@@ -1,0 +1,10 @@
+{
+    "mongodb": {
+        "connection_string": "mongodb+srv://admin:admin@chess.p8k9xpw.mongodb.net/chess_server_game?retryWrites=true&w=majority",
+        "database_name": "chess_server_game"
+    },
+    "redis": {
+        "host": "127.0.0.1",
+        "port": 6379
+    }
+}

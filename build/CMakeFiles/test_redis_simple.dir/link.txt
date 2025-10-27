@@ -1,0 +1,1 @@
+/usr/bin/g++ -g CMakeFiles/test_redis_simple.dir/tests/database/test_redis_simple.cpp.o CMakeFiles/test_redis_simple.dir/src/database/redis_client.cpp.o -o /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_redis_simple   -L/usr/local/lib  -Wl,-rpath,/usr/local/lib -lhiredis -ljsoncpp -lpthread 
