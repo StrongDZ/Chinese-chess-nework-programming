@@ -1,0 +1,153 @@
+@startuml
+title Sign Up Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "Client" as Client
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== Establish TCP Connection ==
+User -> Client: Open application
+activate Client
+
+Client -> Socket: socket(AF_INET, SOCK_STREAM)
+activate Socket
+Client -> Socket: connect(serverIP, 8080)
+
+Socket -> Server: TCP 3-way handshake\n(SYN → SYN-ACK → ACK)
+activate Server
+
+Server -> Server: accept() connection\nCreate thread for client
+Socket --> Client: Connection established
+deactivate Socket
+
+Client -> User: Display sign up form
+deactivate Client
+
+== Sign Up Process ==
+User -> Client: Enter registration info:\n- Username\n- Password\n- Email\n- Full name
+activate Client
+
+Client -> Client: Validate input format:\n- Username: 3-20 chars, alphanumeric\n- Password: min 6 chars\n- Email: valid format
+
+alt Invalid format
+    Client -> User: Show validation errors:\n"Username too short"\n"Invalid email format"
+    
+else Valid format
+    Client -> Client: Hash password:\nhash = SHA256(password)
+    
+    Client -> Client: Create SignUpPacket:\n{type="SIGNUP",\nusername, passwordHash,\nemail, fullName}
+    
+    Client -> Socket: send(SignUpPacket)
+    activate Socket
+    Socket -> Server: Forward packet
+    deactivate Socket
+    
+    Server -> Server: Parse registration packet
+    
+    == Check Username Availability ==
+    Server -> DB: SELECT COUNT(*) FROM users\nWHERE username = ?
+    activate DB
+    
+    alt Username already exists
+        DB --> Server: COUNT > 0
+        deactivate DB
+        
+        Server -> Server: Create ResponsePacket:\n{status="FAIL",\nmsg="Username already taken"}
+        
+        Server -> Socket: send(ResponsePacket)
+        activate Socket
+        Socket -> Client: Forward response
+        deactivate Socket
+        
+        Client -> User: Display "Username already exists.\nPlease choose another."
+        
+    else Username available
+        DB --> Server: COUNT = 0
+        deactivate DB
+        
+        == Check Email Availability ==
+        Server -> DB: SELECT COUNT(*) FROM users\nWHERE email = ?
+        activate DB
+        
+        alt Email already exists
+            DB --> Server: COUNT > 0
+            deactivate DB
+            
+            Server -> Server: Create ResponsePacket:\n{status="FAIL",\nmsg="Email already registered"}
+            
+            Server -> Socket: send(ResponsePacket)
+            activate Socket
+            Socket -> Client: Forward response
+            deactivate Socket
+            
+            Client -> User: Display "Email already in use.\nPlease use another email."
+            
+        else Email available
+            DB --> Server: COUNT = 0
+            deactivate DB
+            
+            == Create New Account ==
+            Server -> Server: Generate userID:\nuserID = UUID()
+            
+            Server -> Server: Set default values:\nelo = 1200,\nstatus = 'OFFLINE',\ncreated_at = NOW()
+            
+            Server -> DB: INSERT INTO users\n(userID, username, passwordHash,\nemail, fullName, elo, status,\ncreated_at)
+            activate DB
+            
+            alt Database error
+                DB --> Server: INSERT failed
+                deactivate DB
+                
+                Server -> Socket: send(ERROR_DB)
+                activate Socket
+                Socket -> Client: Forward error
+                deactivate Socket
+                
+                Client -> User: Display "Registration failed.\nPlease try again."
+                
+            else Insert successful
+                DB --> Server: Account created
+                deactivate DB
+                
+                == Initialize User Data ==
+                Server -> DB: INSERT INTO user_stats\n(userID, total_games=0,\nwins=0, losses=0, draws=0)
+                activate DB
+                DB --> Server: Stats initialized
+                deactivate DB
+                
+                Server -> Server: Create ResponsePacket:\n{status="SUCCESS",\nuserID, username,\nmsg="Account created successfully"}
+                
+                Server -> Socket: send(ResponsePacket)
+                activate Socket
+                Socket -> Client: Forward response
+                deactivate Socket
+                
+                Client -> User: Show success message:\n"Registration successful!\nYou can now log in."
+                
+                Client -> Client: Clear form data
+                
+                == Auto Login Option ==
+                Client -> User: Show dialog:\n"Login now?" with\n[Yes] [No] buttons
+                
+                alt User chooses Yes
+                    User -> Client: Click "Yes"
+                    Client -> User: Redirect to Login page\nwith username pre-filled
+                    
+                else User chooses No
+                    User -> Client: Click "No"
+                    Client -> User: Stay on Sign Up page
+                end
+            end
+        end
+    end
+end
+
+deactivate Client
+deactivate Server
+
+@enduml
