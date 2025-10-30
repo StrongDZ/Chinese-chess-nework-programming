@@ -40,8 +40,10 @@ set(CMAKE_MAKEFILE_PRODUCTS
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
+  "CMakeFiles/config_demo.dir/DependInfo.cmake"
   "CMakeFiles/test_mongo_simple.dir/DependInfo.cmake"
   "CMakeFiles/test_redis_simple.dir/DependInfo.cmake"
   "CMakeFiles/test_protocol.dir/DependInfo.cmake"
   "CMakeFiles/test_auth_handler.dir/DependInfo.cmake"
+  "CMakeFiles/test_import_sample_data.dir/DependInfo.cmake"
   )

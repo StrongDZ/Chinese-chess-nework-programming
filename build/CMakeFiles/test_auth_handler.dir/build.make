@@ -97,10 +97,24 @@ CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.s"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/auth/auth_handler.cpp -o CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.s
 
+CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o: CMakeFiles/test_auth_handler.dir/flags.make
+CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o: /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/config/avatar_config.cpp
+CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o: CMakeFiles/test_auth_handler.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o -MF CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o.d -o CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/config/avatar_config.cpp
+
+CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.i"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/config/avatar_config.cpp > CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.i
+
+CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.s"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/config/avatar_config.cpp -o CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.s
+
 CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o: CMakeFiles/test_auth_handler.dir/flags.make
 CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o: /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp
 CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o: CMakeFiles/test_auth_handler.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o -MF CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o.d -o CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp
 
 CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.i: cmake_force
@@ -114,7 +128,7 @@ CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.s: cmake_force
 CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o: CMakeFiles/test_auth_handler.dir/flags.make
 CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o: /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/redis_client.cpp
 CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o: CMakeFiles/test_auth_handler.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o -MF CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o.d -o CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/redis_client.cpp
 
 CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.i: cmake_force
@@ -129,6 +143,7 @@ CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.s: cmake_force
 test_auth_handler_OBJECTS = \
 "CMakeFiles/test_auth_handler.dir/tests/auth/test_auth_handler.cpp.o" \
 "CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.o" \
+"CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o" \
 "CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o" \
 "CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o"
 
@@ -137,11 +152,12 @@ test_auth_handler_EXTERNAL_OBJECTS =
 
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/tests/auth/test_auth_handler.cpp.o
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.o
+/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/build.make
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler: CMakeFiles/test_auth_handler.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking CXX executable /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Linking CXX executable /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_auth_handler"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/test_auth_handler.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

@@ -3,6 +3,7 @@
 
 #include "../database/mongodb_client.h"
 #include "../database/redis_client.h"
+#include "../config/avatar_config.h"
 #include <json/json.h>
 #include <string>
 
@@ -22,6 +23,12 @@ public:
     
     // Handle 0x03 LOGOUT_REQUEST
     Json::Value handleLogout(const Json::Value& request);
+    
+    // Update user profile (display name, avatar, country)
+    Json::Value handleUpdateProfile(const Json::Value& request);
+    
+    // Get available avatars list
+    Json::Value handleGetAvatars(const Json::Value& request);
 
 private:
     // Hash password with SHA256
@@ -35,6 +42,12 @@ private:
     
     // Validate email format
     bool isValidEmail(const std::string& email);
+    
+    // Validate country code (2 chars)
+    bool isValidCountryCode(const std::string& country);
+    
+    // Get user ID from token
+    std::string getUserIdFromToken(const std::string& token);
 };
 
 #endif // AUTH_HANDLER_H

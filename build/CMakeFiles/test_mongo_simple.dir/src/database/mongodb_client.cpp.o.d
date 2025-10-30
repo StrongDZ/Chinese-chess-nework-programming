@@ -421,18 +421,4 @@ CMakeFiles/test_mongo_simple.dir/src/database/mongodb_client.cpp.o: \
  /usr/local/include/mongocxx/v_noabi/mongocxx/instance-fwd.hpp \
  /usr/local/include/mongocxx/v_noabi/mongocxx/logger-fwd.hpp \
  /usr/local/include/bsoncxx/v_noabi/bsoncxx/json.hpp \
- /usr/local/include/bsoncxx/v_noabi/bsoncxx/json-fwd.hpp \
- /usr/include/c++/13/fstream /usr/include/c++/13/bits/codecvt.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
- /usr/include/c++/13/bits/fstream.tcc /usr/include/jsoncpp/json/json.h \
- /usr/include/jsoncpp/json/config.h /usr/include/c++/13/sstream \
- /usr/include/c++/13/bits/sstream.tcc \
- /usr/include/jsoncpp/json/allocator.h \
- /usr/include/jsoncpp/json/version.h \
- /usr/include/jsoncpp/json/json_features.h \
- /usr/include/jsoncpp/json/forwards.h /usr/include/jsoncpp/json/reader.h \
- /usr/include/jsoncpp/json/value.h /usr/include/c++/13/deque \
- /usr/include/c++/13/bits/stl_deque.h /usr/include/c++/13/bits/deque.tcc \
- /usr/include/c++/13/stack /usr/include/c++/13/bits/stl_stack.h \
- /usr/include/jsoncpp/json/writer.h
+ /usr/local/include/bsoncxx/v_noabi/bsoncxx/json-fwd.hpp

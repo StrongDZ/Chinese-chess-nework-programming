@@ -1,6 +1,24 @@
 [
 {
   "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
+  "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/config_demo.dir/examples/config_demo.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/examples/config_demo.cpp",
+  "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/examples/config_demo.cpp",
+  "output": "CMakeFiles/config_demo.dir/examples/config_demo.cpp.o"
+},
+{
+  "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
+  "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/config_demo.dir/src/database/mongodb_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp",
+  "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp",
+  "output": "CMakeFiles/config_demo.dir/src/database/mongodb_client.cpp.o"
+},
+{
+  "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
+  "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/config_demo.dir/src/database/redis_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/redis_client.cpp",
+  "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/redis_client.cpp",
+  "output": "CMakeFiles/config_demo.dir/src/database/redis_client.cpp.o"
+},
+{
+  "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
   "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/test_mongo_simple.dir/tests/database/test_mongo_simple.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/tests/database/test_mongo_simple.cpp",
   "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/tests/database/test_mongo_simple.cpp",
   "output": "CMakeFiles/test_mongo_simple.dir/tests/database/test_mongo_simple.cpp.o"
@@ -49,6 +67,12 @@
 },
 {
   "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
+  "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/config/avatar_config.cpp",
+  "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/config/avatar_config.cpp",
+  "output": "CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o"
+},
+{
+  "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
   "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp",
   "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp",
   "output": "CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o"
@@ -58,5 +82,17 @@
   "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/redis_client.cpp",
   "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/redis_client.cpp",
   "output": "CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o"
+},
+{
+  "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
+  "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/test_import_sample_data.dir/tests/database/test_import_sample_data.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/tests/database/test_import_sample_data.cpp",
+  "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/tests/database/test_import_sample_data.cpp",
+  "output": "CMakeFiles/test_import_sample_data.dir/tests/database/test_import_sample_data.cpp.o"
+},
+{
+  "directory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build",
+  "command": "/usr/bin/g++  -I/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -g -std=gnu++17 -o CMakeFiles/test_import_sample_data.dir/src/database/mongodb_client.cpp.o -c /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp",
+  "file": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/database/mongodb_client.cpp",
+  "output": "CMakeFiles/test_import_sample_data.dir/src/database/mongodb_client.cpp.o"
 }
 ]

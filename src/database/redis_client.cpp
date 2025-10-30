@@ -13,7 +13,7 @@ RedisClient::~RedisClient() {
     }
 }
 
-bool RedisClient::connect(const string& h, int p) {
+bool RedisClient::connect(const string& h, int p, const string& password, int db) {
     host = h;
     port = p;
     
@@ -21,16 +21,42 @@ bool RedisClient::connect(const string& h, int p) {
     
     if (context == nullptr || context->err) {
         if (context) {
-            cerr << "Redis connection error: " << context->errstr << endl;
+            cerr << "✗ Redis connection error: " << context->errstr << endl;
             redisFree(context);
             context = nullptr;
         } else {
-            cerr << "Redis connection error: can't allocate context" << endl;
+            cerr << "✗ Redis connection error: can't allocate context" << endl;
         }
         return false;
     }
     
-    cout << "Connected to Redis at " << host << ":" << port << endl;
+    // Authenticate if password is provided
+    if (!password.empty()) {
+        redisReply* authReply = (redisReply*)redisCommand(context, "AUTH %s", password.c_str());
+        if (authReply == nullptr || authReply->type == REDIS_REPLY_ERROR) {
+            cerr << "✗ Redis authentication failed" << endl;
+            if (authReply) freeReplyObject(authReply);
+            redisFree(context);
+            context = nullptr;
+            return false;
+        }
+        freeReplyObject(authReply);
+    }
+    
+    // Select database if specified
+    if (db != 0) {
+        redisReply* selectReply = (redisReply*)redisCommand(context, "SELECT %d", db);
+        if (selectReply == nullptr || selectReply->type == REDIS_REPLY_ERROR) {
+            cerr << "✗ Redis database selection failed" << endl;
+            if (selectReply) freeReplyObject(selectReply);
+            redisFree(context);
+            context = nullptr;
+            return false;
+        }
+        freeReplyObject(selectReply);
+    }
+    
+    cout << " Connected to Redis at " << host << ":" << port << " (DB: " << db << ")" << endl;
     return true;
 }
 

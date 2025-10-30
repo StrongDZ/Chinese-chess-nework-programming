@@ -117,6 +117,19 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named config_demo
+
+# Build rule for target.
+config_demo: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 config_demo
+.PHONY : config_demo
+
+# fast build rule for target.
+config_demo/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/build
+.PHONY : config_demo/fast
+
+#=============================================================================
 # Target rules for targets named test_mongo_simple
 
 # Build rule for target.
@@ -168,6 +181,43 @@ test_auth_handler/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/build
 .PHONY : test_auth_handler/fast
 
+#=============================================================================
+# Target rules for targets named test_import_sample_data
+
+# Build rule for target.
+test_import_sample_data: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_import_sample_data
+.PHONY : test_import_sample_data
+
+# fast build rule for target.
+test_import_sample_data/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/build
+.PHONY : test_import_sample_data/fast
+
+examples/config_demo.o: examples/config_demo.cpp.o
+.PHONY : examples/config_demo.o
+
+# target to build an object file
+examples/config_demo.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/examples/config_demo.cpp.o
+.PHONY : examples/config_demo.cpp.o
+
+examples/config_demo.i: examples/config_demo.cpp.i
+.PHONY : examples/config_demo.i
+
+# target to preprocess a source file
+examples/config_demo.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/examples/config_demo.cpp.i
+.PHONY : examples/config_demo.cpp.i
+
+examples/config_demo.s: examples/config_demo.cpp.s
+.PHONY : examples/config_demo.s
+
+# target to generate assembly for a file
+examples/config_demo.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/examples/config_demo.cpp.s
+.PHONY : examples/config_demo.cpp.s
+
 src/auth/auth_handler.o: src/auth/auth_handler.cpp.o
 .PHONY : src/auth/auth_handler.o
 
@@ -192,13 +242,39 @@ src/auth/auth_handler.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.s
 .PHONY : src/auth/auth_handler.cpp.s
 
+src/config/avatar_config.o: src/config/avatar_config.cpp.o
+.PHONY : src/config/avatar_config.o
+
+# target to build an object file
+src/config/avatar_config.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.o
+.PHONY : src/config/avatar_config.cpp.o
+
+src/config/avatar_config.i: src/config/avatar_config.cpp.i
+.PHONY : src/config/avatar_config.i
+
+# target to preprocess a source file
+src/config/avatar_config.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.i
+.PHONY : src/config/avatar_config.cpp.i
+
+src/config/avatar_config.s: src/config/avatar_config.cpp.s
+.PHONY : src/config/avatar_config.s
+
+# target to generate assembly for a file
+src/config/avatar_config.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/config/avatar_config.cpp.s
+.PHONY : src/config/avatar_config.cpp.s
+
 src/database/mongodb_client.o: src/database/mongodb_client.cpp.o
 .PHONY : src/database/mongodb_client.o
 
 # target to build an object file
 src/database/mongodb_client.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/src/database/mongodb_client.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mongo_simple.dir/build.make CMakeFiles/test_mongo_simple.dir/src/database/mongodb_client.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/src/database/mongodb_client.cpp.o
 .PHONY : src/database/mongodb_client.cpp.o
 
 src/database/mongodb_client.i: src/database/mongodb_client.cpp.i
@@ -206,8 +282,10 @@ src/database/mongodb_client.i: src/database/mongodb_client.cpp.i
 
 # target to preprocess a source file
 src/database/mongodb_client.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/src/database/mongodb_client.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mongo_simple.dir/build.make CMakeFiles/test_mongo_simple.dir/src/database/mongodb_client.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/src/database/mongodb_client.cpp.i
 .PHONY : src/database/mongodb_client.cpp.i
 
 src/database/mongodb_client.s: src/database/mongodb_client.cpp.s
@@ -215,8 +293,10 @@ src/database/mongodb_client.s: src/database/mongodb_client.cpp.s
 
 # target to generate assembly for a file
 src/database/mongodb_client.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/src/database/mongodb_client.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mongo_simple.dir/build.make CMakeFiles/test_mongo_simple.dir/src/database/mongodb_client.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/database/mongodb_client.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/src/database/mongodb_client.cpp.s
 .PHONY : src/database/mongodb_client.cpp.s
 
 src/database/redis_client.o: src/database/redis_client.cpp.o
@@ -224,6 +304,7 @@ src/database/redis_client.o: src/database/redis_client.cpp.o
 
 # target to build an object file
 src/database/redis_client.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/src/database/redis_client.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_redis_simple.dir/build.make CMakeFiles/test_redis_simple.dir/src/database/redis_client.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.o
 .PHONY : src/database/redis_client.cpp.o
@@ -233,6 +314,7 @@ src/database/redis_client.i: src/database/redis_client.cpp.i
 
 # target to preprocess a source file
 src/database/redis_client.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/src/database/redis_client.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_redis_simple.dir/build.make CMakeFiles/test_redis_simple.dir/src/database/redis_client.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.i
 .PHONY : src/database/redis_client.cpp.i
@@ -242,6 +324,7 @@ src/database/redis_client.s: src/database/redis_client.cpp.s
 
 # target to generate assembly for a file
 src/database/redis_client.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/config_demo.dir/build.make CMakeFiles/config_demo.dir/src/database/redis_client.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_redis_simple.dir/build.make CMakeFiles/test_redis_simple.dir/src/database/redis_client.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/src/database/redis_client.cpp.s
 .PHONY : src/database/redis_client.cpp.s
@@ -293,6 +376,30 @@ tests/auth/test_auth_handler.s: tests/auth/test_auth_handler.cpp.s
 tests/auth/test_auth_handler.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_auth_handler.dir/build.make CMakeFiles/test_auth_handler.dir/tests/auth/test_auth_handler.cpp.s
 .PHONY : tests/auth/test_auth_handler.cpp.s
+
+tests/database/test_import_sample_data.o: tests/database/test_import_sample_data.cpp.o
+.PHONY : tests/database/test_import_sample_data.o
+
+# target to build an object file
+tests/database/test_import_sample_data.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/tests/database/test_import_sample_data.cpp.o
+.PHONY : tests/database/test_import_sample_data.cpp.o
+
+tests/database/test_import_sample_data.i: tests/database/test_import_sample_data.cpp.i
+.PHONY : tests/database/test_import_sample_data.i
+
+# target to preprocess a source file
+tests/database/test_import_sample_data.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/tests/database/test_import_sample_data.cpp.i
+.PHONY : tests/database/test_import_sample_data.cpp.i
+
+tests/database/test_import_sample_data.s: tests/database/test_import_sample_data.cpp.s
+.PHONY : tests/database/test_import_sample_data.s
+
+# target to generate assembly for a file
+tests/database/test_import_sample_data.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_import_sample_data.dir/build.make CMakeFiles/test_import_sample_data.dir/tests/database/test_import_sample_data.cpp.s
+.PHONY : tests/database/test_import_sample_data.cpp.s
 
 tests/database/test_mongo_simple.o: tests/database/test_mongo_simple.cpp.o
 .PHONY : tests/database/test_mongo_simple.o
@@ -374,13 +481,21 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... config_demo"
 	@echo "... test_auth_handler"
+	@echo "... test_import_sample_data"
 	@echo "... test_mongo_simple"
 	@echo "... test_protocol"
 	@echo "... test_redis_simple"
+	@echo "... examples/config_demo.o"
+	@echo "... examples/config_demo.i"
+	@echo "... examples/config_demo.s"
 	@echo "... src/auth/auth_handler.o"
 	@echo "... src/auth/auth_handler.i"
 	@echo "... src/auth/auth_handler.s"
+	@echo "... src/config/avatar_config.o"
+	@echo "... src/config/avatar_config.i"
+	@echo "... src/config/avatar_config.s"
 	@echo "... src/database/mongodb_client.o"
 	@echo "... src/database/mongodb_client.i"
 	@echo "... src/database/mongodb_client.s"
@@ -393,6 +508,9 @@ help:
 	@echo "... tests/auth/test_auth_handler.o"
 	@echo "... tests/auth/test_auth_handler.i"
 	@echo "... tests/auth/test_auth_handler.s"
+	@echo "... tests/database/test_import_sample_data.o"
+	@echo "... tests/database/test_import_sample_data.i"
+	@echo "... tests/database/test_import_sample_data.s"
 	@echo "... tests/database/test_mongo_simple.o"
 	@echo "... tests/database/test_mongo_simple.i"
 	@echo "... tests/database/test_mongo_simple.s"

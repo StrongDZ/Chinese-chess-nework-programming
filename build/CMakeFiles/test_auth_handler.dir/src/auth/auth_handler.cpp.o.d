@@ -435,6 +435,8 @@ CMakeFiles/test_auth_handler.dir/src/auth/auth_handler.cpp.o: \
  /usr/include/c++/13/bits/stl_deque.h /usr/include/c++/13/bits/deque.tcc \
  /usr/include/c++/13/stack /usr/include/c++/13/bits/stl_stack.h \
  /usr/include/jsoncpp/json/writer.h \
+ /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/auth/../../include/auth/../config/avatar_config.h \
+ /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/src/auth/../../include/config/avatar_config.h \
  /usr/local/include/bsoncxx/v_noabi/bsoncxx/builder/stream/document.hpp \
  /usr/local/include/bsoncxx/v_noabi/bsoncxx/builder/stream/document-fwd.hpp \
  /usr/local/include/bsoncxx/v_noabi/bsoncxx/builder/stream/key_context.hpp \

@@ -1,4 +1,80 @@
-.specstory/
-documents/
+# ===========================================
+# Environment and Secrets
+# ===========================================
+.env
+*.env
+!.env.example
+
+# ===========================================
+# Build Files
+# ===========================================
+build/
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# Compiled Object files
+*.slo
+*.lo
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# ===========================================
+# CMake
+# ===========================================
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# ===========================================
+# IDE
+# ===========================================
+# VSCode
 .vscode/
-tests/
+*.code-workspace
+
+# CLion
+.idea/
+cmake-build-*/
+
+# ===========================================
+# Logs
+# ===========================================
+logs/
+*.log
+
+# ===========================================
+# Temporary Files
+# ===========================================
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ===========================================
+# OS Files
+# ===========================================
+.DS_Store
+Thumbs.db
+
+# ===========================================
+# Development
+# ===========================================
+.specstory/
+
+
+documents/
+examples/
+
+build/

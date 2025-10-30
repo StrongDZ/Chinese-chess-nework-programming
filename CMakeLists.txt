@@ -24,6 +24,21 @@ link_directories(${MONGOCXX_LIB_DIR})
 
 # ==================== TESTS ====================
 
+# Test Config Loader with Database Connections
+add_executable(config_demo
+    examples/config_demo.cpp
+    src/database/mongodb_client.cpp
+    src/database/redis_client.cpp
+)
+
+target_link_libraries(config_demo
+    mongocxx
+    bsoncxx
+    hiredis
+    jsoncpp
+    pthread
+)
+
 # Test MongoDB connection
 add_executable(test_mongo_simple
     tests/database/test_mongo_simple.cpp
@@ -64,6 +79,7 @@ target_link_libraries(test_protocol
 add_executable(test_auth_handler
     tests/auth/test_auth_handler.cpp
     src/auth/auth_handler.cpp
+    src/config/avatar_config.cpp
     src/database/mongodb_client.cpp
     src/database/redis_client.cpp
 )
@@ -75,5 +91,18 @@ target_link_libraries(test_auth_handler
     hiredis
     ssl
     crypto
+    pthread
+)
+
+# Test Import Sample Data to MongoDB
+add_executable(test_import_sample_data
+    tests/database/test_import_sample_data.cpp
+    src/database/mongodb_client.cpp
+)
+
+target_link_libraries(test_import_sample_data
+    mongocxx
+    bsoncxx
+    jsoncpp
     pthread
 )

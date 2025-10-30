@@ -19,7 +19,9 @@ public:
     MongoDBClient();
     ~MongoDBClient();
     
-    bool connect(const std::string& configPath);
+    // Connect using connection string and database name directly
+    bool connect(const std::string& connectionString, const std::string& databaseName);
+    
     mongocxx::database& getDatabase();
     bool isConnected() const;
 };

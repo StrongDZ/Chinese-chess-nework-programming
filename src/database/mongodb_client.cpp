@@ -1,8 +1,6 @@
 #include "../../include/database/mongodb_client.h"
 #include <bsoncxx/json.hpp>
-#include <fstream>
 #include <iostream>
-#include <json/json.h>
 
 using namespace std;
 
@@ -15,37 +13,35 @@ MongoDBClient::MongoDBClient()
 MongoDBClient::~MongoDBClient() {
 }
 
-bool MongoDBClient::connect(const string& configPath) {
+bool MongoDBClient::connect(const string& connectionString, const string& databaseName) {
     try {
-        ifstream configFile(configPath);
-        if (!configFile.is_open()) {
-            cerr << "Failed to open config: " << configPath << endl;
+        if (connectionString.empty()) {
+            cerr << "MongoDB connection string is empty!" << endl;
+            cerr << "Please configure MONGODB_CONNECTION_STRING in .env file" << endl;
             return false;
         }
-
-        Json::Value config;
-        Json::CharReaderBuilder reader;
-        string errors;
         
-        if (!Json::parseFromStream(reader, configFile, &config, &errors)) {
-            cerr << "JSON parse error: " << errors << endl;
+        if (databaseName.empty()) {
+            cerr << "MongoDB database name is empty!" << endl;
+            cerr << "Please configure MONGODB_DATABASE_NAME in .env file" << endl;
             return false;
         }
 
-        connectionString = config["mongodb"]["connection_string"].asString();
-        databaseName = config["mongodb"]["database_name"].asString();
+        this->connectionString = connectionString;
+        this->databaseName = databaseName;
 
         mongocxx::uri uri(connectionString);
         client = mongocxx::client(uri);
         database = client[databaseName];
 
+        // Test connection with ping
         database.run_command(bsoncxx::from_json(R"({"ping": 1})"));
 
         cout << "Connected to MongoDB: " << databaseName << endl;
         return true;
 
     } catch (const exception& e) {
-        cerr << "MongoDB error: " << e.what() << endl;
+        cerr << "MongoDB connection error: " << e.what() << endl;
         return false;
     }
 }

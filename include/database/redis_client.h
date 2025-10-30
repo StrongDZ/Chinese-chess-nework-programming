@@ -15,8 +15,11 @@ public:
     RedisClient();
     ~RedisClient();
     
-    // Connect to Redis
-    bool connect(const std::string& host = "127.0.0.1", int port = 6379);
+    // Connect to Redis with optional password
+    bool connect(const std::string& host = "127.0.0.1", 
+                int port = 6379, 
+                const std::string& password = "",
+                int db = 0);
     bool isConnected() const;
     
     //  SESSION METHODS 

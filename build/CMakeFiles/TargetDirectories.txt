@@ -1,6 +1,8 @@
+/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/config_demo.dir
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/test_mongo_simple.dir
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/test_redis_simple.dir
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/test_protocol.dir
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/test_auth_handler.dir
+/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/test_import_sample_data.dir
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/edit_cache.dir
 /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/build/CMakeFiles/rebuild_cache.dir
