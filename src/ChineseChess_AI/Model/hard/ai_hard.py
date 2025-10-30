@@ -39,7 +39,7 @@ class XiangqiHardAI:
         }
     
         # Cải thiện: thêm minimax và iterative deepening
-        self.max_depth = 6  # Tăng lên 6 cho search sâu hơn
+        self.max_depth = 5  # <== Giảm xuống 5 để đảm bảo chất lượng/tốc độ tốt hơn
         self.transposition_table = {}  # Zobrist-key -> {depth, score, flag, best_move}
         # Killer moves và history heuristic
         self.killer_moves = {}  # depth -> [move1, move2]
@@ -47,8 +47,8 @@ class XiangqiHardAI:
         # Zobrist hashing
         self._init_zobrist()
         # Tối ưu tốc độ: giới hạn nhánh và aspiration window
-        self.max_moves_per_depth = 20  # Tăng để explore nhiều hơn
-        self.asp_window = 50  # điểm số quanh best ở depth-1
+        self.max_moves_per_depth = 8  # <== Chỉ thử 8 nước tốt nhất per ply để search sâu hơn/nhanh
+        self.asp_window = 0
         # Profile mặc định
         self.set_profile('balanced')
 
@@ -523,48 +523,26 @@ class XiangqiHardAI:
         self.history_heuristic[move] = self.history_heuristic.get(move, 0) + 1
 
     def _order_moves_scored(self, board, moves, side, tactical, depth):
-        # Pass 1: rẻ tiền (không gọi is_in_check)
-        prelim = []
-        tt_key = self._zobrist_key(board, side)
-        tt_best = None
-        tt_entry = self.transposition_table.get(tt_key)
-        if tt_entry:
-            tt_best = tt_entry.get('best_move')
+        # Chỉ dùng scoring rẻ tiền, KHÔNG gọi is_in_check trong mọi moves
+        scored = []
         for move in moves:
-            score = 0
             (x1,y1),(x2,y2) = move
-            target = board[x2][y2]
-            if target != '.':
-                # MVV-LVA (mạnh mẽ)
-                victim_value = abs(self._get_piece_value(target))
-                attacker_value = abs(self._get_piece_value(board[x1][y1]))
-                score += victim_value * 20 - attacker_value  # Tăng multiplier
-            # Killer/history
-            killers = self.killer_moves.get(depth, [])
-            if move in killers:
-                score += 40
-            score += self.history_heuristic.get(move, 0)
-            # TT best
-            if tt_best is not None and move == tt_best:
-                score += 200
-            prelim.append([score, move])
-        prelim.sort(key=lambda x: x[0], reverse=True)
-
-        # Pass 2: tính check bonus chỉ cho top-k
-        k = min(8, len(prelim))
-        for i in range(k):
-            move = prelim[i][1]
-            new_board = [row[:] for row in board]
-            apply_move(new_board, move)
-            opponent = 'black' if side == 'red' else 'red'
-            if is_in_check(new_board, opponent):
-                prelim[i][0] += 200  # CHECK BONUS CỰC CAO!
-
-        prelim.sort(key=lambda x: x[0], reverse=True)
-        return [m for _, m in prelim]
+            value = 0
+            # Bonus capture
+            if board[x2][y2] != '.':
+                value += abs(self._get_piece_value(board[x2][y2])) * 10 - abs(self._get_piece_value(board[x1][y1]))
+            # Add PST bonus sau nước đi
+            tmp_board = [row[:] for row in board]
+            apply_move(tmp_board, move)
+            value += evaluate_board(tmp_board) - evaluate_board(board)
+            scored.append((value, move))
+        scored.sort(reverse=True)
+        # Chỉ trả về tối đa self.max_moves_per_depth moves tốt nhất
+        return [m for _,m in scored][:self.max_moves_per_depth]
 
     def _quiescence(self, board, side, alpha, beta, maximizing, tactical):
-        stand_pat = self._evaluate_move_enhanced_board(board, maximizing, tactical)
+        # Quiescence chỉ cho capture (KHÔNG check-nước bất kỳ)
+        stand_pat = evaluate_board(board)
         if maximizing:
             if stand_pat >= beta:
                 return beta
@@ -575,21 +553,12 @@ class XiangqiHardAI:
                 return alpha
             if stand_pat < beta:
                 beta = stand_pat
-
-        # Explore only captures (tiết kiệm, ổn định)
-        legal_moves = generate_legal_moves(board, side)
-        # Filter noisy moves
-        noisy = []
-        for move in legal_moves:
-            (_, _), (x2,y2) = move
-            if board[x2][y2] != '.':
-                noisy.append(move)
-        if not noisy:
+        # Only captures
+        moves = generate_legal_moves(board, side)
+        captures = [mv for mv in moves if board[mv[1][0]][mv[1][1]] != '.']
+        if not captures:
             return stand_pat
-
-        # Order noisy moves
-        noisy = self._order_moves_scored(board, noisy, side, True, 0)
-        for move in noisy:
+        for move in captures:
             new_board = [row[:] for row in board]
             apply_move(new_board, move)
             opponent = 'black' if side == 'red' else 'red'
@@ -607,19 +576,9 @@ class XiangqiHardAI:
         return alpha if maximizing else beta
     
     def _evaluate_move_enhanced_board(self, board, maximizing, tactical):
-        """Đánh giá board cho minimax - luôn return từ góc nhìn RED"""
-        score = evaluate_board(board)  # Bây giờ đã có PST
-        
-        # Check bonus CỰC MẠNH
-        if is_in_check(board, 'black'):
-            score += 150  # Bonus lớn cho chiếu tướng BLACK
-        if is_in_check(board, 'red'):
-            score -= 150  # Penalty khi bị chiếu
-        
-        # Positional factors - RẤT NHẸ vì PST đã lo phần lớn
-        # (Không dùng mobility vì quá chậm)
-        
-        # Luôn return điểm từ góc nhìn RED (dương tốt cho RED, âm tốt cho BLACK)
+        """Đánh giá board: chỉ material+PST; KHÔNG gọi is_in_check nữa!"""
+        score = evaluate_board(board)
+        # KHÔNG bonus check, không gọi is_in_check -> tránh bottleneck
         return score
     
     def _evaluate_center_control_board(self, board, side):
