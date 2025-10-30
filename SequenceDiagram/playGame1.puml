@@ -1,0 +1,138 @@
+@startuml
+title Play Game (Main) - Sequence Diagram (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+note over UI, Server
+  TCP connection already established
+  from login session
+end note
+
+== Game Play (Common for all types) ==
+note over UI, Server
+  After game is created from any of the above flows,
+  all games follow the same gameplay loop below
+end note
+
+activate UI
+activate Server
+
+loop Until game ends (Win/Loss/Draw/Resign)
+    alt Player's Turn
+        User -> UI: Make move (from→to)
+        
+        UI -> UI: Validate move locally
+        
+        alt Invalid move
+            UI -> User: Show "Invalid move"
+            
+        else Valid move
+            UI -> Socket: send(MOVE_PACKET)
+            activate Socket
+            Socket -> Server: Forward move
+            deactivate Socket
+            
+            Server -> Server: Validate move on server
+            Server -> Server: Update board state
+            Server -> Server: Check game rules
+            
+            Server -> DB: INSERT INTO game_moves\n(gameID, move_number, from, to)
+            activate DB
+            DB --> Server: Move saved
+            deactivate DB
+            
+            alt Game ended
+                Server -> DB: UPDATE games SET\nstatus="COMPLETED",\nwinner=?, end_time=NOW()
+                activate DB
+                DB --> Server: Game ended
+                deactivate DB
+                
+                Server -> DB: UPDATE user_stats:\nWins/Losses/Draws\nCalculate new ELO rating
+                activate DB
+                DB --> Server: Stats updated
+                deactivate DB
+                
+                Server -> Socket: send(GAME_END,\n{result, winner, new_elo})
+                activate Socket
+                Socket -> UI: Forward result
+                deactivate Socket
+                
+                UI -> User: Display game result
+                
+            else Game continues
+                Server -> Socket: send(MOVE_SUCCESS)
+                activate Socket
+                Socket -> UI: Confirmation
+                deactivate Socket
+                
+                Server -> Socket: Broadcast move to opponent\n(if PVP game)
+                activate Socket
+                Socket --> UI: Update opponent's board
+                deactivate Socket
+                
+                UI -> UI: Update board display
+                UI -> User: Show move animation\nWait for opponent
+            end
+        end
+        
+    else Special Actions
+        alt Resign
+            User -> UI: Click "Resign"
+            UI -> Socket: send(RESIGN_PACKET)
+            activate Socket
+            Socket -> Server: Forward resign
+            deactivate Socket
+            
+            Server -> DB: UPDATE games SET\nstatus="RESIGNED",\nwinner=opponent
+            activate DB
+            DB --> Server: Updated
+            deactivate DB
+            
+            Server -> Socket: send(GAME_END, result="RESIGN")
+            activate Socket
+            Socket -> UI: Forward result
+            deactivate Socket
+            
+            UI -> User: Show "You resigned"
+            
+        else Offer Draw
+            User -> UI: Click "Offer Draw"
+            UI -> Socket: send(DRAW_OFFER)
+            activate Socket
+            Socket -> Server: Forward offer
+            deactivate Socket
+            
+            Server -> Socket: Forward to opponent
+            activate Socket
+            Socket --> UI: Opponent receives offer
+            deactivate Socket
+            
+            note right
+              Wait for opponent response
+              Accept/Decline draw
+            end note
+            
+        else Request Rematch
+            User -> UI: Click "Rematch" (after game ends)
+            
+            note right
+              Similar to Challenge flow
+              Send rematch request
+              Wait for acceptance
+            end note
+        end
+    end
+end
+
+deactivate UI
+deactivate Server
+
+
+@enduml

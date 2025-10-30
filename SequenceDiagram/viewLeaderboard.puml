@@ -5,23 +5,23 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "Client" as Client
+participant "UI" as UI
 participant "TCP Socket" as Socket
 participant "Server" as Server
 database "Database" as DB
 
-note over Client, Server
+note over UI, Server
   TCP connection already established
   from login session
 end note
 
 == View Leaderboard ==
-User -> Client: Click "Leaderboard" / "Rankings"
-activate Client
+User -> UI: Click "Leaderboard" / "Rankings"
+activate UI
 
-Client -> Client: Create GetLeaderboardPacket:\n{type="GET_LEADERBOARD",\nsessionID, timeFilter="all-time"}
+UI -> UI: Create GetLeaderboardPacket:\n{type="GET_LEADERBOARD",\nsessionID, timeFilter="all-time"}
 
-Client -> Socket: send(GetLeaderboardPacket)
+UI -> Socket: send(GetLeaderboardPacket)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -32,10 +32,10 @@ Server -> Server: Validate sessionID
 alt Invalid session
     Server -> Socket: send(ERROR_SESSION)
     activate Socket
-    Socket -> Client: Forward error
+    Socket -> UI: Forward error
     deactivate Socket
-    Client -> User: Show "Session expired, please login"
-    deactivate Client
+    UI -> User: Show "Session expired, please login"
+    deactivate UI
     
 else Valid session
     == Fetch Top Players ==
@@ -48,11 +48,11 @@ else Valid session
         
         Server -> Socket: send(EmptyLeaderboardPacket)
         activate Socket
-        Socket -> Client: Forward response
+        Socket -> UI: Forward response
         deactivate Socket
         
-        Client -> User: Display "No players yet\nBe the first to play!"
-        deactivate Client
+        UI -> User: Display "No players yet\nBe the first to play!"
+        deactivate UI
         
     else Players found
         DB --> Server: Return top 100 players list:\n[{userID, username, elo,\ntotal_games, wins, losses}...]
@@ -67,27 +67,27 @@ else Valid session
         
         Server -> Socket: send(LeaderboardPacket)
         activate Socket
-        Socket -> Client: Forward leaderboard data
+        Socket -> UI: Forward leaderboard data
         deactivate Socket
         
-        Client -> Client: Parse leaderboard data
+        UI -> UI: Parse leaderboard data
         
-        Client -> User: Display leaderboard:\n━━━━━━━━━━━━━━━━━━━━━━━\nRank | Username | ELO | Games | Win%\n━━━━━━━━━━━━━━━━━━━━━━━\n1 🏆 | Player1 | 2100 | 150 | 68%\n2 🥈 | Player2 | 1980 | 120 | 65%\n3 🥉 | Player3 | 1850 | 200 | 62%\n...\nYour Rank: #25\n━━━━━━━━━━━━━━━━━━━━━━━\n[Refresh] [Filter] [Search]
-        deactivate Client
+        UI -> User: Display leaderboard:\n━━━━━━━━━━━━━━━━━━━━━━━\nRank | Username | ELO | Games | Win%\n━━━━━━━━━━━━━━━━━━━━━━━\n1 🏆 | Player1 | 2100 | 150 | 68%\n2 🥈 | Player2 | 1980 | 120 | 65%\n3 🥉 | Player3 | 1850 | 200 | 62%\n...\nYour Rank: #25\n━━━━━━━━━━━━━━━━━━━━━━━\n[Refresh] [Filter] [Search]
+        deactivate UI
         deactivate Server
     end
 end
 
 == Filter by Time Period ==
-User -> Client: Click "Filter" dropdown
-activate Client
-Client -> User: Show options:\n- All-time\n- This Month\n- This Week
+User -> UI: Click "Filter" dropdown
+activate UI
+UI -> User: Show options:\n- All-time\n- This Month\n- This Week
 
-User -> Client: Select "This Month"
+User -> UI: Select "This Month"
 
-Client -> Client: Create GetLeaderboardPacket:\n{type="GET_LEADERBOARD",\ntimeFilter="month"}
+UI -> UI: Create GetLeaderboardPacket:\n{type="GET_LEADERBOARD",\ntimeFilter="month"}
 
-Client -> Socket: send(GetLeaderboardPacket)
+UI -> Socket: send(GetLeaderboardPacket)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
@@ -102,27 +102,27 @@ Server -> Server: Calculate ranks for filtered list
 
 Server -> Socket: send(FilteredLeaderboardPacket)
 activate Socket
-Socket -> Client: Forward filtered data
+Socket -> UI: Forward filtered data
 deactivate Socket
 
-Client -> User: Update display:\nShow "Monthly Rankings"\nwith date range header
-deactivate Client
+UI -> User: Update display:\nShow "Monthly Rankings"\nwith date range header
+deactivate UI
 deactivate Server
 
 == Search Specific Player ==
-User -> Client: Enter username in search box\n(e.g., "Player123")
-activate Client
+User -> UI: Enter username in search box\n(e.g., "Player123")
+activate UI
 
-Client -> Client: Validate input:\nmin 3 characters
+UI -> UI: Validate input:\nmin 3 characters
 
 alt Input too short
-    Client -> User: Show "Enter at least 3 characters"
-    deactivate Client
+    UI -> User: Show "Enter at least 3 characters"
+    deactivate UI
     
 else Valid input
-    Client -> Client: Create SearchPlayerPacket:\n{type="SEARCH_PLAYER",\nusername="Player123"}
+    UI -> UI: Create SearchPlayerPacket:\n{type="SEARCH_PLAYER",\nusername="Player123"}
     
-    Client -> Socket: send(SearchPlayerPacket)
+    UI -> Socket: send(SearchPlayerPacket)
     activate Socket
     Socket -> Server: Forward search request
     deactivate Socket
@@ -137,10 +137,10 @@ else Valid input
         
         Server -> Socket: send(NoResultsPacket)
         activate Socket
-        Socket -> Client: Forward response
+        Socket -> UI: Forward response
         deactivate Socket
         
-        Client -> User: Display "No player found\nmatching 'Player123'"
+        UI -> User: Display "No player found\nmatching 'Player123'"
         
     else Players found
         DB --> Server: Return matching players:\n[{userID, username, elo, rank}...]
@@ -154,27 +154,27 @@ else Valid input
         
         Server -> Socket: send(SearchResultsPacket)
         activate Socket
-        Socket -> Client: Forward results
+        Socket -> UI: Forward results
         deactivate Socket
         
-        Client -> Client: Parse search results
+        UI -> UI: Parse search results
         
-        Client -> User: Display search results:\n━━━━━━━━━━━━━━━━━\nFound 3 players:\n#25 | Player123 | 1650\n#89 | Player1234 | 1420\n#120 | MyPlayer123 | 1380\n━━━━━━━━━━━━━━━━━\n[Click to view profile]
+        UI -> User: Display search results:\n━━━━━━━━━━━━━━━━━\nFound 3 players:\n#25 | Player123 | 1650\n#89 | Player1234 | 1420\n#120 | MyPlayer123 | 1380\n━━━━━━━━━━━━━━━━━\n[Click to view profile]
         
-        User -> Client: Click on a player
-        Client -> User: Open player profile\n(see viewProfile.puml)
+        User -> UI: Click on a player
+        UI -> User: Open player profile\n(see viewProfile.puml)
     end
-    deactivate Client
+    deactivate UI
     deactivate Server
 end
 
 == Manual Refresh ==
-User -> Client: Click "Refresh" button
-activate Client
+User -> UI: Click "Refresh" button
+activate UI
 
-Client -> Client: Show loading indicator
+UI -> UI: Show loading indicator
 
-Client -> Socket: send(GET_LEADERBOARD{timeFilter})
+UI -> Socket: send(GET_LEADERBOARD{timeFilter})
 activate Socket
 Socket -> Server: Forward refresh request
 deactivate Socket
@@ -189,18 +189,18 @@ Server -> Server: Calculate updated ranks
 
 Server -> Socket: send(LeaderboardPacket)
 activate Socket
-Socket -> Client: Forward updated data
+Socket -> UI: Forward updated data
 deactivate Socket
 
-Client -> Client: Compare with previous data:\n- Highlight rank changes (↑↓)\n- Show new players (NEW badge)\n- Update ELO changes (+15, -8)
+UI -> UI: Compare with previous data:\n- Highlight rank changes (↑↓)\n- Show new players (NEW badge)\n- Update ELO changes (+15, -8)
 
-Client -> User: Update display\nShow "Refreshed at [time]"\nHighlight changes
-deactivate Client
+UI -> User: Update display\nShow "Refreshed at [time]"\nHighlight changes
+deactivate UI
 deactivate Server
 
 == View Player Profile ==
-User -> Client: Click on a player's name
-activate Client
+User -> UI: Click on a player's name
+activate UI
 
 note right
   This triggers the
@@ -208,15 +208,15 @@ note right
   (see viewProfile.puml)
 end note
 
-Client -> User: Navigate to player profile
-deactivate Client
+UI -> User: Navigate to player profile
+deactivate UI
 
 == Leave Leaderboard ==
-User -> Client: Click "Back" button
-activate Client
+User -> UI: Click "Back" button
+activate UI
 
-Client -> User: Return to main menu/lobby
-deactivate Client
+UI -> User: Return to main menu/lobby
+deactivate UI
 
 @enduml
 

@@ -5,32 +5,32 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "Client" as Client
+participant "UI" as UI
 participant "TCP Socket" as Socket
 participant "Server" as Server
 database "Database" as DB
 
 == Sign Out Request ==
-User -> Client: Click "Sign Out" button
-activate Client
+User -> UI: Click "Sign Out" button
+activate UI
 
-Client -> Client: Show confirmation dialog
-Client -> User: "Are you sure you want to sign out?"
+UI -> UI: Show confirmation dialog
+UI -> User: "Are you sure you want to sign out?"
 
 alt User cancels
-    User -> Client: Click "Cancel"
-    Client -> User: Stay in current page
-    deactivate Client
+    User -> UI: Click "Cancel"
+    UI -> User: Stay in current page
+    deactivate UI
     
 else User confirms
-    User -> Client: Click "Confirm"
+    User -> UI: Click "Confirm"
     
     == Check Active Game ==
     alt User is in active game
-        Client -> Client: Detect active game session
-        Client -> Client: Create SaveGamePacket:\n{type="SAVE_GAME", gameID, moves[]}
+        UI -> UI: Detect active game session
+        UI -> UI: Create SaveGamePacket:\n{type="SAVE_GAME", gameID, moves[]}
         
-        Client -> Socket: send(SaveGamePacket)
+        UI -> Socket: send(SaveGamePacket)
         activate Socket
         Socket -> Server: Forward packet
         deactivate Socket
@@ -43,14 +43,14 @@ else User confirms
         
         Server -> Socket: send(ACK_SAVED)
         activate Socket
-        Socket -> Client: Game saved confirmation
+        Socket -> UI: Game saved confirmation
         deactivate Socket
     end
     
     == Send Sign Out Request ==
-    Client -> Client: Create SignOutPacket:\n{type="SIGNOUT", sessionID, userID}
+    UI -> UI: Create SignOutPacket:\n{type="SIGNOUT", sessionID, userID}
     
-    Client -> Socket: send(SignOutPacket)
+    UI -> Socket: send(SignOutPacket)
     activate Socket
     Socket -> Server: Forward packet
     deactivate Socket
@@ -61,9 +61,9 @@ else User confirms
     alt Invalid session
         Server -> Socket: send(ERROR_INVALID_SESSION)
         activate Socket
-        Socket -> Client: Forward error
+        Socket -> UI: Forward error
         deactivate Socket
-        Client -> User: Show "Session expired"
+        UI -> User: Show "Session expired"
         
     else Valid session
         == Update User Status ==
@@ -75,7 +75,7 @@ else User confirms
         == Remove from Online Players ==
         Server -> Server: Remove from activeUsers list:\nactiveUsers.remove(userID)
         
-        Server -> Server: Broadcast to other clients:\nLOBBY_UPDATE (player offline)
+        Server -> Server: Broadcast to other UIs:\nLOBBY_UPDATE (player offline)
         
         == Clear Session ==
         Server -> Server: Delete session:\nsessions.remove(sessionID)
@@ -84,31 +84,31 @@ else User confirms
         
         Server -> Socket: send(ResponsePacket)
         activate Socket
-        Socket -> Client: Forward response
+        Socket -> UI: Forward response
         deactivate Socket
         
-        == Client Cleanup ==
-        Client -> Client: Clear local session data:\ndelete sessionID,\ndelete userInfo
+        == UI Cleanup ==
+        UI -> UI: Clear local session data:\ndelete sessionID,\ndelete userInfo
         
-        Client -> Client: Close game UI
-        Client -> User: Show "Signed out successfully"
+        UI -> UI: Close game UI
+        UI -> User: Show "Signed out successfully"
         
         == Close TCP Connection ==
-        Client -> Socket: send(CLOSE_CONNECTION)
+        UI -> Socket: send(CLOSE_CONNECTION)
         activate Socket
         Socket -> Server: Forward close request
         deactivate Socket
         
-        Server -> Server: Log: "Client disconnected"
-        Server -> Socket: close(clientSocket)
+        Server -> Server: Log: "UI disconnected"
+        Server -> Socket: close(UISocket)
         activate Socket
-        Socket -> Client: Connection closed
+        Socket -> UI: Connection closed
         deactivate Socket
         
-        Client -> Client: close(socket)
+        UI -> UI: close(socket)
         
-        Client -> User: Redirect to Login page
-        deactivate Client
+        UI -> User: Redirect to Login page
+        deactivate UI
         
         Server -> Server: Free resources:\ndelete thread/handler
         deactivate Server

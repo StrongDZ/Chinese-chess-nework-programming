@@ -5,18 +5,18 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "Client" as Client
+participant "UI" as UI
 participant "TCP Socket" as Socket
 participant "Server" as Server
 database "Database" as DB
 
 == Open Customize Board ==
-User -> Client: Click "Customize Board" / "Settings"
-activate Client
+User -> UI: Click "Customize Board" / "Settings"
+activate UI
 
-Client -> Client: Create GetPreferencesPacket:\n{type="GET_PREFERENCES",\nsessionID, userID}
+UI -> UI: Create GetPreferencesPacket:\n{type="GET_PREFERENCES",\nsessionID, userID}
 
-Client -> Socket: send(GetPreferencesPacket)
+UI -> Socket: send(GetPreferencesPacket)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -27,10 +27,10 @@ Server -> Server: Validate sessionID
 alt Invalid session
     Server -> Socket: send(ERROR_SESSION)
     activate Socket
-    Socket -> Client: Forward error
+    Socket -> UI: Forward error
     deactivate Socket
-    Client -> User: Show "Session expired"
-    deactivate Client
+    UI -> User: Show "Session expired"
+    deactivate UI
     
 else Valid session
     Server -> DB: SELECT * FROM user_preferences\nWHERE userID = ?
@@ -49,41 +49,41 @@ else Valid session
     
     Server -> Socket: send(PreferencesPacket)
     activate Socket
-    Socket -> Client: Forward preferences
+    Socket -> UI: Forward preferences
     deactivate Socket
     
-    Client -> User: Display customization page:\n- Board Theme section\n  (Currently: [theme_name])\n- Piece Style section\n  (Currently: [style_name])\n- [Save] button\n- [Cancel] button
-    deactivate Client
+    UI -> User: Display customization page:\n- Board Theme section\n  (Currently: [theme_name])\n- Piece Style section\n  (Currently: [style_name])\n- [Save] button\n- [Cancel] button
+    deactivate UI
     deactivate Server
 end
 
 == Customize Board Theme ==
-User -> Client: Select/Enter board theme
-activate Client
+User -> UI: Select/Enter board theme
+activate UI
 
-Client -> Client: Store temporary selection:\ntemp_board_theme = user_input
+UI -> UI: Store temporary selection:\ntemp_board_theme = user_input
 
-Client -> User: Update preview/display
-deactivate Client
+UI -> User: Update preview/display
+deactivate UI
 
 == Customize Piece Style ==
-User -> Client: Select/Enter piece style
-activate Client
+User -> UI: Select/Enter piece style
+activate UI
 
-Client -> Client: Store temporary selection:\ntemp_piece_style = user_input
+UI -> UI: Store temporary selection:\ntemp_piece_style = user_input
 
-Client -> User: Update preview/display
-deactivate Client
+UI -> User: Update preview/display
+deactivate UI
 
 == Save Customizations ==
-User -> Client: Click "Save"
-activate Client
+User -> UI: Click "Save"
+activate UI
 
-Client -> Client: Collect customizations:\n{board_theme, piece_style}
+UI -> UI: Collect customizations:\n{board_theme, piece_style}
 
-Client -> Client: Create SavePreferencesPacket:\n{type="SAVE_PREFERENCES",\nsessionID, userID,\nboard_theme, piece_style}
+UI -> UI: Create SavePreferencesPacket:\n{type="SAVE_PREFERENCES",\nsessionID, userID,\nboard_theme, piece_style}
 
-Client -> Socket: send(SavePreferencesPacket)
+UI -> Socket: send(SavePreferencesPacket)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -93,9 +93,9 @@ Server -> Server: Validate sessionID
 alt Invalid session
     Server -> Socket: send(ERROR_SESSION)
     activate Socket
-    Socket -> Client: Forward error
+    Socket -> UI: Forward error
     deactivate Socket
-    Client -> User: Show "Session expired"
+    UI -> User: Show "Session expired"
     
 else Valid session
     Server -> DB: SELECT COUNT(*) FROM user_preferences\nWHERE userID = ?
@@ -113,9 +113,9 @@ else Valid session
             deactivate DB
             Server -> Socket: send(ERROR_DB)
             activate Socket
-            Socket -> Client: Forward error
+            Socket -> UI: Forward error
             deactivate Socket
-            Client -> User: Show "Failed to save"
+            UI -> User: Show "Failed to save"
             
         else Insert successful
             DB --> Server: Preferences saved
@@ -123,12 +123,12 @@ else Valid session
             
             Server -> Socket: send(SUCCESS_RESPONSE)
             activate Socket
-            Socket -> Client: Forward success
+            Socket -> UI: Forward success
             deactivate Socket
             
-            Client -> Client: Update local preferences
-            Client -> User: Show "Saved successfully"
-            Client -> User: Apply new settings
+            UI -> UI: Update local preferences
+            UI -> User: Show "Saved successfully"
+            UI -> User: Apply new settings
         end
         
     else Update existing preferences
@@ -143,9 +143,9 @@ else Valid session
             deactivate DB
             Server -> Socket: send(ERROR_DB)
             activate Socket
-            Socket -> Client: Forward error
+            Socket -> UI: Forward error
             deactivate Socket
-            Client -> User: Show "Failed to save"
+            UI -> User: Show "Failed to save"
             
         else Update successful
             DB --> Server: Preferences updated
@@ -153,26 +153,26 @@ else Valid session
             
             Server -> Socket: send(SUCCESS_RESPONSE)
             activate Socket
-            Socket -> Client: Forward success
+            Socket -> UI: Forward success
             deactivate Socket
             
-            Client -> Client: Update local preferences
-            Client -> User: Show "Saved successfully"
-            Client -> User: Apply new settings
+            UI -> UI: Update local preferences
+            UI -> User: Show "Saved successfully"
+            UI -> User: Apply new settings
         end
     end
 end
 
-deactivate Client
+deactivate UI
 deactivate Server
 
 == Cancel Customization ==
-User -> Client: Click "Cancel"
-activate Client
+User -> UI: Click "Cancel"
+activate UI
 
-Client -> Client: Discard temporary changes
+UI -> UI: Discard temporary changes
 
-Client -> User: Close customization page
-deactivate Client
+UI -> User: Close customization page
+deactivate UI
 
 @enduml

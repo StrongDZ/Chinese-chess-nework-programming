@@ -5,44 +5,44 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "Client" as Client
+participant "UI" as UI
 participant "TCP Socket" as Socket
 participant "Server" as Server
 database "Database" as DB
 
 == Establish TCP Connection ==
-User -> Client: Open application
-activate Client
+User -> UI: Open application
+activate UI
 
-Client -> Socket: socket(AF_INET, SOCK_STREAM)
+UI -> Socket: socket(AF_INET, SOCK_STREAM)
 activate Socket
-Client -> Socket: connect(serverIP, 8080)
+UI -> Socket: connect(serverIP, 8080)
 
 Socket -> Server: TCP 3-way handshake\n(SYN → SYN-ACK → ACK)
 activate Server
 
-Server -> Server: accept() connection\nCreate thread for client
-Socket --> Client: Connection established
+Server -> Server: accept() connection\nCreate thread for UI
+Socket --> UI: Connection established
 deactivate Socket
 
-Client -> User: Display sign up form
-deactivate Client
+UI -> User: Display sign up form
+deactivate UI
 
 == Sign Up Process ==
-User -> Client: Enter registration info:\n- Username\n- Password\n- Email\n- Full name
-activate Client
+User -> UI: Enter registration info:\n- Username\n- Password\n- Email\n- Full name
+activate UI
 
-Client -> Client: Validate input format:\n- Username: 3-20 chars, alphanumeric\n- Password: min 6 chars\n- Email: valid format
+UI -> UI: Validate input format:\n- Username: 3-20 chars, alphanumeric\n- Password: min 6 chars\n- Email: valid format
 
 alt Invalid format
-    Client -> User: Show validation errors:\n"Username too short"\n"Invalid email format"
+    UI -> User: Show validation errors:\n"Username too short"\n"Invalid email format"
     
 else Valid format
-    Client -> Client: Hash password:\nhash = SHA256(password)
+    UI -> UI: Hash password:\nhash = SHA256(password)
     
-    Client -> Client: Create SignUpPacket:\n{type="SIGNUP",\nusername, passwordHash,\nemail, fullName}
+    UI -> UI: Create SignUpPacket:\n{type="SIGNUP",\nusername, passwordHash,\nemail, fullName}
     
-    Client -> Socket: send(SignUpPacket)
+    UI -> Socket: send(SignUpPacket)
     activate Socket
     Socket -> Server: Forward packet
     deactivate Socket
@@ -61,10 +61,10 @@ else Valid format
         
         Server -> Socket: send(ResponsePacket)
         activate Socket
-        Socket -> Client: Forward response
+        Socket -> UI: Forward response
         deactivate Socket
         
-        Client -> User: Display "Username already exists.\nPlease choose another."
+        UI -> User: Display "Username already exists.\nPlease choose another."
         
     else Username available
         DB --> Server: COUNT = 0
@@ -82,10 +82,10 @@ else Valid format
             
             Server -> Socket: send(ResponsePacket)
             activate Socket
-            Socket -> Client: Forward response
+            Socket -> UI: Forward response
             deactivate Socket
             
-            Client -> User: Display "Email already in use.\nPlease use another email."
+            UI -> User: Display "Email already in use.\nPlease use another email."
             
         else Email available
             DB --> Server: COUNT = 0
@@ -105,10 +105,10 @@ else Valid format
                 
                 Server -> Socket: send(ERROR_DB)
                 activate Socket
-                Socket -> Client: Forward error
+                Socket -> UI: Forward error
                 deactivate Socket
                 
-                Client -> User: Display "Registration failed.\nPlease try again."
+                UI -> User: Display "Registration failed.\nPlease try again."
                 
             else Insert successful
                 DB --> Server: Account created
@@ -124,30 +124,30 @@ else Valid format
                 
                 Server -> Socket: send(ResponsePacket)
                 activate Socket
-                Socket -> Client: Forward response
+                Socket -> UI: Forward response
                 deactivate Socket
                 
-                Client -> User: Show success message:\n"Registration successful!\nYou can now log in."
+                UI -> User: Show success message:\n"Registration successful!\nYou can now log in."
                 
-                Client -> Client: Clear form data
+                UI -> UI: Clear form data
                 
                 == Auto Login Option ==
-                Client -> User: Show dialog:\n"Login now?" with\n[Yes] [No] buttons
+                UI -> User: Show dialog:\n"Login now?" with\n[Yes] [No] buttons
                 
                 alt User chooses Yes
-                    User -> Client: Click "Yes"
-                    Client -> User: Redirect to Login page\nwith username pre-filled
+                    User -> UI: Click "Yes"
+                    UI -> User: Redirect to Login page\nwith username pre-filled
                     
                 else User chooses No
-                    User -> Client: Click "No"
-                    Client -> User: Stay on Sign Up page
+                    User -> UI: Click "No"
+                    UI -> User: Stay on Sign Up page
                 end
             end
         end
     end
 end
 
-deactivate Client
+deactivate UI
 deactivate Server
 
 @enduml

@@ -5,18 +5,18 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "Client" as Client
+participant "UI" as UI
 participant "TCP Socket" as Socket
 participant "Server" as Server
 database "Database" as DB
 
 == View Own Profile ==
-User -> Client: Click "Profile" / "My Profile"
-activate Client
+User -> UI: Click "Profile" / "My Profile"
+activate UI
 
-Client -> Client: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, userID}
+UI -> UI: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, userID}
 
-Client -> Socket: send(ProfileRequestPacket)
+UI -> Socket: send(ProfileRequestPacket)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -27,10 +27,10 @@ Server -> Server: Validate sessionID
 alt Invalid session
     Server -> Socket: send(ERROR_SESSION)
     activate Socket
-    Socket -> Client: Forward error
+    Socket -> UI: Forward error
     deactivate Socket
-    Client -> User: Show "Session expired, please login"
-    deactivate Client
+    UI -> User: Show "Session expired, please login"
+    deactivate UI
     
 else Valid session
     == Fetch User Profile ==
@@ -61,21 +61,21 @@ else Valid session
     
     Server -> Socket: send(ProfileResponsePacket)
     activate Socket
-    Socket -> Client: Forward response
+    Socket -> UI: Forward response
     deactivate Socket
     
-    Client -> Client: Parse profile data
-    Client -> User: Display profile page:\n- Avatar\n- Username & Full name\n- ELO rating & Rank\n- Win/Loss statistics\n- Recent match history
-    deactivate Client
+    UI -> UI: Parse profile data
+    UI -> User: Display profile page:\n- Avatar\n- Username & Full name\n- ELO rating & Rank\n- Win/Loss statistics\n- Recent match history
+    deactivate UI
 end
 
 == View Other User's Profile ==
-User -> Client: Click on another player's name
-activate Client
+User -> UI: Click on another player's name
+activate UI
 
-Client -> Client: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, targetUserID}
+UI -> UI: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, targetUserID}
 
-Client -> Socket: send(ProfileRequestPacket)
+UI -> Socket: send(ProfileRequestPacket)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -85,10 +85,10 @@ Server -> Server: Validate sessionID
 alt Invalid session
     Server -> Socket: send(ERROR_SESSION)
     activate Socket
-    Socket -> Client: Forward error
+    Socket -> UI: Forward error
     deactivate Socket
-    Client -> User: Show "Session expired"
-    deactivate Client
+    UI -> User: Show "Session expired"
+    deactivate UI
     
 else Valid session
     == Fetch Target User Profile ==
@@ -101,10 +101,10 @@ else Valid session
         
         Server -> Socket: send(ERROR_USER_NOT_FOUND)
         activate Socket
-        Socket -> Client: Forward error
+        Socket -> UI: Forward error
         deactivate Socket
         
-        Client -> User: Show "User not found"
+        UI -> User: Show "User not found"
         
     else User found
         DB --> Server: Return user data
@@ -124,20 +124,20 @@ else Valid session
         
         Server -> Socket: send(ProfileResponsePacket)
         activate Socket
-        Socket -> Client: Forward response
+        Socket -> UI: Forward response
         deactivate Socket
         
-        Client -> User: Display profile:\n- Username & Rank\n- ELO rating\n- Online status\n- Statistics\n- Head-to-head record\n- [Challenge] button (if online)
-        deactivate Client
+        UI -> User: Display profile:\n- Username & Rank\n- ELO rating\n- Online status\n- Statistics\n- Head-to-head record\n- [Challenge] button (if online)
+        deactivate UI
         deactivate Server
     end
 end
 
 == Optional: View Match History Detail ==
-User -> Client: Click "View Match History"
-activate Client
+User -> UI: Click "View Match History"
+activate UI
 
-Client -> Socket: send(GET_MATCH_HISTORY)
+UI -> Socket: send(GET_MATCH_HISTORY)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
@@ -149,11 +149,11 @@ deactivate DB
 
 Server -> Socket: send(MatchHistoryPacket)
 activate Socket
-Socket -> Client: Forward data
+Socket -> UI: Forward data
 deactivate Socket
 
-Client -> User: Display match history list:\n- Date & Time\n- Opponent\n- Result (Win/Loss/Draw)\n- Game mode\n- [Replay] button
-deactivate Client
+UI -> User: Display match history list:\n- Date & Time\n- Opponent\n- Result (Win/Loss/Draw)\n- Game mode\n- [Replay] button
+deactivate UI
 deactivate Server
 
 @enduml
