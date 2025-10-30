@@ -1,0 +1,189 @@
+@startuml
+title Challenge Player - Sequence Diagram (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Challenger\n(Player 1)" as P1
+participant "UI 1" as C1
+participant "TCP Socket" as Socket
+participant "Server" as Server
+participant "UI 2" as C2
+actor "Opponent\n(Player 2)" as P2
+database "Database" as DB
+
+== Send Challenge ==
+P1 -> C1: Select player from ready list\nClick "Challenge"
+activate C1
+
+C1 -> C1: Show game mode selection:\n[Classic] [Rapid] [Blitz]
+
+P1 -> C1: Select mode (e.g., Rapid)
+
+C1 -> C1: Create ChallengePacket:\n{type="SEND_CHALLENGE",\nsessionID, fromUserID,\ntoUserID, mode="RAPID"}
+
+C1 -> Socket: send(ChallengePacket)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR_SESSION)
+    activate Socket
+    Socket -> C1: Forward error
+    deactivate Socket
+    C1 -> P1: Show "Session expired"
+    deactivate C1
+    
+else Valid session
+    Server -> DB: SELECT status FROM users\nWHERE userID = toUserID
+    activate DB
+    
+    alt Player offline or in game
+        DB --> Server: status != "ONLINE"
+        deactivate DB
+        
+        Server -> Socket: send(ERROR_PLAYER_UNAVAILABLE)
+        activate Socket
+        Socket -> C1: Forward error
+        deactivate Socket
+        
+        C1 -> P1: Show "Player is not available"
+        deactivate C1
+        
+    else Player available
+        DB --> Server: status = "ONLINE"
+        deactivate DB
+        
+        Server -> Server: Generate challengeID = UUID()
+        
+        Server -> DB: INSERT INTO challenges\n(challengeID, from_user, to_user,\nmode="RAPID", status="PENDING",\ncreated_at=NOW())
+        activate DB
+        DB --> Server: Challenge saved
+        deactivate DB
+        
+        Server -> Socket: send(CHALLENGE_SENT)
+        activate Socket
+        Socket -> C1: Confirmation
+        deactivate Socket
+        
+        C1 -> P1: Show "Challenge sent to [username]\nWaiting for response..."
+        deactivate C1
+        
+        == Notify Opponent ==
+        Server -> Socket: send(CHALLENGE_RECEIVED,\n{challengeID, from_username,\nfrom_elo, mode="RAPID"})
+        activate Socket
+        Socket -> C2: Forward challenge
+        deactivate Socket
+        activate C2
+        
+        C2 -> C2: Show challenge notification:\nPlay sound/popup
+        
+        C2 -> P2: Display challenge dialog:\n"[username] (ELO: 1450)\nchallenges you to Rapid game\n[Accept] [Decline]"
+        deactivate C2
+        
+        == Wait for Response (30s timeout) ==
+        alt Timeout (30 seconds)
+            Server -> Server: Challenge timeout
+            
+            Server -> DB: UPDATE challenges SET\nstatus="EXPIRED"\nWHERE challengeID=?
+            activate DB
+            DB --> Server: Updated
+            deactivate DB
+            
+            Server -> Socket: send(CHALLENGE_EXPIRED)
+            activate Socket
+            Socket -> C1: Forward timeout
+            deactivate Socket
+            activate C1
+            
+            C1 -> P1: Show "Challenge expired.\nPlayer did not respond."
+            deactivate C1
+            
+        else Opponent Declines
+            P2 -> C2: Click "Decline"
+            activate C2
+            
+            C2 -> Socket: send(CHALLENGE_DECLINED,\nchallengeID)
+            activate Socket
+            Socket -> Server: Forward response
+            deactivate Socket
+            
+            Server -> DB: UPDATE challenges SET\nstatus="DECLINED"\nWHERE challengeID=?
+            activate DB
+            DB --> Server: Updated
+            deactivate DB
+            
+            Server -> Socket: send(CHALLENGE_DECLINED)
+            activate Socket
+            Socket -> C1: Forward response
+            deactivate Socket
+            activate C1
+            
+            C1 -> P1: Show "[username] declined\nyour challenge"
+            deactivate C1
+            
+            C2 -> P2: Show "Challenge declined"
+            deactivate C2
+            
+        else Opponent Accepts
+            P2 -> C2: Click "Accept"
+            activate C2
+            
+            C2 -> Socket: send(CHALLENGE_ACCEPTED,\nchallengeID)
+            activate Socket
+            Socket -> Server: Forward response
+            deactivate Socket
+            
+            Server -> DB: UPDATE challenges SET\nstatus="ACCEPTED"\nWHERE challengeID=?
+            activate DB
+            DB --> Server: Updated
+            deactivate DB
+            
+            == Create Game ==
+            Server -> Server: Generate gameID = UUID()
+            Server -> Server: Assign colors randomly:\nplayer1_color = random(RED, BLACK)
+            
+            Server -> DB: INSERT INTO games\n(gameID, player1_id, player2_id,\nmode="RAPID", type="PVP",\nstatus="ACTIVE", created_at=NOW())
+            activate DB
+            DB --> Server: Game created
+            deactivate DB
+            
+            Server -> DB: UPDATE users SET\nstatus="IN_GAME"\nWHERE userID IN (?, ?)
+            activate DB
+            DB --> Server: Status updated
+            deactivate DB
+            
+            == Start Game for Both Players ==
+            Server -> Socket: send(GAME_START,\n{gameID, color="RED", opponent})
+            activate Socket
+            Socket -> C1: Forward game start
+            deactivate Socket
+            activate C1
+            
+            C1 -> P1: Show "Challenge accepted!\nStarting game..."\nLoad game board
+            deactivate C1
+            
+            Server -> Socket: send(GAME_START,\n{gameID, color="BLACK", opponent})
+            activate Socket
+            Socket -> C2: Forward game start
+            deactivate Socket
+            
+            C2 -> P2: Show "Game starting..."\nLoad game board
+            deactivate C2
+            
+            note over C1, C2
+              Both players now enter
+              the game play loop
+              (see Play Game sequence)
+            end note
+        end
+    end
+end
+
+deactivate Server
+
+@enduml

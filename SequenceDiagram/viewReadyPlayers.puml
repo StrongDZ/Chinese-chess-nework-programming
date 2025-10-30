@@ -5,23 +5,23 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "Client" as Client
+participant "UI" as UI
 participant "TCP Socket" as Socket
 participant "Server" as Server
 database "Database" as DB
 
-note over Client, Server
+note over UI, Server
   TCP connection already established
   from login session
 end note
 
 == Enter Lobby / View Ready Players ==
-User -> Client: Navigate to "Lobby" / "Find Players"
-activate Client
+User -> UI: Navigate to "Lobby" / "Find Players"
+activate UI
 
-Client -> Client: Create GetReadyPlayersPacket:\n{type="GET_READY_PLAYERS",\nsessionID, userID}
+UI -> UI: Create GetReadyPlayersPacket:\n{type="GET_READY_PLAYERS",\nsessionID, userID}
 
-Client -> Socket: send(GetReadyPlayersPacket)
+UI -> Socket: send(GetReadyPlayersPacket)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -32,10 +32,10 @@ Server -> Server: Validate sessionID
 alt Invalid session
     Server -> Socket: send(ERROR_SESSION)
     activate Socket
-    Socket -> Client: Forward error
+    Socket -> UI: Forward error
     deactivate Socket
-    Client -> User: Show "Session expired, please login"
-    deactivate Client
+    UI -> User: Show "Session expired, please login"
+    deactivate UI
     
 else Valid session
     == Fetch Online Players ==
@@ -48,11 +48,11 @@ else Valid session
         
         Server -> Socket: send(EmptyListPacket)
         activate Socket
-        Socket -> Client: Forward response
+        Socket -> UI: Forward response
         deactivate Socket
         
-        Client -> User: Display "No players online\nPlease wait for other players"
-        deactivate Client
+        UI -> User: Display "No players online\nPlease wait for other players"
+        deactivate UI
         
     else Players found
         DB --> Server: Return online players list:\n[{userID, username, elo, status}...]
@@ -65,20 +65,20 @@ else Valid session
         
         Server -> Socket: send(ReadyPlayersPacket)
         activate Socket
-        Socket -> Client: Forward players list
+        Socket -> UI: Forward players list
         deactivate Socket
         
-        Client -> Client: Parse players data
+        UI -> UI: Parse players data
         
-        Client -> User: Display ready players list:\n━━━━━━━━━━━━━━━━\n👤 Username | ELO | Status\n━━━━━━━━━━━━━━━━\n🟢 Player1 | 1450 | Ready\n🟢 Player2 | 1380 | Ready\n🔴 Player3 | 1520 | In Game\n🟢 Player4 | 1290 | Ready\n━━━━━━━━━━━━━━━━\n[Refresh] [Challenge]
-        deactivate Client
+        UI -> User: Display ready players list:\n━━━━━━━━━━━━━━━━\n👤 Username | ELO | Status\n━━━━━━━━━━━━━━━━\n🟢 Player1 | 1450 | Ready\n🟢 Player2 | 1380 | Ready\n🔴 Player3 | 1520 | In Game\n🟢 Player4 | 1290 | Ready\n━━━━━━━━━━━━━━━━\n[Refresh] [Challenge]
+        deactivate UI
         deactivate Server
     end
 end
 
 == Auto Refresh / Real-time Updates ==
 loop Every 5 seconds OR when player status changes
-    Client -> Socket: send(GET_READY_PLAYERS)
+    UI -> Socket: send(GET_READY_PLAYERS)
     activate Socket
     Socket -> Server: Forward request
     deactivate Socket
@@ -91,20 +91,20 @@ loop Every 5 seconds OR when player status changes
     
     Server -> Socket: send(UpdatedPlayersPacket)
     activate Socket
-    Socket -> Client: Forward updated list
+    Socket -> UI: Forward updated list
     deactivate Socket
     
-    Client -> Client: Compare with previous list:\n- Highlight new players (green)\n- Mark offline players (gray)\n- Update status changes
+    UI -> UI: Compare with previous list:\n- Highlight new players (green)\n- Mark offline players (gray)\n- Update status changes
     
-    Client -> User: Update display dynamically
+    UI -> User: Update display dynamically
     deactivate Server
 end
 
 == Manual Refresh ==
-User -> Client: Click "Refresh" button
-activate Client
+User -> UI: Click "Refresh" button
+activate UI
 
-Client -> Socket: send(GET_READY_PLAYERS)
+UI -> Socket: send(GET_READY_PLAYERS)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
@@ -117,35 +117,35 @@ deactivate DB
 
 Server -> Socket: send(ReadyPlayersPacket)
 activate Socket
-Socket -> Client: Forward list
+Socket -> UI: Forward list
 deactivate Socket
 
-Client -> User: Update display\nShow "List refreshed"
-deactivate Client
+UI -> User: Update display\nShow "List refreshed"
+deactivate UI
 deactivate Server
 
 == Filter Players by ELO ==
-User -> Client: Apply ELO filter\n(e.g., 1200-1500)
-activate Client
+User -> UI: Apply ELO filter\n(e.g., 1200-1500)
+activate UI
 
-Client -> Client: Filter local list:\nShow only players in ELO range
+UI -> UI: Filter local list:\nShow only players in ELO range
 
-Client -> User: Display filtered list
-deactivate Client
+UI -> User: Display filtered list
+deactivate UI
 
 == Select Player to Challenge ==
-User -> Client: Click on a player\nfrom the list
-activate Client
+User -> UI: Click on a player\nfrom the list
+activate UI
 
-Client -> Client: Check player status
+UI -> UI: Check player status
 
 alt Player is in game
-    Client -> User: Show "Player is currently in game\nPlease select another player"
+    UI -> User: Show "Player is currently in game\nPlease select another player"
     
 else Player is ready
-    Client -> User: Highlight selected player\nShow [Challenge] button enabled
+    UI -> User: Highlight selected player\nShow [Challenge] button enabled
     
-    User -> Client: Click "Challenge"
+    User -> UI: Click "Challenge"
     
     note right
       This triggers the
@@ -153,18 +153,18 @@ else Player is ready
       (separate sequence diagram)
     end note
     
-    Client -> User: Show "Challenge sent to [username]"
+    UI -> User: Show "Challenge sent to [username]"
 end
 
-deactivate Client
+deactivate UI
 
 == Leave Lobby ==
-User -> Client: Click "Back" / "Leave Lobby"
-activate Client
+User -> UI: Click "Back" / "Leave Lobby"
+activate UI
 
-Client -> Client: Stop auto-refresh loop
+UI -> UI: Stop auto-refresh loop
 
-Client -> User: Return to main menu
-deactivate Client
+UI -> User: Return to main menu
+deactivate UI
 
 @enduml
