@@ -1,0 +1,159 @@
+@startuml
+title View Profile Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "Client" as Client
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== View Own Profile ==
+User -> Client: Click "Profile" / "My Profile"
+activate Client
+
+Client -> Client: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, userID}
+
+Client -> Socket: send(ProfileRequestPacket)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR_SESSION)
+    activate Socket
+    Socket -> Client: Forward error
+    deactivate Socket
+    Client -> User: Show "Session expired, please login"
+    deactivate Client
+    
+else Valid session
+    == Fetch User Profile ==
+    Server -> DB: SELECT * FROM users\nWHERE userID = ?
+    activate DB
+    DB --> Server: Return user data:\n{userID, username, email,\nfullName, elo, status,\ncreated_at, avatar}
+    deactivate DB
+    
+    == Fetch User Statistics ==
+    Server -> DB: SELECT * FROM user_stats\nWHERE userID = ?
+    activate DB
+    DB --> Server: Return stats:\n{total_games, wins, losses,\ndraws, win_rate}
+    deactivate DB
+    
+    == Fetch Recent Matches ==
+    Server -> DB: SELECT * FROM game_history\nWHERE player1_id = ? OR player2_id = ?\nORDER BY date DESC\nLIMIT 10
+    activate DB
+    DB --> Server: Return recent games:\n[{gameID, opponent, result,\ndate, mode}...]
+    deactivate DB
+    
+    == Fetch Rank Info ==
+    Server -> DB: SELECT COUNT(*) + 1 FROM users\nWHERE elo > ?\n(Calculate user rank)
+    activate DB
+    DB --> Server: Return rank: e.g., #245
+    deactivate DB
+    
+    Server -> Server: Create ProfileResponsePacket:\n{status="SUCCESS",\nprofile={username, email, elo, rank},\nstats={games, wins, losses, draws},\nrecent_matches=[...]}
+    
+    Server -> Socket: send(ProfileResponsePacket)
+    activate Socket
+    Socket -> Client: Forward response
+    deactivate Socket
+    
+    Client -> Client: Parse profile data
+    Client -> User: Display profile page:\n- Avatar\n- Username & Full name\n- ELO rating & Rank\n- Win/Loss statistics\n- Recent match history
+    deactivate Client
+end
+
+== View Other User's Profile ==
+User -> Client: Click on another player's name
+activate Client
+
+Client -> Client: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, targetUserID}
+
+Client -> Socket: send(ProfileRequestPacket)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR_SESSION)
+    activate Socket
+    Socket -> Client: Forward error
+    deactivate Socket
+    Client -> User: Show "Session expired"
+    deactivate Client
+    
+else Valid session
+    == Fetch Target User Profile ==
+    Server -> DB: SELECT * FROM users\nWHERE userID = ?
+    activate DB
+    
+    alt User not found
+        DB --> Server: No record
+        deactivate DB
+        
+        Server -> Socket: send(ERROR_USER_NOT_FOUND)
+        activate Socket
+        Socket -> Client: Forward error
+        deactivate Socket
+        
+        Client -> User: Show "User not found"
+        
+    else User found
+        DB --> Server: Return user data
+        deactivate DB
+        
+        Server -> DB: SELECT * FROM user_stats\nWHERE userID = ?
+        activate DB
+        DB --> Server: Return stats
+        deactivate DB
+        
+        Server -> DB: SELECT * FROM game_history\nWHERE (player1_id = ? OR player2_id = ?)\nAND (player1_id = currentUser\nOR player2_id = currentUser)\nORDER BY date DESC
+        activate DB
+        DB --> Server: Return head-to-head matches
+        deactivate DB
+        
+        Server -> Server: Create ProfileResponsePacket:\n{status="SUCCESS",\nprofile={username, elo, rank},\nstats={games, wins, losses},\nhead_to_head=[...],\nis_online=true/false}
+        
+        Server -> Socket: send(ProfileResponsePacket)
+        activate Socket
+        Socket -> Client: Forward response
+        deactivate Socket
+        
+        Client -> User: Display profile:\n- Username & Rank\n- ELO rating\n- Online status\n- Statistics\n- Head-to-head record\n- [Challenge] button (if online)
+        deactivate Client
+        deactivate Server
+    end
+end
+
+== Optional: View Match History Detail ==
+User -> Client: Click "View Match History"
+activate Client
+
+Client -> Socket: send(GET_MATCH_HISTORY)
+activate Socket
+Socket -> Server: Forward request
+deactivate Socket
+
+Server -> DB: SELECT * FROM game_history\nWHERE userID = ?\nORDER BY date DESC\nLIMIT 50
+activate DB
+DB --> Server: Return match history
+deactivate DB
+
+Server -> Socket: send(MatchHistoryPacket)
+activate Socket
+Socket -> Client: Forward data
+deactivate Socket
+
+Client -> User: Display match history list:\n- Date & Time\n- Opponent\n- Result (Win/Loss/Draw)\n- Game mode\n- [Replay] button
+deactivate Client
+deactivate Server
+
+@enduml
