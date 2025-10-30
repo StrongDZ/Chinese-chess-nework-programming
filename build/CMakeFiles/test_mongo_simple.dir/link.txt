@@ -1,1 +1,0 @@
-/usr/bin/g++ -g CMakeFiles/test_mongo_simple.dir/tests/database/test_mongo_simple.cpp.o CMakeFiles/test_mongo_simple.dir/src/database/mongodb_client.cpp.o -o /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_mongo_simple   -L/usr/local/lib  -Wl,-rpath,/usr/local/lib -lmongocxx -lbsoncxx -ljsoncpp -lpthread 

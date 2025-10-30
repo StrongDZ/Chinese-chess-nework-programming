@@ -1,1 +1,0 @@
-/usr/bin/g++ -g CMakeFiles/test_protocol.dir/tests/network/test_protocol.cpp.o CMakeFiles/test_protocol.dir/src/network/protocol.cpp.o -o /home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/bin/test_protocol   -L/usr/local/lib  -Wl,-rpath,/usr/local/lib -ljsoncpp -lpthread 
