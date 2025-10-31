@@ -1,3 +1,8 @@
+documents/
+examples/
+
+build/
+bin/
 # ===========================================
 # Environment and Secrets
 # ===========================================
@@ -74,7 +79,4 @@ Thumbs.db
 .specstory/
 
 
-documents/
-examples/
 
-build/

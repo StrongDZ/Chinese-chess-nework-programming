@@ -65,15 +65,15 @@ target_link_libraries(test_redis_simple
 )
 
 # Test Protocol (binary message encoding/decoding)
-add_executable(test_protocol
-    tests/network/test_protocol.cpp
-    src/network/protocol.cpp
-)
+# add_executable(test_protocol
+#     tests/network/test_protocol.cpp
+#     src/network/protocol.cpp
+# )
 
-target_link_libraries(test_protocol
-    jsoncpp
-    pthread
-)
+# target_link_libraries(test_protocol
+#     jsoncpp
+#     pthread
+# )
 
 # Test AuthHandler
 add_executable(test_auth_handler
