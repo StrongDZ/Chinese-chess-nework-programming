@@ -1,0 +1,51 @@
+<!-- /Users/tuanpham/Chinese-chess-nework-programming/src/Front_end/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Chinese Chess</title>
+	<link rel="preload" href="./assets/bg.jpg" as="image">
+	<link rel="preload" href="./assets/title_cn.png" as="image">
+	<link rel="preload" href="./assets/title_en.png" as="image">
+	<link rel="preload" href="./assets/board.png" as="image">
+	<link rel="stylesheet" href="./styles/base.css" />
+</head>
+<body>
+	<cc-background
+		src="./assets/bg.jpg"
+		alt="Ink landscape background"
+	></cc-background>
+
+    <main class="stage-outer" role="main" aria-label="Chinese Chess Landing">
+		<div class="stage">
+			<cc-background
+				src="./assets/bg.jpg"
+				alt="Ink landscape background"
+			></cc-background>
+
+			<cc-title
+				src="./assets/title_cn.png"
+				alt="中国象棋"
+				style="--w: 935px; --h: 268px; --top: 100px; --left: 530px;"
+			></cc-title>
+
+			<cc-title
+				src="./assets/title_en.png"
+				alt="Chinese chess"
+				style="--w: 461px; --h: 145px; --top: 346px; --left: 776px;"
+			></cc-title>
+
+			<cc-board
+				src="./assets/board.png"
+				alt="Chinese chess board"
+				style="--w: 607px; --h: 450px; --top: 630px; --left: 680px;"
+			></cc-board>
+		</div>
+	</main>
+
+	<script type="module" src="./components/cc-background.js"></script>
+	<script type="module" src="./components/cc-title.js"></script>
+	<script type="module" src="./components/cc-board.js"></script>
+</body>
+</html>
