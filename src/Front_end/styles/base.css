@@ -31,7 +31,7 @@ html,body{
 	overflow: hidden;
 }
 
-cc-title, cc-board{
+cc-title, cc-board, cc-button{
 	position: absolute;
 	display: block;
 }

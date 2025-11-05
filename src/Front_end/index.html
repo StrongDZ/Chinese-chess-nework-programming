@@ -27,25 +27,42 @@
 			<cc-title
 				src="./assets/title_cn.png"
 				alt="中国象棋"
-				style="--w: 935px; --h: 268px; --top: 100px; --left: 530px;"
+				style="--w: 935px; --h: 268px; --top: 100px; --left: 530px;--w-small: 600px; --h-small: 150px; --top-small: 80px; --left-small: 660px;"
 			></cc-title>
 
 			<cc-title
 				src="./assets/title_en.png"
 				alt="Chinese chess"
-				style="--w: 461px; --h: 145px; --top: 346px; --left: 776px;"
+				style="--w: 461px; --h: 145px; --top: 346px; --left: 776px; --w-small: 320px; --h-small: 70px; --top-small: 240px; --left-small: 800px;"
 			></cc-title>
 
 			<cc-board
 				src="./assets/board.png"
 				alt="Chinese chess board"
-				style="--w: 607px; --h: 450px; --top: 630px; --left: 680px;"
+				style="--w: 607px; --top: 630px; --left: 680px; --w-small: 400px; --top-small: 700px; --left-small: 760px;"
 			></cc-board>
+
+			<cc-auth-panel visible="false" style="--top: 450px;">
+				<cc-button
+					text="login"
+					src="./assets/login.png"
+					alt="Log in"
+					style="--w: 287px; --top: -80px; --left: -150px;"
+				></cc-button>
+				<cc-button
+					text="register"
+					src="./assets/register.png"
+					alt="Register"
+					style="--w: 380px; --top: 80px; --left: -185px;"
+				></cc-button>
+			</cc-auth-panel>
 		</div>
 	</main>
 
 	<script type="module" src="./components/cc-background.js"></script>
 	<script type="module" src="./components/cc-title.js"></script>
 	<script type="module" src="./components/cc-board.js"></script>
+	<script type="module" src="./components/cc-button.js"></script>
+	<script type="module" src="./components/cc-auth-panel.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 // /Users/tuanpham/Chinese-chess-nework-programming/src/Front_end/components/cc-board.js
 class CCBoard extends HTMLElement{
-	static get observedAttributes(){ return ['src','alt']; }
+	static get observedAttributes(){ return ['src','alt','state']; }
 	constructor(){
 		super();
 		const root = this.attachShadow({mode:'open'});
@@ -8,17 +8,26 @@ class CCBoard extends HTMLElement{
 			<style>
 				:host{
 					display:block;
+					position: absolute;
 					top: calc(var(--top, 0px) * var(--scale));
 					left: calc(var(--left, 0px) * var(--scale));
 					width: calc(var(--w, 640px) * var(--scale));
+					transition: all .5s cubic-bezier(0.4, 0, 0.2, 1);
+				}
+				:host([state="small"]){
+					top: calc(var(--top-small, 0px) * var(--scale));
+					left: calc(var(--left-small, 0px) * var(--scale));
+					width: calc(var(--w-small, 400px) * var(--scale));
 				}
 				.wrap{
 					position: relative;
 					display: inline-block;
 					transition: transform .25s ease;
 					overflow: visible;
+					cursor: pointer;
 				}
 				.wrap:hover{ transform: translateY(-2px); }
+				:host([state="small"]) .wrap:hover{ transform: translateY(-1px); }
 
 				img{
 					position: relative;
@@ -74,8 +83,15 @@ class CCBoard extends HTMLElement{
 			</div>
 		`;
 		this.$img = root.querySelector('img');
+		this.$wrap = root.querySelector('.wrap');
 	}
-	connectedCallback(){ this.#sync(); }
+	connectedCallback(){ 
+		this.#sync();
+		this.$wrap.addEventListener('click', this.#handleClick);
+	}
+	disconnectedCallback(){
+		this.$wrap.removeEventListener('click', this.#handleClick);
+	}
 	attributeChangedCallback(){ this.#sync(); }
 	#sync(){
 		if(this.$img){
@@ -83,6 +99,24 @@ class CCBoard extends HTMLElement{
 			this.$img.src = src;
 			this.$img.alt = this.getAttribute('alt') || '';
 			this.shadowRoot.querySelector('#maskImg')?.setAttribute('href', src);
+		}
+	}
+	#handleClick = (e) => {
+		const currentState = this.getAttribute('state');
+		if(currentState !== 'small'){
+			// Chuyển sang frame 2 (nhỏ)
+			this.setAttribute('state', 'small');
+			document.dispatchEvent(new CustomEvent('cc-board-clicked', {
+				bubbles: true,
+				detail: { board: this, state: 'small' }
+			}));
+		} else {
+			// Quay lại frame 1 (to)
+			this.removeAttribute('state');
+			document.dispatchEvent(new CustomEvent('cc-board-reset', {
+				bubbles: true,
+				detail: { board: this, state: 'normal' }
+			}));
 		}
 	}
 }
