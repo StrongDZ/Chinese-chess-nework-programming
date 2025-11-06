@@ -56,6 +56,26 @@
 					style="--w: 380px; --top: 80px; --left: -185px;"
 				></cc-button>
 			</cc-auth-panel>
+
+			<cc-login-panel visible="false" title-src="./assets/login-title.png">
+				<div slot="inputs">
+					<cc-input
+						type="text"
+						placeholder="Username"
+						style="--w: 400px; --mb: 24px; --radius: 50px;"
+					></cc-input>
+					<cc-input
+						type="password"
+						placeholder="Password"
+						style="--w: 400px; --mb: 24px; --radius: 50px;"
+					></cc-input>
+				</div>
+				<cc-next-button slot="button" src="./assets/next-button.png" style="--w: 80px;"></cc-next-button>
+				<div slot="links">
+					<cc-link text="Forgot password?" href="#forgot"></cc-link>
+					<cc-link text="Register" href="#register"></cc-link>
+				</div>
+			</cc-login-panel>
 		</div>
 	</main>
 
@@ -64,5 +84,9 @@
 	<script type="module" src="./components/cc-board.js"></script>
 	<script type="module" src="./components/cc-button.js"></script>
 	<script type="module" src="./components/cc-auth-panel.js"></script>
+	<script type="module" src="./components/cc-login-panel.js"></script>
+	<script type="module" src="./components/cc-input.js"></script>
+	<script type="module" src="./components/cc-next-button.js"></script>
+	<script type="module" src="./components/cc-link.js"></script>
 </body>
 </html>

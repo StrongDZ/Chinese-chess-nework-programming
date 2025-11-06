@@ -111,12 +111,20 @@ class CCBoard extends HTMLElement{
 				detail: { board: this, state: 'small' }
 			}));
 		} else {
-			// Quay lại frame 1 (to)
-			this.removeAttribute('state');
-			document.dispatchEvent(new CustomEvent('cc-board-reset', {
-				bubbles: true,
-				detail: { board: this, state: 'normal' }
-			}));
+			// Đang ở frame 2 hoặc frame 3
+			// Kiểm tra xem login panel có đang mở không
+			const loginPanel = document.querySelector('cc-login-panel');
+			if(loginPanel && loginPanel.getAttribute('visible') === 'true'){
+				// Đang ở frame 3 → đóng login panel, quay lại frame 2
+				loginPanel.setAttribute('visible', 'false');
+			} else {
+				// Đang ở frame 2 → quay lại frame 1
+				this.removeAttribute('state');
+				document.dispatchEvent(new CustomEvent('cc-board-reset', {
+					bubbles: true,
+					detail: { board: this, state: 'normal' }
+				}));
+			}
 		}
 	}
 }

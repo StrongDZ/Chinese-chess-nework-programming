@@ -35,10 +35,14 @@ class CCAuthPanel extends HTMLElement{
 	connectedCallback(){
 		document.addEventListener('cc-board-clicked', this.#handleBoardClick);
 		document.addEventListener('cc-board-reset', this.#handleBoardReset);
+		document.addEventListener('cc-login-opened', this.#handleLoginOpened);
+		document.addEventListener('cc-login-closed', this.#handleLoginClosed);
 	}
 	disconnectedCallback(){
 		document.removeEventListener('cc-board-clicked', this.#handleBoardClick);
 		document.removeEventListener('cc-board-reset', this.#handleBoardReset);
+		document.removeEventListener('cc-login-opened', this.#handleLoginOpened);
+		document.removeEventListener('cc-login-closed', this.#handleLoginClosed);
 	}
 	attributeChangedCallback(name, oldVal, newVal){
 		if(name === 'visible') this.#updateVisibility();
@@ -49,8 +53,18 @@ class CCAuthPanel extends HTMLElement{
 	#handleBoardReset = () => {
 		this.setAttribute('visible', 'false');
 	}
+	#handleLoginOpened = () => {
+		this.setAttribute('visible', 'false');
+	}
+	#handleLoginClosed = () => {
+		// Chỉ hiện lại nếu board đang ở state small (frame 2)
+		const board = document.querySelector('cc-board');
+		if(board && board.getAttribute('state') === 'small'){
+			this.setAttribute('visible', 'true');
+		}
+	}
 	#updateVisibility(){
 		// Already handled by CSS :host([visible])
-	}
+	}   
 }
 customElements.define('cc-auth-panel', CCAuthPanel);

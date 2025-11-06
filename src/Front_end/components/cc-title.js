@@ -35,10 +35,14 @@ class CCTitle extends HTMLElement{
 		this.#sync();
 		document.addEventListener('cc-board-clicked', this.#handleBoardClick);
 		document.addEventListener('cc-board-reset', this.#handleBoardReset);
+		document.addEventListener('cc-login-opened', this.#handleLoginOpened);
+		document.addEventListener('cc-login-closed', this.#handleLoginClosed);
 	}
 	disconnectedCallback(){
 		document.removeEventListener('cc-board-clicked', this.#handleBoardClick);
 		document.removeEventListener('cc-board-reset', this.#handleBoardReset);
+		document.removeEventListener('cc-login-opened', this.#handleLoginOpened);
+		document.removeEventListener('cc-login-closed', this.#handleLoginClosed);
 	}
 	attributeChangedCallback(){ this.#sync(); }
 	#sync(){
@@ -56,6 +60,12 @@ class CCTitle extends HTMLElement{
 		if(this.getAttribute('state') === 'small'){
 			this.removeAttribute('state');
 		}
+	}
+	#handleLoginOpened = () => {
+		this.style.display = 'none';
+	}
+	#handleLoginClosed = () => {
+		this.style.display = 'block';
 	}
 }
 customElements.define('cc-title', CCTitle);
