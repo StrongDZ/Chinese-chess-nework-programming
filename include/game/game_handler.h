@@ -5,67 +5,59 @@
 #include "../database/redis_client.h"
 #include <json/json.h>
 #include <string>
-#include <bsoncxx/oid.hpp>
 
-// Move structure
-struct Move {
-    int moveNumber;
-    bsoncxx::oid playerId;
-    int fromX, fromY;
-    int toX, toY;
-    std::string piece;
-    std::string captured;
-    std::string notation;
-    std::string fenAfter;
-    int timeTaken;
-};
-
+/**
+ * GameHandler - Xử lý logic game cờ tướng
+ * 
+ * Chức năng:
+ * - handleCreateGame: Tạo game mới từ challenge
+ * - handleMakeMove: Thực hiện nước đi
+ * - handleOfferDraw: Đề nghị hòa
+ * - handleRespondDraw: Chấp nhận/từ chối hòa
+ * - handleResign: Đầu hàng
+ * - handleGetGame: Lấy thông tin game
+ */
 class GameHandler {
 private:
     MongoDBClient& mongoClient;
     RedisClient& redisClient;
+    
+    // Helper: Lấy userId từ token
+    std::string getUserIdFromToken(const std::string& token);
+    
+    // Helper: Validate nước đi (cơ bản)
+    bool isValidMove(const std::string& from, const std::string& to);
+    
+    // Helper: Check game đã kết thúc chưa
+    bool isGameOver(const std::string& gameId);
+    
+    // Helper: Cập nhật rating sau game
+    void updatePlayerRatings(const std::string& whiteId, const std::string& blackId,
+                            const std::string& result, const std::string& timeControl);
 
 public:
     GameHandler(MongoDBClient& mongo, RedisClient& redis);
     
-    // Create a new game
+    // Tạo game mới từ challenge đã accept
     Json::Value handleCreateGame(const Json::Value& request);
     
-    // Make a move
+    // Thực hiện nước đi
     Json::Value handleMakeMove(const Json::Value& request);
     
-    // End game (resign, draw offer, timeout)
-    Json::Value handleEndGame(const Json::Value& request);
+    // Đề nghị hòa
+    Json::Value handleOfferDraw(const Json::Value& request);
     
-    // Get game state
+    // Chấp nhận/từ chối hòa
+    Json::Value handleRespondDraw(const Json::Value& request);
+    
+    // Đầu hàng
+    Json::Value handleResign(const Json::Value& request);
+    
+    // Lấy thông tin game
     Json::Value handleGetGame(const Json::Value& request);
     
-    // Get active games for a player
-    Json::Value handleGetActiveGames(const Json::Value& request);
-    
-    // Accept/reject draw offer
-    Json::Value handleDrawOffer(const Json::Value& request);
-
-private:
-    // Validate FEN string
-    bool isValidFEN(const std::string& fen);
-    
-    // Validate move (basic validation, full chess logic would be more complex)
-    bool isValidMove(const Move& move);
-    
-    // Archive a completed game
-    bool archiveGame(const bsoncxx::oid& gameId, 
-                    const std::string& result,
-                    const std::string& termination);
-    
-    // Get user ID from token
-    std::string getUserIdFromToken(const std::string& token);
-    
-    // Calculate initial FEN for Chinese Chess (Xiangqi)
-    std::string getInitialXiangqiFEN();
-    
-    // Validate time control
-    bool isValidTimeControl(const std::string& timeControl);
+    // Lấy danh sách game của user
+    Json::Value handleListGames(const Json::Value& request);
 };
 
-#endif // GAME_HANDLER_H
+#endif

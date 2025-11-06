@@ -3,7 +3,6 @@
 
 #include "../database/mongodb_client.h"
 #include "../database/redis_client.h"
-#include "../config/avatar_config.h"
 #include <json/json.h>
 #include <string>
 
@@ -15,39 +14,42 @@ private:
 public:
     AuthHandler(MongoDBClient& mongo, RedisClient& redis);
     
-    // Handle 0x01 LOGIN_REQUEST
-    Json::Value handleLogin(const Json::Value& request);
-    
-    // Handle 0x02 REGISTER_REQUEST
+    // Đăng ký tài khoản mới
     Json::Value handleRegister(const Json::Value& request);
     
-    // Handle 0x03 LOGOUT_REQUEST
+    // Đăng nhập
+    Json::Value handleLogin(const Json::Value& request);
+    
+    // Đăng xuất
     Json::Value handleLogout(const Json::Value& request);
     
-    // Update user profile (display name, avatar, country)
+    // Cập nhật profile (display_name, avatar, country)
     Json::Value handleUpdateProfile(const Json::Value& request);
     
-    // Get available avatars list
+    // Lấy danh sách 10 avatar
     Json::Value handleGetAvatars(const Json::Value& request);
 
 private:
-    // Hash password with SHA256
+    // Hash password bằng SHA256
     std::string hashPassword(const std::string& password);
     
-    // Generate random session token
+    // Tạo random token cho session
     std::string generateToken();
     
-    // Validate username format (3-50 chars, alphanumeric)
+    // Validate username (3-50 ký tự, chữ + số)
     bool isValidUsername(const std::string& username);
     
     // Validate email format
     bool isValidEmail(const std::string& email);
     
-    // Validate country code (2 chars)
+    // Validate avatar_id (1-10)
+    bool isValidAvatarId(int avatarId);
+    
+    // Validate country code (2 chữ cái)
     bool isValidCountryCode(const std::string& country);
     
-    // Get user ID from token
+    // Lấy userId từ token (Redis)
     std::string getUserIdFromToken(const std::string& token);
 };
 
-#endif // AUTH_HANDLER_H
+#endif

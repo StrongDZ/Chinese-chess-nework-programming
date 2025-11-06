@@ -7,9 +7,10 @@
 #include <mongocxx/database.hpp>
 #include <string>
 
+// Quản lý kết nối MongoDB
 class MongoDBClient {
 private:
-    static mongocxx::instance instance;
+    static mongocxx::instance instance;  // Singleton instance (khởi tạo 1 lần)
     mongocxx::client client;
     mongocxx::database database;
     std::string connectionString;
@@ -19,10 +20,13 @@ public:
     MongoDBClient();
     ~MongoDBClient();
     
-    // Connect using connection string and database name directly
+    // Kết nối tới MongoDB Atlas/Local
     bool connect(const std::string& connectionString, const std::string& databaseName);
     
+    // Lấy database handle để thao tác collections
     mongocxx::database& getDatabase();
+    
+    // Kiểm tra kết nối
     bool isConnected() const;
 };
 

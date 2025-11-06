@@ -1,119 +1,84 @@
 #include "../../include/auth/auth_handler.h"
-#include "../../include/auth/auth_handler.h"
-#include "../../include/config/avatar_config.h"
+#include <mongocxx/client.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
-#include <mongocxx/exception/exception.hpp>
 #include <openssl/sha.h>
 #include <random>
-#include <sstream>
-#include <iomanip>
 #include <regex>
+#include <iomanip>
+#include <sstream>
+#include <chrono>
 
 using namespace std;
-
 using bsoncxx::builder::stream::document;
 using bsoncxx::builder::stream::finalize;
-using bsoncxx::builder::stream::open_document;
-using bsoncxx::builder::stream::close_document;
 
 AuthHandler::AuthHandler(MongoDBClient& mongo, RedisClient& redis)
-    : mongoClient(mongo), redisClient(redis) {
-}
+    : mongoClient(mongo), redisClient(redis) {}
 
-Json::Value AuthHandler::handleLogin(const Json::Value& request) {
-    Json::Value response;
+// Hash password bằng SHA256
+string AuthHandler::hashPassword(const string& password) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)password.c_str(), password.length(), hash);
     
-    try {
-        // 1. Validate input
-        if (!request.isMember("username") || !request.isMember("password")) {
-            response["success"] = false;
-            response["error"] = "Missing username or password";
-            return response;
-        }
-
-        string username = request["username"].asString();
-        string password = request["password"].asString();
-
-        if (username.empty() || password.empty()) {
-            response["success"] = false;
-            response["error"] = "Username and password cannot be empty";
-            return response;
-        }
-        
-        // 2. Hash password
-        string passwordHash = hashPassword(password);
-
-        // 3. Query MongoDB for user
-        auto db = mongoClient.getDatabase();
-        auto users = db["users"];
-        
-        auto filter = document{}
-            << "username" << username
-            << "password_hash" << passwordHash
-            << finalize;
-        
-        auto result = users.find_one(filter.view());
-        
-        if (!result) {
-            response["success"] = false;
-            response["error"] = "Invalid username or password";
-            return response;
-        }
-        
-        // 4. Get user details
-        auto doc = result->view();
-        string userId = doc["_id"].get_oid().value.to_string();
-        string email = string(doc["email"].get_string().value);
-        
-        // 5. Generate session token
-        string token = generateToken();
-        
-        // 6. Save session to Redis (24 hours TTL)
-        if (!redisClient.saveSession(token, userId, 86400)) {
-            response["success"] = false;
-            response["error"] = "Failed to create session";
-            return response;
-        }
-        
-        // 7. Update user status in MongoDB
-        auto update = document{}
-            << "$set" << open_document
-                << "is_online" << true
-                << "status" << "active"
-                << "last_login" << bsoncxx::types::b_date{chrono::system_clock::now()}
-            << close_document
-            << finalize;
-        
-        users.update_one(filter.view(), update.view());
-        
-        // 8. Return success response
-        response["success"] = true;
-        response["message"] = "Login successful";
-        response["data"]["token"] = token;
-        response["data"]["user_id"] = userId;
-        response["data"]["username"] = username;
-        response["data"]["email"] = email;
-        
-    } catch (const mongocxx::exception& e) {
-        response["success"] = false;
-        response["error"] = string("Database error: ") + e.what();
-    } catch (const exception& e) {
-        response["success"] = false;
-        response["error"] = string("Login error: ") + e.what();
+    stringstream ss;
+    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << hex << setw(2) << setfill('0') << (int)hash[i];
     }
-    
-    return response;
+    return ss.str();
 }
 
+// Tạo token ngẫu nhiên
+string AuthHandler::generateToken() {
+    random_device rd;
+    mt19937_64 gen(rd());
+    uniform_int_distribution<uint64_t> dis;
+    
+    stringstream ss;
+    ss << hex << dis(gen) << dis(gen);
+    return ss.str();
+}
+
+// Validate username
+bool AuthHandler::isValidUsername(const string& username) {
+    if (username.length() < 3 || username.length() > 50) return false;
+    regex pattern("^[a-zA-Z0-9_]+$");
+    return regex_match(username, pattern);
+}
+
+// Validate email
+bool AuthHandler::isValidEmail(const string& email) {
+    regex pattern(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
+    return regex_match(email, pattern);
+}
+
+// Validate avatar ID (1-10)
+bool AuthHandler::isValidAvatarId(int avatarId) {
+    return avatarId >= 1 && avatarId <= 10;
+}
+
+// Validate country code
+bool AuthHandler::isValidCountryCode(const string& country) {
+    if (country.length() != 2) return false;
+    regex pattern("^[A-Z]{2}$");
+    return regex_match(country, pattern);
+}
+
+// Lấy userId từ token
+string AuthHandler::getUserIdFromToken(const string& token) {
+    return redisClient.getSession(token);
+}
+
+// ĐĂNG KÝ
 Json::Value AuthHandler::handleRegister(const Json::Value& request) {
     Json::Value response;
     
     try {
-        // 1. Validate input
-        if (!request.isMember("username") || !request.isMember("email") || !request.isMember("password")) {
+        // 1. Lấy thông tin từ request
+        if (!request.isMember("username") || !request.isMember("email") || 
+            !request.isMember("password")) {
             response["success"] = false;
-            response["error"] = "Missing required fields (username, email, password)";
+            response["error"] = "Missing required fields";
             return response;
         }
         
@@ -123,13 +88,13 @@ Json::Value AuthHandler::handleRegister(const Json::Value& request) {
         
         // Optional fields
         string displayName = request.get("display_name", username).asString();
-        int avatarId = request.get("avatar_id", AvatarConfig::getDefaultAvatarId()).asInt();
+        int avatarId = request.get("avatar_id", 1).asInt();  // Mặc định avatar 1
         string country = request.get("country", "").asString();
         
-        // 2. Validate formats
+        // 2. Validate
         if (!isValidUsername(username)) {
             response["success"] = false;
-            response["error"] = "Invalid username (3-50 chars, alphanumeric only)";
+            response["error"] = "Invalid username (3-50 chars, alphanumeric)";
             return response;
         }
         
@@ -139,90 +104,85 @@ Json::Value AuthHandler::handleRegister(const Json::Value& request) {
             return response;
         }
         
-        if (password.length() < 6) {
+        if (!isValidAvatarId(avatarId)) {
             response["success"] = false;
-            response["error"] = "Password must be at least 6 characters";
-            return response;
-        }
-        
-        if (!AvatarConfig::isValidAvatarId(avatarId)) {
-            response["success"] = false;
-            response["error"] = "Invalid avatar ID (must be 1-10)";
+            response["error"] = "Invalid avatar_id (must be 1-10)";
             return response;
         }
         
         if (!country.empty() && !isValidCountryCode(country)) {
             response["success"] = false;
-            response["error"] = "Invalid country code (must be 2 chars)";
+            response["error"] = "Invalid country code (2 uppercase letters)";
             return response;
         }
         
         // 3. Hash password
         string passwordHash = hashPassword(password);
         
-        // 4. Check if username or email already exists
+        // 4. Check username/email đã tồn tại chưa
         auto db = mongoClient.getDatabase();
         auto users = db["users"];
         
-        auto existingUser = users.find_one(document{} << "username" << username << finalize);
+        auto existingUser = users.find_one(
+            document{} << "username" << username << finalize
+        );
         if (existingUser) {
             response["success"] = false;
             response["error"] = "Username already exists";
             return response;
         }
         
-        auto existingEmail = users.find_one(document{} << "email" << email << finalize);
+        auto existingEmail = users.find_one(
+            document{} << "email" << email << finalize
+        );
         if (existingEmail) {
             response["success"] = false;
             response["error"] = "Email already registered";
             return response;
         }
         
-        // 5. Get avatar path (local file)
-        string avatarPath = AvatarConfig::getAvatarPath(avatarId);
+        // 5. Tạo avatar path
+        string avatarPath = "resources/avatars/image" + to_string(avatarId) + ".jpg";
         
-        // 6. Create user document
+        // 6. Tạo user document
         auto now = chrono::system_clock::now();
-        auto userDocBuilder = document{}
+        document userDocBuilder{};
+        userDocBuilder
             << "username" << username
             << "email" << email
             << "password_hash" << passwordHash
             << "display_name" << displayName
-            << "avatar_path" << avatarPath
+            << "avatar_url" << avatarPath
             << "status" << "active"
             << "is_online" << false
             << "created_at" << bsoncxx::types::b_date{now}
             << "last_login" << bsoncxx::types::b_date{now};
         
-        // Add country if provided
         if (!country.empty()) {
             userDocBuilder << "country" << country;
         }
         
         auto userDoc = userDocBuilder << finalize;
         
+        // 7. Insert vào database
         auto insertResult = users.insert_one(userDoc.view());
-        
         if (!insertResult) {
             response["success"] = false;
             response["error"] = "Failed to create user";
             return response;
         }
         
-        string userId = insertResult->inserted_id().get_oid().value.to_string();
+        bsoncxx::oid userOid = insertResult->inserted_id().get_oid().value;
+        string userId = userOid.to_string();
         
-        // 7. Initialize player stats (3 records: bullet, blitz, classical)
+        // 8. Tạo player_stats cho 3 time_control
         auto stats = db["player_stats"];
         vector<string> timeControls = {"bullet", "blitz", "classical"};
+        int initialRating = 1500;
         
         for (const auto& timeControl : timeControls) {
-            int initialRating = 1200;
-            if (timeControl == "bullet") initialRating = 1200;
-            else if (timeControl == "blitz") initialRating = 1200;
-            else initialRating = 1200; // classical
-            
             auto statDoc = document{}
-                << "user_id" << bsoncxx::oid(userId)
+                << "user_id" << userOid
                 << "time_control" << timeControl
                 << "rating" << initialRating
                 << "highest_rating" << initialRating
@@ -242,21 +202,13 @@ Json::Value AuthHandler::handleRegister(const Json::Value& request) {
             stats.insert_one(statDoc.view());
         }
         
-        // 8. Return success
+        // 9. Return success
         response["success"] = true;
         response["message"] = "Registration successful";
         response["data"]["user_id"] = userId;
         response["data"]["username"] = username;
-        response["data"]["email"] = email;
-        response["data"]["display_name"] = displayName;
-        response["data"]["avatar_path"] = avatarPath;
-        if (!country.empty()) {
-            response["data"]["country"] = country;
-        }
+        response["data"]["avatar_url"] = avatarPath;
         
-    } catch (const mongocxx::exception& e) {
-        response["success"] = false;
-        response["error"] = string("Database error: ") + e.what();
     } catch (const exception& e) {
         response["success"] = false;
         response["error"] = string("Registration error: ") + e.what();
@@ -265,46 +217,124 @@ Json::Value AuthHandler::handleRegister(const Json::Value& request) {
     return response;
 }
 
+// ĐĂNG NHẬP
+Json::Value AuthHandler::handleLogin(const Json::Value& request) {
+    Json::Value response;
+    
+    try {
+        // 1. Lấy thông tin
+        if (!request.isMember("username") || !request.isMember("password")) {
+            response["success"] = false;
+            response["error"] = "Missing username or password";
+            return response;
+        }
+        
+        string username = request["username"].asString();
+        string password = request["password"].asString();
+        string passwordHash = hashPassword(password);
+        
+        // 2. Tìm user
+        auto db = mongoClient.getDatabase();
+        auto users = db["users"];
+        
+        auto userDoc = users.find_one(
+            document{} << "username" << username << finalize
+        );
+        
+        if (!userDoc) {
+            response["success"] = false;
+            response["error"] = "Invalid username or password";
+            return response;
+        }
+        
+        auto user = userDoc->view();
+        
+        // 3. Check password
+        string storedHash = string(user["password_hash"].get_string().value);
+        if (storedHash != passwordHash) {
+            response["success"] = false;
+            response["error"] = "Invalid username or password";
+            return response;
+        }
+        
+        // 4. Check account status
+        string status = string(user["status"].get_string().value);
+        if (status == "banned") {
+            response["success"] = false;
+            response["error"] = "Account is banned";
+            return response;
+        }
+        
+        // 5. Tạo session token
+        string token = generateToken();
+        string userId = user["_id"].get_oid().value.to_string();
+        
+        // Lưu session vào Redis (TTL 24h)
+        redisClient.saveSession(token, userId, 86400);
+        
+        // 6. Update last_login và is_online
+        auto now = chrono::system_clock::now();
+        users.update_one(
+            document{} << "_id" << bsoncxx::oid(userId) << finalize,
+            document{} << "$set" << bsoncxx::builder::stream::open_document
+                      << "last_login" << bsoncxx::types::b_date{now}
+                      << "is_online" << true
+                      << bsoncxx::builder::stream::close_document
+                      << finalize
+        );
+        
+        // 7. Return success với token
+        response["success"] = true;
+        response["message"] = "Login successful";
+        response["data"]["token"] = token;
+        response["data"]["user_id"] = userId;
+        response["data"]["username"] = string(user["username"].get_string().value);
+        response["data"]["display_name"] = string(user["display_name"].get_string().value);
+        
+    } catch (const exception& e) {
+        response["success"] = false;
+        response["error"] = string("Login error: ") + e.what();
+    }
+    
+    return response;
+}
+
+// ĐĂNG XUẤT
 Json::Value AuthHandler::handleLogout(const Json::Value& request) {
     Json::Value response;
     
     try {
-        // 1. Validate input
+        // 1. Lấy token
         if (!request.isMember("token")) {
             response["success"] = false;
-            response["error"] = "Missing session token";
+            response["error"] = "Token required";
             return response;
         }
         
         string token = request["token"].asString();
-        
-        // 2. Get user ID from Redis
-        string userId = redisClient.getSession(token);
+        string userId = getUserIdFromToken(token);
         
         if (userId.empty()) {
             response["success"] = false;
-            response["error"] = "Invalid or expired session";
+            response["error"] = "Invalid or expired token";
             return response;
         }
         
-        // 3. Delete session from Redis
-        redisClient.deleteSession(token);
-        
-        // 4. Update user status in MongoDB
+        // 2. Update is_online = false
         auto db = mongoClient.getDatabase();
         auto users = db["users"];
         
-        auto filter = document{} << "_id" << bsoncxx::oid(userId) << finalize;
-        auto update = document{}
-            << "$set" << open_document
-                << "is_online" << false
-                << "status" << "active"
-            << close_document
-            << finalize;
+        users.update_one(
+            document{} << "_id" << bsoncxx::oid(userId) << finalize,
+            document{} << "$set" << bsoncxx::builder::stream::open_document
+                      << "is_online" << false
+                      << bsoncxx::builder::stream::close_document
+                      << finalize
+        );
         
-        users.update_one(filter.view(), update.view());
+        // 3. Xóa session khỏi Redis
+        redisClient.deleteSession(token);
         
-        // 5. Return success
         response["success"] = true;
         response["message"] = "Logout successful";
         
@@ -316,62 +346,7 @@ Json::Value AuthHandler::handleLogout(const Json::Value& request) {
     return response;
 }
 
-//  HELPER METHODS 
-
-string AuthHandler::hashPassword(const string& password) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256(reinterpret_cast<const unsigned char*>(password.c_str()), password.length(), hash);
-    
-    stringstream ss;
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        ss << hex << setw(2) << setfill('0') << static_cast<int>(hash[i]);
-    }
-    
-    return ss.str();
-}
-
-string AuthHandler::generateToken() {
-    static const char chars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    static random_device rd;
-    static mt19937 gen(rd());
-    static uniform_int_distribution<> dis(0, sizeof(chars) - 2);
-    
-    string token;
-    token.reserve(64);
-    
-    for (int i = 0; i < 64; i++) {
-        token += chars[dis(gen)];
-    }
-    
-    return token;
-}
-
-bool AuthHandler::isValidUsername(const string& username) {
-    if (username.length() < 3 || username.length() > 50) {
-        return false;
-    }
-    
-    // Only alphanumeric and underscore
-    regex pattern("^[a-zA-Z0-9_]+$");
-    return regex_match(username, pattern);
-}
-
-bool AuthHandler::isValidEmail(const string& email) {
-    regex pattern(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
-    return regex_match(email, pattern);
-}
-
-bool AuthHandler::isValidCountryCode(const string& country) {
-    if (country.length() != 2) return false;
-    // Check if it's uppercase letters
-    regex pattern("^[A-Z]{2}$");
-    return regex_match(country, pattern);
-}
-
-string AuthHandler::getUserIdFromToken(const string& token) {
-    return redisClient.getSession(token);
-}
-
+// CẬP NHẬT PROFILE
 Json::Value AuthHandler::handleUpdateProfile(const Json::Value& request) {
     Json::Value response;
     
@@ -379,7 +354,7 @@ Json::Value AuthHandler::handleUpdateProfile(const Json::Value& request) {
         // 1. Validate token
         if (!request.isMember("token")) {
             response["success"] = false;
-            response["error"] = "Missing session token";
+            response["error"] = "Token required";
             return response;
         }
         
@@ -388,29 +363,32 @@ Json::Value AuthHandler::handleUpdateProfile(const Json::Value& request) {
         
         if (userId.empty()) {
             response["success"] = false;
-            response["error"] = "Invalid or expired session";
+            response["error"] = "Invalid or expired token";
             return response;
         }
         
         // 2. Build update document
-        auto updateBuilder = document{} << "$set" << open_document;
+        auto db = mongoClient.getDatabase();
+        auto users = db["users"];
+        
+        document updateBuilder{};
         bool hasUpdate = false;
         
         // Display name
         if (request.isMember("display_name")) {
             string displayName = request["display_name"].asString();
-            if (!displayName.empty() && displayName.length() <= 100) {
+            if (!displayName.empty()) {
                 updateBuilder << "display_name" << displayName;
                 hasUpdate = true;
             }
         }
         
-        // Avatar ID
+        // Avatar
         if (request.isMember("avatar_id")) {
             int avatarId = request["avatar_id"].asInt();
-            if (AvatarConfig::isValidAvatarId(avatarId)) {
-                string avatarPath = AvatarConfig::getAvatarPath(avatarId);
-                updateBuilder << "avatar_path" << avatarPath;
+            if (isValidAvatarId(avatarId)) {
+                string avatarPath = "resources/avatars/image" + to_string(avatarId) + ".jpg";
+                updateBuilder << "avatar_url" << avatarPath;
                 hasUpdate = true;
             }
         }
@@ -430,14 +408,11 @@ Json::Value AuthHandler::handleUpdateProfile(const Json::Value& request) {
             return response;
         }
         
-        auto update = updateBuilder << close_document << finalize;
-        
-        // 3. Update user
-        auto db = mongoClient.getDatabase();
-        auto users = db["users"];
-        
-        auto filter = document{} << "_id" << bsoncxx::oid(userId) << finalize;
-        auto result = users.update_one(filter.view(), update.view());
+        // 3. Update database
+        auto result = users.update_one(
+            document{} << "_id" << bsoncxx::oid(userId) << finalize,
+            document{} << "$set" << updateBuilder << finalize
+        );
         
         if (!result || result->modified_count() == 0) {
             response["success"] = false;
@@ -445,7 +420,6 @@ Json::Value AuthHandler::handleUpdateProfile(const Json::Value& request) {
             return response;
         }
         
-        // 4. Return success
         response["success"] = true;
         response["message"] = "Profile updated successfully";
         
@@ -457,6 +431,7 @@ Json::Value AuthHandler::handleUpdateProfile(const Json::Value& request) {
     return response;
 }
 
+// LẤY DANH SÁCH AVATAR
 Json::Value AuthHandler::handleGetAvatars(const Json::Value& request) {
     Json::Value response;
     
@@ -464,12 +439,12 @@ Json::Value AuthHandler::handleGetAvatars(const Json::Value& request) {
         response["success"] = true;
         response["data"] = Json::Value(Json::arrayValue);
         
-        // Return all 10 avatars with their local paths
-        for (int id = 1; id <= AvatarConfig::TOTAL_AVATARS; id++) {
+        // Trả về 10 avatar
+        for (int id = 1; id <= 10; id++) {
             Json::Value avatar;
             avatar["id"] = id;
-            avatar["filename"] = AvatarConfig::getAvatarFilename(id);
-            avatar["path"] = AvatarConfig::getAvatarPath(id);
+            avatar["filename"] = "image" + to_string(id) + ".jpg";
+            avatar["path"] = "resources/avatars/image" + to_string(id) + ".jpg";
             response["data"].append(avatar);
         }
         

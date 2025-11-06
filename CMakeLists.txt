@@ -22,69 +22,30 @@ include_directories(
 
 link_directories(${MONGOCXX_LIB_DIR})
 
-# ==================== TESTS ====================
-
-# Test Config Loader with Database Connections
-add_executable(config_demo
-    examples/config_demo.cpp
+# Test Database Connections
+add_executable(test_connections
+    tests/database/test_connections.cpp
     src/database/mongodb_client.cpp
     src/database/redis_client.cpp
 )
 
-target_link_libraries(config_demo
-    mongocxx
-    bsoncxx
-    hiredis
-    jsoncpp
-    pthread
-)
-
-# Test MongoDB connection
-add_executable(test_mongo_simple
-    tests/database/test_mongo_simple.cpp
-    src/database/mongodb_client.cpp
-)
-
-target_link_libraries(test_mongo_simple
+target_link_libraries(test_connections
     mongocxx
     bsoncxx
     jsoncpp
-    pthread
-)
-
-# Test Redis connection
-add_executable(test_redis_simple
-    tests/database/test_redis_simple.cpp
-    src/database/redis_client.cpp
-)
-
-target_link_libraries(test_redis_simple
     hiredis
-    jsoncpp
     pthread
 )
 
-# Test Protocol (binary message encoding/decoding)
-# add_executable(test_protocol
-#     tests/network/test_protocol.cpp
-#     src/network/protocol.cpp
-# )
-
-# target_link_libraries(test_protocol
-#     jsoncpp
-#     pthread
-# )
-
-# Test AuthHandler
-add_executable(test_auth_handler
+# Test Auth Handler
+add_executable(test_auth
     tests/auth/test_auth_handler.cpp
     src/auth/auth_handler.cpp
-    src/config/avatar_config.cpp
     src/database/mongodb_client.cpp
     src/database/redis_client.cpp
 )
 
-target_link_libraries(test_auth_handler
+target_link_libraries(test_auth
     mongocxx
     bsoncxx
     jsoncpp
@@ -94,15 +55,63 @@ target_link_libraries(test_auth_handler
     pthread
 )
 
-# Test Import Sample Data to MongoDB
-add_executable(test_import_sample_data
-    tests/database/test_import_sample_data.cpp
+# Test Challenge Handler
+add_executable(test_challenge
+    tests/challenge/test_challenge_handler.cpp
+    src/challenge/challenge_handler.cpp
+    src/auth/auth_handler.cpp
     src/database/mongodb_client.cpp
+    src/database/redis_client.cpp
 )
 
-target_link_libraries(test_import_sample_data
+target_link_libraries(test_challenge
     mongocxx
     bsoncxx
     jsoncpp
+    hiredis
+    ssl
+    crypto
     pthread
 )
+
+# Test Game Handler
+add_executable(test_game
+    tests/game/test_game_handler.cpp
+    src/game/game_handler.cpp
+    src/challenge/challenge_handler.cpp
+    src/auth/auth_handler.cpp
+    src/database/mongodb_client.cpp
+    src/database/redis_client.cpp
+)
+
+target_link_libraries(test_game
+    mongocxx
+    bsoncxx
+    jsoncpp
+    hiredis
+    ssl
+    crypto
+    pthread
+)
+
+# Test Player Stats Handler
+add_executable(test_player_stat
+    tests/player_stat/test_player_stat_handler.cpp
+    src/player_stat/player_stat_handler.cpp
+    src/game/game_handler.cpp
+    src/challenge/challenge_handler.cpp
+    src/auth/auth_handler.cpp
+    src/database/mongodb_client.cpp
+    src/database/redis_client.cpp
+)
+
+target_link_libraries(test_player_stat
+    mongocxx
+    bsoncxx
+    jsoncpp
+    hiredis
+    ssl
+    crypto
+    pthread
+)
+
