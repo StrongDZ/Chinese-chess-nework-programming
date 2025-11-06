@@ -7,15 +7,23 @@
 #include <string>
 
 /**
- * GameHandler - Xử lý logic game cờ tướng
+ * GameHandler - Xử lý logic game cờ tướng (Xiangqi/Chinese Chess)
+ * 
+ * Cờ tướng:
+ * - Bàn cờ 9x10 (9 cột, 10 hàng)
+ * - Red (đỏ) đi trước, Black (đen) đi sau
+ * - XFEN notation cho board state
+ * - Tọa độ: {x: 0-8, y: 0-9}
+ * - Lưu trong MongoDB (active_games collection)
  * 
  * Chức năng:
- * - handleCreateGame: Tạo game mới từ challenge
+ * - handleCreateGame: Tạo game mới từ challenge (Redis)
  * - handleMakeMove: Thực hiện nước đi
  * - handleOfferDraw: Đề nghị hòa
  * - handleRespondDraw: Chấp nhận/từ chối hòa
  * - handleResign: Đầu hàng
  * - handleGetGame: Lấy thông tin game
+ * - handleListGames: Lấy danh sách game
  */
 class GameHandler {
 private:
@@ -25,15 +33,19 @@ private:
     // Helper: Lấy userId từ token
     std::string getUserIdFromToken(const std::string& token);
     
-    // Helper: Validate nước đi (cơ bản)
-    bool isValidMove(const std::string& from, const std::string& to);
+    // Helper: Validate tọa độ (x: 0-8, y: 0-9)
+    bool isValidCoordinate(int x, int y);
     
     // Helper: Check game đã kết thúc chưa
     bool isGameOver(const std::string& gameId);
     
-    // Helper: Cập nhật rating sau game
-    void updatePlayerRatings(const std::string& whiteId, const std::string& blackId,
+    // Helper: Update player ratings sau khi game kết thúc
+    void updatePlayerRatings(const std::string& redId, const std::string& blackId,
                             const std::string& result, const std::string& timeControl);
+    
+    // Helper: Get time limits based on time_control
+    int getTimeLimitSeconds(const std::string& timeControl);
+    int getIncrementSeconds(const std::string& timeControl);
 
 public:
     GameHandler(MongoDBClient& mongo, RedisClient& redis);
@@ -41,7 +53,7 @@ public:
     // Tạo game mới từ challenge đã accept
     Json::Value handleCreateGame(const Json::Value& request);
     
-    // Thực hiện nước đi
+    // Thực hiện nước đi (với tọa độ x,y)
     Json::Value handleMakeMove(const Json::Value& request);
     
     // Đề nghị hòa

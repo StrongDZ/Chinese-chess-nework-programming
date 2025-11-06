@@ -59,18 +59,12 @@ target_link_libraries(test_auth
 add_executable(test_challenge
     tests/challenge/test_challenge_handler.cpp
     src/challenge/challenge_handler.cpp
-    src/auth/auth_handler.cpp
-    src/database/mongodb_client.cpp
     src/database/redis_client.cpp
 )
 
 target_link_libraries(test_challenge
-    mongocxx
-    bsoncxx
     jsoncpp
     hiredis
-    ssl
-    crypto
     pthread
 )
 
@@ -115,3 +109,14 @@ target_link_libraries(test_player_stat
     pthread
 )
 
+# Verify Moves in MongoDB
+add_executable(verify_moves
+    tests/game/verify_moves.cpp
+    src/database/mongodb_client.cpp
+)
+
+target_link_libraries(verify_moves
+    mongocxx
+    bsoncxx
+    pthread
+)

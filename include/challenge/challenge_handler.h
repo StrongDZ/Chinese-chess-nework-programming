@@ -1,7 +1,6 @@
 #ifndef CHALLENGE_HANDLER_H
 #define CHALLENGE_HANDLER_H
 
-#include "../database/mongodb_client.h"
 #include "../database/redis_client.h"
 #include <json/json.h>
 #include <string>
@@ -18,8 +17,9 @@
  */
 class ChallengeHandler {
 private:
-    MongoDBClient& mongoClient;
     RedisClient& redisClient;
+    static constexpr int PENDING_TTL_SECONDS = 3600;
+    static constexpr int FINALIZED_TTL_SECONDS = 300;
     
     // Helper: Lấy userId từ token
     std::string getUserIdFromToken(const std::string& token);
@@ -30,8 +30,15 @@ private:
     // Helper: Validate rated flag
     bool isValidRated(bool rated);
 
+    // Internal helpers for Redis-backed storage
+    Json::Value loadChallenge(const std::string& challengeId);
+    bool persistChallenge(const Json::Value& challenge, int ttlSeconds);
+    void indexChallenge(const Json::Value& challenge);
+    void removeChallengeIndexes(const Json::Value& challenge);
+    Json::Value buildChallengeSummary(const Json::Value& challenge) const;
+
 public:
-    ChallengeHandler(MongoDBClient& mongo, RedisClient& redis);
+    explicit ChallengeHandler(RedisClient& redis);
     
     // Tạo thách đấu mới
     Json::Value handleCreateChallenge(const Json::Value& request);
