@@ -1,104 +1,65 @@
 @startuml
-' Finite State Machine - Chinese Chess Client Session (Hierarchical)
+title Chinese Chess System - Finite State Machine
 
-left to right direction
-
-skinparam BackgroundColor #0B1418
-skinparam FontColor #E8F1F5
-skinparam shadowing false
-skinparam linetype ortho
-skinparam DefaultTextAlignment center
-skinparam ArrowColor #6EC1E4
 skinparam state {
-  BackgroundColor #0E1E25
-  BorderColor #6EC1E4
-  FontColor #E8F1F5
-  RoundCorner 12
+  BackgroundColor<<auth>> LightBlue
+  BackgroundColor<<menu>> LightGreen
+  BackgroundColor<<view>> LightYellow
+  BackgroundColor<<game>> Gold
+  BackgroundColor<<end>> LightCoral
+  BorderColor Black
+  FontSize 14
+  FontStyle bold
 }
 
-[*] --> Disconnected
-
-state Disconnected
-state Connecting
-state Connected
-state SigningIn
-state Authenticated
-state Lobby
-state Reconnecting
-state GameOver
-
-' Nested states with themed colors
-state SearchingGame #102535 {
-  state Matchmaking
-  state Challenging
+skinparam arrow {
+  Color DarkSlateGray
+  FontSize 11
 }
 
-state Playing #10201A {
-  state InGame
-  state InGameAI
-}
+[*] --> Connected : Open web /\nEstablish TCP
 
-' Connection lifecycle
-Disconnected --> Connecting : connect() / [open_socket]
-Connecting --> Connected : CONNECT_OK [socket_ok] / [set_channel]
-Connecting --> Disconnected : CONNECT_FAIL | TIMEOUT / [close_socket]
+state Connected<<auth>>
+state Lobby<<menu>>
+state InProfile<<view>>
+state InLeaderboard<<view>>
+state WaitingMatch<<menu>>
+state InGame<<game>>
+state PostGame
 
-' Authentication
-Connected --> SigningIn : LOGIN{user,pass} / [send_login]
-SigningIn --> Authenticated : LOGIN_OK [cred_valid] / [set_session]
-SigningIn --> Connected : LOGIN_FAIL / [show_error]
+Connected --> Connected : send(LOGIN/REGISTER) /\nrecv(ERROR)
 
-' Session exit (global)
-Authenticated --> Disconnected : SIGNOUT / [clear_session, close_socket]
-Lobby --> Disconnected : SIGNOUT / [clear_session, close_socket]
-Playing --> Disconnected : SIGNOUT / [save_if_needed]
-GameOver --> Disconnected : SIGNOUT
-SearchingGame --> Disconnected : SIGNOUT
+Connected --> Lobby : recv(SUCCESS)[authenticated] /\nStore sessionID
 
-' Lobby data
-Authenticated --> Lobby : REQUEST_LOBBY / [send_req] \n LOBBY_DATA / [render_lobby]
+Lobby --> InProfile : Click "Profile" /\nsend(USER_STATS)
 
-' Search game (hierarchical)
-Lobby --> SearchingGame : MATCH_REQUEST [timeMode_ok] / [enqueue]
+Lobby --> InLeaderboard : Click "Leaderboard" /\nsend(LEADERBOARD)
 
-' Inside SearchingGame
-Lobby --> Matchmaking : MATCH_REQUEST(timeMode)
-Lobby --> Challenging : CHALLENGE_SENT(target)
-Matchmaking --> InGame : MATCH_FOUND / [create_room, start_game]
-Matchmaking --> Lobby : CANCEL
-Matchmaking --> Lobby : MATCH_TIMEOUT / [dequeue]
-Challenging --> InGame : CHALLENGE_ACCEPT [target_online] / [create_room, start_game]
-Challenging --> Lobby : CHALLENGE_DECLINE | CANCEL | TIMEOUT / [notify_user]
+' PvP: vào hàng đợi hoặc gửi lời mời
+Lobby --> WaitingMatch : send(CHALLENGE)[target_online] /\nshowWaiting
 
-' AI game path
-Lobby --> InGameAI : START_GAME_AI(difficulty) / [init_ai(difficulty)]
+' PvE: chơi với AI đi thẳng vào game
+Lobby --> InGame : send(AI_GAME_REQUEST)[level_ok] /\ninitAI
 
-' Reconnect flow
-Authenticated --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [start_reconnect]
-Lobby --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [start_reconnect]
-SearchingGame --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [recover_queue]
-Playing --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [pause_timers]
-GameOver --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT
-Reconnecting --> InGame : REJOIN_OK [room_found] / [sync_state]
-Reconnecting --> InGameAI : REJOIN_OK [ai_game] / [sync_state]
-Reconnecting --> Disconnected : REJOIN_FAIL / [go_offline]
+InProfile --> Lobby : Click "Back"
 
-' In-game lifecycle (inside Playing)
-InGame --> GameOver : GAME_RESULT(reason) / [persist_history, update_elo]
-InGameAI --> GameOver : GAME_RESULT(reason) / [persist_history]
+InLeaderboard --> Lobby : Click "Back"
 
-' Rematch / Replay / Return
-GameOver --> Lobby : RETURN
-GameOver --> InGame : REMATCH_ACCEPT / [reuse_room]
-GameOver --> Lobby : VIEW_REPLAY (exit replay)
+WaitingMatch --> Lobby : recv(DECLINE) /\nTimeout
 
-legend right
-  <b>Legend</b>
-  Colors:
-  - SearchingGame = #102535
-  - Playing = #10201A
-  - Arrows = #6EC1E4
-  Notation: Trigger [Guard] / [Effect]
-endlegend
+WaitingMatch --> InGame : recv(GAME_START)[room_ready] /\nLoad board
+
+InGame --> InGame : send(MOVE)[your_turn] /\nrecv(MOVE/AI_MOVE) /\nrecv(INVALID_MOVE)
+
+InGame --> PostGame : recv(GAME_END)[finished]
+InGame --> PostGame : send(RESIGN)
+
+PostGame --> Lobby : Click "Exit"
+
+PostGame --> WaitingMatch : send(REMATCH_REQUEST) /\nrecv(REMATCH_RESPONSE)[accept]
+
+PostGame --> PostGame : send(REPLAY_REQUEST) /\nrecv(REPLAY_DATA)
+
+Lobby --> Connected : send(LOGOUT) /\nClear session
 
 @enduml

@@ -5,15 +5,10 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "UI" as UI
-participant "TCP Socket" as Socket
-participant "Server" as Server
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
 database "Database" as DB
-
-note over UI, Server
-  TCP connection already established
-  from login session
-end note
 
 == Game Play (Common for all types) ==
 note over UI, Server
@@ -43,23 +38,23 @@ loop Until game ends (Win/Loss/Draw/Resign)
             Server -> Server: Update board state
             Server -> Server: Check game rules
             
-            Server -> DB: INSERT INTO game_moves\n(gameID, move_number, from, to)
+            Server -> DB: INSERT INTO game_moves(gameID, move_number, from, to)
             activate DB
             DB --> Server: Move saved
             deactivate DB
             
             alt Game ended
-                Server -> DB: UPDATE games SET\nstatus="COMPLETED",\nwinner=?, end_time=NOW()
+                Server -> DB: UPDATE games SET status="COMPLETED",winner=?, end_time=NOW()
                 activate DB
                 DB --> Server: Game ended
                 deactivate DB
                 
-                Server -> DB: UPDATE user_stats:\nWins/Losses/Draws\nCalculate new ELO rating
+                Server -> DB: UPDATE user_stats:Wins/Losses/DrawsCalculate new ELO rating
                 activate DB
                 DB --> Server: Stats updated
                 deactivate DB
                 
-                Server -> Socket: send(GAME_END,\n{result, winner, new_elo})
+                Server -> Socket: send(GAME_END,{result, winner, new_elo})
                 activate Socket
                 Socket -> UI: Forward result
                 deactivate Socket
@@ -72,7 +67,7 @@ loop Until game ends (Win/Loss/Draw/Resign)
                 Socket -> UI: Confirmation
                 deactivate Socket
                 
-                Server -> Socket: Broadcast move to opponent\n(if PVP game)
+                Server -> Socket: Broadcast move to opponent(if PVP game)
                 activate Socket
                 Socket --> UI: Update opponent's board
                 deactivate Socket
@@ -90,7 +85,7 @@ loop Until game ends (Win/Loss/Draw/Resign)
             Socket -> Server: Forward resign
             deactivate Socket
             
-            Server -> DB: UPDATE games SET\nstatus="RESIGNED",\nwinner=opponent
+            Server -> DB: UPDATE games SET status="RESIGNED",winner=opponent
             activate DB
             DB --> Server: Updated
             deactivate DB

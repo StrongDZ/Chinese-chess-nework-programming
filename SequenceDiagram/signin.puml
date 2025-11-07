@@ -5,9 +5,9 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "UI" as UI
-participant "TCP Socket" as Socket
-participant "Server" as Server
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
 database "Database" as DB
 
 == Signin Authentication ==
@@ -31,7 +31,7 @@ else Valid format
     deactivate Socket
     
     Server -> Server: Parse signin packet
-    Server -> DB: SELECT * FROM users\nWHERE username = ?
+    Server -> DB: SELECT * FROM users WHERE username = ?
     activate DB
     
     alt User not found
@@ -63,14 +63,14 @@ else Valid format
         else Correct password
             Server -> Server: Generate sessionID
             
-            Server -> DB: UPDATE users SET\nstatus='ONLINE',\nlast_signin=NOW()
+            Server -> DB: UPDATE users SET status='ONLINE',last_signin=NOW()
             activate DB
             DB --> Server: Updated
             deactivate DB
             
-            Server -> Server: Store session:\nsessions[sessionID] = {socket, userID}
+            Server -> Server: Store session:sessions[sessionID] = {socket, userID}
             
-            Server -> Server: Create ResponsePacket:\n{status="SUCCESS", sessionID,\nuserID, username, elo}
+            Server -> Server: Create ResponsePacket:{status="SUCCESS", sessionID,userID, username, elo}
             
             Server -> Socket: send(ResponsePacket)
             activate Socket
