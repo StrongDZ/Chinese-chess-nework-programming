@@ -1,15 +1,15 @@
 @startuml
-title Matchmaking (Random Match) - Sequence Diagram (TCP Socket)
+title Quick Matching (Random Match) - Sequence Diagram
 
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor "Player 1" as P1
-participant "UI 1" as C1
-participant "TCP Socket" as Socket
-participant "Server" as Server
-participant "Matchmaking\nQueue" as Queue
-participant "UI 2" as C2
+boundary "UI 1" as C1
+control "TCP Socket" as Socket
+control "Server" as Server
+control "Matchmaking Queue" as Queue
+boundary "UI 2" as C2
 actor "Player 2" as P2
 database "Database" as DB
 
@@ -21,9 +21,9 @@ C1 -> C1: Show game mode selection:\n[Classic] [Rapid] [Blitz]
 
 P1 -> C1: Select mode (e.g., Rapid)
 
-C1 -> C1: Create JoinQueuePacket:\n{type="JOIN_MATCHMAKING",\nsessionID, userID,\nmode="RAPID", elo=1450}
+C1 -> C1: Join matchmaking queue
 
-C1 -> Socket: send(JoinQueuePacket)
+C1 -> Socket: send(QUICK_MATCHING)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -32,7 +32,7 @@ activate Server
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> C1: Forward error
     deactivate Socket
@@ -40,7 +40,7 @@ alt Invalid session
     deactivate C1
     
 else Valid session
-    Server -> DB: UPDATE users SET\nstatus="IN_QUEUE"\nWHERE userID=?
+    Server -> DB: Update player status
     activate DB
     DB --> Server: Status updated
     deactivate DB
@@ -49,7 +49,7 @@ else Valid session
     activate Queue
     Queue --> Server: Player queued
     
-    Server -> Socket: send(QUEUE_JOINED)
+    Server -> Socket: send(INFO)
     activate Socket
     Socket -> C1: Confirmation
     deactivate Socket
@@ -65,7 +65,7 @@ else Valid session
         alt No suitable opponent found
             Queue --> Server: No match
             
-            Server -> Socket: send(STILL_SEARCHING)
+            Server -> Socket: send(INFO)
             activate Socket
             Socket -> C1: Update search status
             deactivate Socket
@@ -79,7 +79,7 @@ else Valid session
             
             Server -> Server: Validate both players\nstill available
             
-            Server -> DB: SELECT status FROM users\nWHERE userID IN (?, ?)
+            Server -> DB: Check player status
             activate DB
             DB --> Server: Both IN_QUEUE
             deactivate DB
@@ -88,12 +88,12 @@ else Valid session
             Server -> Server: Generate gameID = UUID()
             Server -> Server: Assign colors randomly:\nplayer1_color = random(RED, BLACK)
             
-            Server -> DB: INSERT INTO games\n(gameID, player1_id, player2_id,\nmode="RAPID", type="MATCHMAKING",\nelo_diff=abs(elo1-elo2),\nstatus="ACTIVE", created_at=NOW())
+            Server -> DB: Create game
             activate DB
             DB --> Server: Game created
             deactivate DB
             
-            Server -> DB: UPDATE users SET\nstatus="IN_GAME"\nWHERE userID IN (?, ?)
+            Server -> DB: Update player status
             activate DB
             DB --> Server: Status updated
             deactivate DB
@@ -104,7 +104,7 @@ else Valid session
             deactivate Queue
             
             == Notify Both Players ==
-            Server -> Socket: send(MATCH_FOUND,\n{gameID, opponent_username,\nopponent_elo, color="RED"})
+            Server -> Socket: send(GAME_START)
             activate Socket
             Socket -> C1: Forward match info
             deactivate Socket
@@ -115,7 +115,7 @@ else Valid session
             C1 -> C1: Load game board
             deactivate C1
             
-            Server -> Socket: send(MATCH_FOUND,\n{gameID, opponent_username,\nopponent_elo, color="BLACK"})
+            Server -> Socket: send(GAME_START)
             activate Socket
             Socket -> C2: Forward match info
             deactivate Socket
@@ -139,7 +139,7 @@ end
 P1 -> C1: Click "Cancel"
 activate C1
 
-C1 -> Socket: send(LEAVE_QUEUE, sessionID)
+C1 -> Socket: send(QUICK_MATCHING)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
@@ -149,15 +149,15 @@ activate Queue
 Queue --> Server: Player removed
 deactivate Queue
 
-Server -> DB: UPDATE users SET\nstatus="ONLINE"\nWHERE userID=?
+Server -> DB: Update player status
 activate DB
 DB --> Server: Status updated
 deactivate DB
 
-Server -> Socket: send(QUEUE_LEFT)
-activate Socket
-Socket -> C1: Confirmation
-deactivate Socket
+Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> C1: Confirmation
+    deactivate Socket
 
 C1 -> P1: Show "Search cancelled"\nReturn to lobby
 deactivate C1

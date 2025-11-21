@@ -31,9 +31,9 @@ Client -> User: Display time mode selection
 User -> Client: Select time mode 
 
 == Create Normal AI Game ==
-Client -> Client: Create StartAIGamePacket
+Client -> Client: Prepare AI game request
 
-Client -> Socket: send(StartAIGamePacket)
+Client -> Socket: send(AI_MATCH)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -42,7 +42,7 @@ activate Server
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> Client: Forward error
     deactivate Socket
@@ -58,19 +58,19 @@ else Valid session
     AI --> Server: AI initialized successfully
     deactivate AI
     
-    Server -> DB: INSERT INTO games
+    Server -> DB: Create game
     activate DB
     DB --> Server: Game created successfully
     deactivate DB
     
-    Server -> DB: UPDATE users SET\nstatus = "IN_GAME"\nWHERE userID = ?
+    Server -> DB: Update player status
     activate DB
     DB --> Server: Status updated
     deactivate DB
     
-    Server -> Server: Create GameStartPacket
+    Server -> Server: Prepare game start response
     
-    Server -> Socket: send(GameStartPacket)
+    Server -> Socket: send(GAME_START)
     activate Socket
     Socket -> Client: Forward packet
     deactivate Socket

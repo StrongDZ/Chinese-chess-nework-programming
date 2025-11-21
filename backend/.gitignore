@@ -33,9 +33,13 @@ GAME_HISTORYs.txt
 
 # Dependencies
 deps/
+third_party/
 
+# Generated output
+out/
+bin/
+lib/
 
-
-
-
-
+# OS files
+.DS_Store
+Thumbs.db

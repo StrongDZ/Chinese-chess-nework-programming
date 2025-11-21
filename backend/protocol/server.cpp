@@ -10,56 +10,26 @@
 #include <string>
 #include <vector>
 
-#include "../../include/protocol/MessageTypes.h"
-#include "../../include/protocol/server.h"
+#include "../include/protocol/MessageTypes.h"
+#include "../include/protocol/server.h"
+#include "handle_socket.cpp"
 
 using namespace std;
 
-static bool recvAll(int fd, void *buffer, size_t bytes) {
-  char *ptr = static_cast<char *>(buffer);
-  size_t total = 0;
-  while (total < bytes) {
-    ssize_t n = recv(fd, ptr + total, bytes - total, 0);
-    if (n <= 0)
-      return false; // error or closed
-    total += static_cast<size_t>(n);
-  }
-  return true;
-}
-
-static bool sendAll(int fd, const void *buffer, size_t bytes) {
-  const char *ptr = static_cast<const char *>(buffer);
-  size_t total = 0;
-  while (total < bytes) {
-    ssize_t n = send(fd, ptr + total, bytes - total, 0);
-    if (n <= 0)
-      return false;
-    total += static_cast<size_t>(n);
-  }
-  return true;
-}
-
-static bool sendMessage(int fd, MessageType type,
-                        const Payload &payload = EmptyPayload{}) {
-  string data = makeMessage(type, payload);
-  uint32_t len = htonl(static_cast<uint32_t>(data.size()));
-  if (!sendAll(fd, &len, sizeof(len)))
-    return false;
-  return sendAll(fd, data.data(), data.size());
-}
-
-static bool recvMessage(int fd, string &out) {
-  uint32_t netLen = 0;
-  if (!recvAll(fd, &netLen, sizeof(netLen)))
-    return false;
-  uint32_t len = ntohl(netLen);
-  if (len > 10 * 1024 * 1024)
-    return false; // guard 10MB
-  out.resize(len);
-  if (len == 0)
-    return true;
-  return recvAll(fd, out.data(), len);
-}
+// ===================== Handler Declarations ===================== //
+static void handleLogin(const ParsedMessage &pm, int fd,
+                        map<int, PlayerInfo> &clients,
+                        map<string, int> &username_to_fd);
+static void handleChallenge(const ParsedMessage &pm, int fd,
+                            map<int, PlayerInfo> &clients,
+                            map<string, int> &username_to_fd);
+static void handleChallengeResponse(const ParsedMessage &pm, int fd,
+                                    map<int, PlayerInfo> &clients,
+                                    map<string, int> &username_to_fd);
+static void handleMove(const ParsedMessage &pm, int fd,
+                       map<int, PlayerInfo> &clients);
+static void handleMessage(const ParsedMessage &pm, int fd,
+                          map<int, PlayerInfo> &clients);
 
 int main(int argc, char **argv) {
   int port = 8080;
@@ -153,33 +123,69 @@ int main(int argc, char **argv) {
                     ErrorPayload{"REGISTER not implemented"});
         break;
       case MessageType::LOGOUT:
-        sendMessage(fd, MessageType::INFO);
+        sendMessage(fd, MessageType::INFO,
+                    InfoPayload{nlohmann::json{{"logout", "ok"}}});
         shutdown(fd, SHUT_RDWR);
         break;
-      case MessageType::PLAYER_LIST:
-        sendMessage(fd, MessageType::ERROR,
-                    ErrorPayload{"PLAYER_LIST not implemented"});
+      case MessageType::PLAYER_LIST: {
+        nlohmann::json arr = nlohmann::json::array();
+        for (auto &p : clients) {
+          if (!p.second.username.empty()) {
+            arr.push_back(p.second.username);
+          }
+        }
+        sendMessage(fd, MessageType::INFO, InfoPayload{arr});
         break;
-      case MessageType::USER_STATUS:
-        sendMessage(fd, MessageType::ERROR,
-                    ErrorPayload{"USER_STATUS not implemented"});
+      }
+      case MessageType::AUTHENTICATED:
+        sendMessage(fd, MessageType::AUTHENTICATED);
         break;
-      case MessageType::CHALLENGE:
+      case MessageType::QUICK_MATCHING:
+        sendMessage(fd, MessageType::ERROR,
+                    ErrorPayload{"QUICK_MATCHING not implemented"});
+        break;
+      case MessageType::CHALLENGE_REQUEST:
         handleChallenge(pm, fd, clients, username_to_fd);
         break;
-      case MessageType::ACCEPT:
-        handleAccept(pm, fd, clients, username_to_fd);
-        break;
-      case MessageType::DECLINE:
+      case MessageType::CHALLENGE_CANCEL:
         sendMessage(fd, MessageType::ERROR,
-                    ErrorPayload{"DECLINE not implemented"});
+                    ErrorPayload{"CHALLENGE_CANCEL not implemented"});
+        break;
+      case MessageType::CHALLENGE_RESPONSE:
+        handleChallengeResponse(pm, fd, clients, username_to_fd);
+        break;
+      case MessageType::AI_MATCH:
+        sendMessage(fd, MessageType::ERROR,
+                    ErrorPayload{"AI_MATCH not implemented"});
+        break;
+      case MessageType::USER_STATS: {
+        auto &s = clients[fd];
+        nlohmann::json info = {
+            {"username", s.username},
+            {"in_game", s.in_game},
+        };
+        if (s.in_game && s.opponent_fd >= 0 && clients.count(s.opponent_fd)) {
+          info["opponent"] = clients[s.opponent_fd].username;
+        } else {
+          info["opponent"] = nullptr;
+        }
+        sendMessage(fd, MessageType::INFO, InfoPayload{info});
+        break;
+      }
+      case MessageType::LEADER_BOARD:
+        sendMessage(fd, MessageType::ERROR,
+                    ErrorPayload{"LEADER_BOARD not implemented"});
         break;
       case MessageType::MOVE:
         handleMove(pm, fd, clients);
         break;
       case MessageType::INVALID_MOVE:
+        // Server sends this to client, not received from client
         sendMessage(fd, MessageType::ERROR,
-                    ErrorPayload{"INVALID_MOVE not implemented"});
+                    ErrorPayload{"INVALID_MOVE not a client command"});
+        break;
+      case MessageType::MESSAGE:
+        handleMessage(pm, fd, clients);
         break;
       case MessageType::GAME_END: {
         auto &sender = clients[fd];
@@ -205,10 +211,6 @@ int main(int argc, char **argv) {
         sender.opponent_fd = -1;
         break;
       }
-      case MessageType::RESULT:
-        sendMessage(fd, MessageType::ERROR,
-                    ErrorPayload{"RESULT not implemented"});
-        break;
       case MessageType::RESIGN: {
         auto &sender = clients[fd];
         if (!sender.in_game || sender.opponent_fd < 0) {
@@ -232,22 +234,15 @@ int main(int argc, char **argv) {
       case MessageType::DRAW_RESPONSE:
       case MessageType::REMATCH_REQUEST:
       case MessageType::REMATCH_RESPONSE:
-      case MessageType::GAME_HISTORY:
-      case MessageType::REPLAY_REQUEST:
-      case MessageType::REPLAY_DATA:
-      case MessageType::CUSTOM_BOARD:
-      case MessageType::TIME_SETTING:
-      case MessageType::AI_GAME_REQUEST:
-      case MessageType::AI_MOVE:
         sendMessage(fd, MessageType::ERROR,
                     ErrorPayload{"Feature not implemented"});
         break;
-      case MessageType::PING:
-        sendMessage(fd, MessageType::PONG);
+      case MessageType::GAME_HISTORY:
+      case MessageType::REPLAY_REQUEST:
+        sendMessage(fd, MessageType::ERROR,
+                    ErrorPayload{"Feature not implemented"});
         break;
-      case MessageType::PONG:
       case MessageType::INFO:
-      case MessageType::CHAT:
         sendMessage(fd, MessageType::ERROR,
                     ErrorPayload{"Unsupported inbound message"});
         break;
@@ -270,7 +265,8 @@ int main(int argc, char **argv) {
         if (opp >= 0 && clients.count(opp)) {
           clients[opp].in_game = false;
           clients[opp].opponent_fd = -1;
-          sendMessage(opp, MessageType::INFO);
+          sendMessage(opp, MessageType::INFO,
+                      InfoPayload{nlohmann::json("opponent_disconnected")});
         }
       }
       close(fd);
@@ -282,7 +278,7 @@ int main(int argc, char **argv) {
   return 0;
 }
 
-// ===================== Handlers ===================== //
+// ===================== Handler Implementations ===================== //
 static void handleLogin(const ParsedMessage &pm, int fd,
                         map<int, PlayerInfo> &clients,
                         map<string, int> &username_to_fd) {
@@ -307,9 +303,9 @@ static void handleLogin(const ParsedMessage &pm, int fd,
     }
     sender.username = username;
     username_to_fd[sender.username] = fd;
-    sendMessage(fd, MessageType::INFO);
+    sendMessage(fd, MessageType::AUTHENTICATED);
   } catch (...) {
-    sendMessage(fd, MessageType::ERROR);
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
   }
 }
 
@@ -323,14 +319,14 @@ static void handleChallenge(const ParsedMessage &pm, int fd,
     return;
   }
   if (!pm.payload.has_value() ||
-      !holds_alternative<ChallengePayload>(*pm.payload)) {
+      !holds_alternative<ChallengeRequestPayload>(*pm.payload)) {
     sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"CHALLENGE requires target_username"});
+                ErrorPayload{"CHALLENGE_REQUEST requires username"});
     return;
   }
   try {
-    const auto &p = get<ChallengePayload>(*pm.payload);
-    const string &target = p.target_username;
+    const auto &p = get<ChallengeRequestPayload>(*pm.payload);
+    const string &target = p.username;
     auto it = username_to_fd.find(target);
     if (it == username_to_fd.end()) {
       sendMessage(fd, MessageType::ERROR,
@@ -343,31 +339,42 @@ static void handleChallenge(const ParsedMessage &pm, int fd,
                   ErrorPayload{"Cannot challenge yourself"});
       return;
     }
-    sendMessage(target_fd, MessageType::CHALLENGE);
-    sendMessage(fd, MessageType::INFO);
+    sendMessage(target_fd, MessageType::CHALLENGE_REQUEST,
+                ChallengeRequestPayload{sender.username});
+    sendMessage(fd, MessageType::INFO,
+                InfoPayload{nlohmann::json{{"challenge_sent", true},
+                                           {"target", target}}});
   } catch (...) {
-    sendMessage(fd, MessageType::ERROR);
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
   }
 }
 
-static void handleAccept(const ParsedMessage &pm, int fd,
-                         map<int, PlayerInfo> &clients,
-                         map<string, int> &username_to_fd) {
+static void handleChallengeResponse(const ParsedMessage &pm, int fd,
+                                    map<int, PlayerInfo> &clients,
+                                    map<string, int> &username_to_fd) {
   auto &sender = clients[fd];
   if (sender.username.empty()) {
     sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"Please LOGIN before accepting"});
+                ErrorPayload{"Please LOGIN before responding to challenge"});
     return;
   }
   if (!pm.payload.has_value() ||
-      !holds_alternative<AcceptPayload>(*pm.payload)) {
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"ACCEPT requires challenger_username"});
+      !holds_alternative<ChallengeResponsePayload>(*pm.payload)) {
+    sendMessage(
+        fd, MessageType::ERROR,
+        ErrorPayload{"CHALLENGE_RESPONSE requires username and accept"});
     return;
   }
   try {
-    const auto &p = get<AcceptPayload>(*pm.payload);
-    const string &challengerName = p.challenger_username;
+    const auto &p = get<ChallengeResponsePayload>(*pm.payload);
+    if (!p.accept) {
+      // Decline challenge
+      sendMessage(fd, MessageType::INFO,
+                  InfoPayload{nlohmann::json{{"challenge_declined", true}}});
+      return;
+    }
+    // Accept challenge
+    const string &challengerName = p.username;
     auto it = username_to_fd.find(challengerName);
     if (it == username_to_fd.end()) {
       sendMessage(fd, MessageType::ERROR,
@@ -385,10 +392,18 @@ static void handleAccept(const ParsedMessage &pm, int fd,
     sender.opponent_fd = challenger_fd;
     challenger.in_game = true;
     challenger.opponent_fd = fd;
-    sendMessage(challenger_fd, MessageType::GAME_START);
-    sendMessage(fd, MessageType::GAME_START);
+
+    // Send GAME_START to both players
+    GameStartPayload gs1, gs2;
+    gs1.opponent = challenger.username;
+    gs1.game_mode = "classic"; // Default, can be enhanced
+    gs2.opponent = sender.username;
+    gs2.game_mode = "classic";
+
+    sendMessage(challenger_fd, MessageType::GAME_START, gs1);
+    sendMessage(fd, MessageType::GAME_START, gs2);
   } catch (...) {
-    sendMessage(fd, MessageType::ERROR, ErrorPayload{"invalid_payload"});
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
   }
 }
 
@@ -410,4 +425,25 @@ static void handleMove(const ParsedMessage &pm, int fd,
     return;
   }
   sendMessage(opp, MessageType::MOVE, get<MovePayload>(*pm.payload));
+}
+
+static void handleMessage(const ParsedMessage &pm, int fd,
+                          map<int, PlayerInfo> &clients) {
+  auto &sender = clients[fd];
+  if (!sender.in_game || sender.opponent_fd < 0) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"You are not in a game"});
+    return;
+  }
+  if (!pm.payload.has_value() ||
+      !holds_alternative<MessagePayload>(*pm.payload)) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"MESSAGE requires message field"});
+    return;
+  }
+  int opp = sender.opponent_fd;
+  if (clients.count(opp) == 0) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Opponent disconnected"});
+    return;
+  }
+  sendMessage(opp, MessageType::MESSAGE, get<MessagePayload>(*pm.payload));
 }

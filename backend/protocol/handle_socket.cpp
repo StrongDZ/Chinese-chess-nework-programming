@@ -6,7 +6,7 @@
 #include <cstring>
 #include <string>
 
-#include "../../include/protocol/MessageTypes.h"
+#include "../include/protocol/MessageTypes.h"
 
 using namespace std;
 

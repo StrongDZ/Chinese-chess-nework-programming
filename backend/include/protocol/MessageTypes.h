@@ -15,24 +15,25 @@
 using namespace std;
 
 enum class MessageType {
-  // === User Management ===
+  // === Authentication ===
   LOGIN,
   REGISTER,
   LOGOUT,
-  PLAYER_LIST,
-  USER_STATUS,
+  AUTHENTICATED,
 
-  // === Challenge Management ===
-  CHALLENGE,
-  ACCEPT,
-  DECLINE,
+  // === Game Management ===
+  QUICK_MATCHING,
+  CHALLENGE_CANCEL,
+  CHALLENGE_REQUEST,
+  CHALLENGE_RESPONSE,
+  AI_MATCH,
 
   // === Game Flow ===
   GAME_START,
   MOVE,
   INVALID_MOVE,
+  MESSAGE,
   GAME_END,
-  RESULT,
 
   // === Game Control ===
   RESIGN,
@@ -41,23 +42,16 @@ enum class MessageType {
   REMATCH_REQUEST,
   REMATCH_RESPONSE,
 
-  // === History / Replay ===
+  // === Data Management ===
+  USER_STATS,
   GAME_HISTORY,
   REPLAY_REQUEST,
-  REPLAY_DATA,
-
-  // === Advanced / Optional ===
-  CUSTOM_BOARD,
-  TIME_SETTING,
-  AI_GAME_REQUEST,
-  AI_MOVE,
-
-  // === System / Utility ===
-  PING,
-  PONG,
-  ERROR,
+  LEADER_BOARD,
+  PLAYER_LIST,
   INFO,
-  CHAT,
+
+  // === System ===
+  ERROR,
 
   UNKNOWN
 };
@@ -80,13 +74,26 @@ struct RegisterPayload {
   string password;
 };
 
-// Challenge payloads
-struct ChallengePayload {
-  string target_username;
+struct LogoutPayload {
+  string username;
 };
 
-struct AcceptPayload {
-  string challenger_username;
+// Challenge payloads
+struct ChallengeRequestPayload {
+  string username;
+};
+
+struct ChallengeCancelPayload {
+  string username;
+};
+
+struct ChallengeResponsePayload {
+  string username;
+  bool accept;
+};
+
+struct AIMatchPayload {
+  string gamemode;
 };
 
 // Game payloads
@@ -96,12 +103,38 @@ struct MovePayload {
   Coord to;
 };
 
+struct GameStartPayload {
+  string opponent;
+  string game_mode;
+};
+
 struct GameEndPayload {
   string win_side;
 };
 
+struct InvalidMovePayload {
+  string reason;
+};
+
+struct MessagePayload {
+  string message;
+};
+
+struct UserStatsPayload {
+  string username;
+};
+
+struct GameHistoryPayload {
+  string username;
+};
+
 struct ErrorPayload {
-  string detail;
+  string message;
+};
+
+// INFO payload: can carry ANY JSON value via nlohmann::json
+struct InfoPayload {
+  nlohmann::json data;
 };
 
 // Empty payload cho các message không cần data
@@ -109,8 +142,11 @@ struct EmptyPayload {};
 
 // ===================== UNIFIED PAYLOAD ===================== //
 using Payload =
-    variant<EmptyPayload, LoginPayload, RegisterPayload, ChallengePayload,
-            AcceptPayload, MovePayload, GameEndPayload, ErrorPayload>;
+    variant<EmptyPayload, LoginPayload, RegisterPayload, LogoutPayload,
+            ChallengeRequestPayload, ChallengeCancelPayload,
+            ChallengeResponsePayload, AIMatchPayload, GameStartPayload,
+            MovePayload, InvalidMovePayload, MessagePayload, GameEndPayload,
+            UserStatsPayload, GameHistoryPayload, ErrorPayload, InfoPayload>;
 
 // ============= nlohmann::json converters ============= //
 using nlohmann::json;
@@ -122,11 +158,35 @@ inline void to_json(json &j, const LoginPayload &p) {
 inline void to_json(json &j, const RegisterPayload &p) {
   j = json{{"username", p.username}, {"password", p.password}};
 }
-inline void to_json(json &j, const ChallengePayload &p) {
-  j = json{{"target_username", p.target_username}};
+inline void to_json(json &j, const LogoutPayload &p) {
+  j = json{{"username", p.username}};
 }
-inline void to_json(json &j, const AcceptPayload &p) {
-  j = json{{"challenger_username", p.challenger_username}};
+inline void to_json(json &j, const ChallengeRequestPayload &p) {
+  j = json{{"username", p.username}};
+}
+inline void to_json(json &j, const ChallengeCancelPayload &p) {
+  j = json{{"username", p.username}};
+}
+inline void to_json(json &j, const ChallengeResponsePayload &p) {
+  j = json{{"username", p.username}, {"accept", p.accept}};
+}
+inline void to_json(json &j, const AIMatchPayload &p) {
+  j = json{{"gamemode", p.gamemode}};
+}
+inline void to_json(json &j, const GameStartPayload &p) {
+  j = json{{"opponent", p.opponent}, {"game_mode", p.game_mode}};
+}
+inline void to_json(json &j, const InvalidMovePayload &p) {
+  j = json{{"reason", p.reason}};
+}
+inline void to_json(json &j, const MessagePayload &p) {
+  j = json{{"message", p.message}};
+}
+inline void to_json(json &j, const UserStatsPayload &p) {
+  j = json{{"username", p.username}};
+}
+inline void to_json(json &j, const GameHistoryPayload &p) {
+  j = json{{"username", p.username}};
 }
 inline void to_json(json &j, const Coord &c) {
   j = json{{"row", c.row}, {"col", c.col}};
@@ -138,10 +198,19 @@ inline void to_json(json &j, const GameEndPayload &p) {
   j = json{{"win_side", p.win_side}};
 }
 inline void to_json(json &j, const ErrorPayload &p) {
-  j = json{{"detail", p.detail}};
+  j = json{{"message", p.message}};
+}
+inline void to_json(json &j, const InfoPayload &p) {
+  j = json{{"data", p.data}};
 }
 inline void to_json(json &j, const Payload &v) {
-  std::visit([&](auto const &alt) { j = json(alt); }, v);
+  std::visit(
+      [&](auto const &alt) {
+        json tmp;
+        to_json(tmp, alt);
+        j = std::move(tmp);
+      },
+      v);
 }
 
 struct ParsedMessage {
@@ -188,23 +257,97 @@ inline optional<Payload> parsePayload(MessageType type,
       return p;
     }
 
-    case MessageType::CHALLENGE: {
-      if (!doc.HasMember("target_username") ||
-          !doc["target_username"].IsString()) {
+    case MessageType::LOGOUT: {
+      if (!doc.HasMember("username") || !doc["username"].IsString()) {
         return nullopt;
       }
-      ChallengePayload p;
-      p.target_username = doc["target_username"].GetString();
+      LogoutPayload p;
+      p.username = doc["username"].GetString();
       return p;
     }
 
-    case MessageType::ACCEPT: {
-      if (!doc.HasMember("challenger_username") ||
-          !doc["challenger_username"].IsString()) {
+    case MessageType::CHALLENGE_REQUEST: {
+      if (!doc.HasMember("username") || !doc["username"].IsString()) {
         return nullopt;
       }
-      AcceptPayload p;
-      p.challenger_username = doc["challenger_username"].GetString();
+      ChallengeRequestPayload p;
+      p.username = doc["username"].GetString();
+      return p;
+    }
+
+    case MessageType::CHALLENGE_CANCEL: {
+      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+        return nullopt;
+      }
+      ChallengeCancelPayload p;
+      p.username = doc["username"].GetString();
+      return p;
+    }
+
+    case MessageType::CHALLENGE_RESPONSE: {
+      if (!doc.HasMember("username") || !doc["username"].IsString() ||
+          !doc.HasMember("accept") || !doc["accept"].IsBool()) {
+        return nullopt;
+      }
+      ChallengeResponsePayload p;
+      p.username = doc["username"].GetString();
+      p.accept = doc["accept"].GetBool();
+      return p;
+    }
+
+    case MessageType::AI_MATCH: {
+      if (!doc.HasMember("gamemode") || !doc["gamemode"].IsString()) {
+        return nullopt;
+      }
+      AIMatchPayload p;
+      p.gamemode = doc["gamemode"].GetString();
+      return p;
+    }
+
+    case MessageType::GAME_START: {
+      if (!doc.HasMember("opponent") || !doc["opponent"].IsString() ||
+          !doc.HasMember("game_mode") || !doc["game_mode"].IsString()) {
+        return nullopt;
+      }
+      GameStartPayload p;
+      p.opponent = doc["opponent"].GetString();
+      p.game_mode = doc["game_mode"].GetString();
+      return p;
+    }
+
+    case MessageType::INVALID_MOVE: {
+      if (!doc.HasMember("reason") || !doc["reason"].IsString()) {
+        return nullopt;
+      }
+      InvalidMovePayload p;
+      p.reason = doc["reason"].GetString();
+      return p;
+    }
+
+    case MessageType::MESSAGE: {
+      if (!doc.HasMember("message") || !doc["message"].IsString()) {
+        return nullopt;
+      }
+      MessagePayload p;
+      p.message = doc["message"].GetString();
+      return p;
+    }
+
+    case MessageType::USER_STATS: {
+      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+        return nullopt;
+      }
+      UserStatsPayload p;
+      p.username = doc["username"].GetString();
+      return p;
+    }
+
+    case MessageType::GAME_HISTORY: {
+      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+        return nullopt;
+      }
+      GameHistoryPayload p;
+      p.username = doc["username"].GetString();
       return p;
     }
 
@@ -244,12 +387,18 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::ERROR: {
-      if (!doc.HasMember("detail") || !doc["detail"].IsString()) {
+      if (!doc.HasMember("message") || !doc["message"].IsString()) {
         return nullopt;
       }
       ErrorPayload p;
-      p.detail = doc["detail"].GetString();
+      p.message = doc["message"].GetString();
       return p;
+    }
+
+    case MessageType::INFO: {
+      // We do not attempt to convert rapidjson::Value to nlohmann::json here.
+      // Inbound INFO will be treated as EmptyPayload by default.
+      return EmptyPayload{};
     }
 
     default:
@@ -272,33 +421,29 @@ static const unordered_map<string, MessageType> commandMap = {
     {"LOGIN", MessageType::LOGIN},
     {"REGISTER", MessageType::REGISTER},
     {"LOGOUT", MessageType::LOGOUT},
-    {"PLAYER_LIST", MessageType::PLAYER_LIST},
-    {"USER_STATUS", MessageType::USER_STATUS},
-    {"CHALLENGE", MessageType::CHALLENGE},
-    {"ACCEPT", MessageType::ACCEPT},
-    {"DECLINE", MessageType::DECLINE},
+    {"AUTHENTICATED", MessageType::AUTHENTICATED},
+    {"QUICK_MATCHING", MessageType::QUICK_MATCHING},
+    {"CHALLENGE_CANCEL", MessageType::CHALLENGE_CANCEL},
+    {"CHALLENGE_REQUEST", MessageType::CHALLENGE_REQUEST},
+    {"CHALLENGE_RESPONSE", MessageType::CHALLENGE_RESPONSE},
+    {"AI_MATCH", MessageType::AI_MATCH},
     {"GAME_START", MessageType::GAME_START},
     {"MOVE", MessageType::MOVE},
     {"INVALID_MOVE", MessageType::INVALID_MOVE},
+    {"MESSAGE", MessageType::MESSAGE},
     {"GAME_END", MessageType::GAME_END},
-    {"RESULT", MessageType::RESULT},
     {"RESIGN", MessageType::RESIGN},
     {"DRAW_REQUEST", MessageType::DRAW_REQUEST},
     {"DRAW_RESPONSE", MessageType::DRAW_RESPONSE},
     {"REMATCH_REQUEST", MessageType::REMATCH_REQUEST},
     {"REMATCH_RESPONSE", MessageType::REMATCH_RESPONSE},
+    {"USER_STATS", MessageType::USER_STATS},
     {"GAME_HISTORY", MessageType::GAME_HISTORY},
     {"REPLAY_REQUEST", MessageType::REPLAY_REQUEST},
-    {"REPLAY_DATA", MessageType::REPLAY_DATA},
-    {"CUSTOM_BOARD", MessageType::CUSTOM_BOARD},
-    {"TIME_SETTING", MessageType::TIME_SETTING},
-    {"AI_GAME_REQUEST", MessageType::AI_GAME_REQUEST},
-    {"AI_MOVE", MessageType::AI_MOVE},
-    {"PING", MessageType::PING},
-    {"PONG", MessageType::PONG},
-    {"ERROR", MessageType::ERROR},
+    {"LEADER_BOARD", MessageType::LEADER_BOARD},
+    {"PLAYER_LIST", MessageType::PLAYER_LIST},
     {"INFO", MessageType::INFO},
-    {"CHAT", MessageType::CHAT}};
+    {"ERROR", MessageType::ERROR}};
 
 inline ParsedMessage parseMessage(const string &msg) {
   ParsedMessage pm;
@@ -328,33 +473,29 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::LOGIN, "LOGIN"},
     {MessageType::REGISTER, "REGISTER"},
     {MessageType::LOGOUT, "LOGOUT"},
-    {MessageType::PLAYER_LIST, "PLAYER_LIST"},
-    {MessageType::USER_STATUS, "USER_STATUS"},
-    {MessageType::CHALLENGE, "CHALLENGE"},
-    {MessageType::ACCEPT, "ACCEPT"},
-    {MessageType::DECLINE, "DECLINE"},
+    {MessageType::AUTHENTICATED, "AUTHENTICATED"},
+    {MessageType::QUICK_MATCHING, "QUICK_MATCHING"},
+    {MessageType::CHALLENGE_CANCEL, "CHALLENGE_CANCEL"},
+    {MessageType::CHALLENGE_REQUEST, "CHALLENGE_REQUEST"},
+    {MessageType::CHALLENGE_RESPONSE, "CHALLENGE_RESPONSE"},
+    {MessageType::AI_MATCH, "AI_MATCH"},
     {MessageType::GAME_START, "GAME_START"},
     {MessageType::MOVE, "MOVE"},
     {MessageType::INVALID_MOVE, "INVALID_MOVE"},
+    {MessageType::MESSAGE, "MESSAGE"},
     {MessageType::GAME_END, "GAME_END"},
-    {MessageType::RESULT, "RESULT"},
     {MessageType::RESIGN, "RESIGN"},
     {MessageType::DRAW_REQUEST, "DRAW_REQUEST"},
     {MessageType::DRAW_RESPONSE, "DRAW_RESPONSE"},
     {MessageType::REMATCH_REQUEST, "REMATCH_REQUEST"},
     {MessageType::REMATCH_RESPONSE, "REMATCH_RESPONSE"},
+    {MessageType::USER_STATS, "USER_STATS"},
     {MessageType::GAME_HISTORY, "GAME_HISTORY"},
     {MessageType::REPLAY_REQUEST, "REPLAY_REQUEST"},
-    {MessageType::REPLAY_DATA, "REPLAY_DATA"},
-    {MessageType::CUSTOM_BOARD, "CUSTOM_BOARD"},
-    {MessageType::TIME_SETTING, "TIME_SETTING"},
-    {MessageType::AI_GAME_REQUEST, "AI_GAME_REQUEST"},
-    {MessageType::AI_MOVE, "AI_MOVE"},
-    {MessageType::PING, "PING"},
-    {MessageType::PONG, "PONG"},
-    {MessageType::ERROR, "ERROR"},
+    {MessageType::LEADER_BOARD, "LEADER_BOARD"},
+    {MessageType::PLAYER_LIST, "PLAYER_LIST"},
     {MessageType::INFO, "INFO"},
-    {MessageType::CHAT, "CHAT"}};
+    {MessageType::ERROR, "ERROR"}};
 
 inline string makeMessage(MessageType type,
                           const Payload &payload = EmptyPayload{}) {

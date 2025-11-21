@@ -28,29 +28,29 @@ else User confirms
     == Check Active Game ==
     alt User is in active game
         UI -> UI: Detect active game session
-        UI -> UI: Create SaveGamePacket:\n{type="SAVE_GAME", gameID, moves[]}
+        UI -> UI: Save match
         
-        UI -> Socket: send(SaveGamePacket)
+        UI -> Socket: send(GAME_HISTORY)
         activate Socket
         Socket -> Server: Forward packet
         deactivate Socket
         
         Server -> Server: Parse save game request
-        Server -> DB: INSERT INTO game_history\n(gameID, moves, status='INTERRUPTED')
+        Server -> DB: Save match
         activate DB
         DB --> Server: Game saved
         deactivate DB
         
-        Server -> Socket: send(ACK_SAVED)
+        Server -> Socket: send(INFO)
         activate Socket
         Socket -> UI: Game saved confirmation
         deactivate Socket
     end
     
     == Send Sign Out Request ==
-    UI -> UI: Create SignOutPacket:\n{type="SIGNOUT", sessionID, userID}
+    UI -> UI: Prepare signout request
     
-    UI -> Socket: send(SignOutPacket)
+    UI -> Socket: send(LOGOUT)
     activate Socket
     Socket -> Server: Forward packet
     deactivate Socket
@@ -59,7 +59,7 @@ else User confirms
     Server -> Server: Validate sessionID
     
     alt Invalid session
-        Server -> Socket: send(ERROR_INVALID_SESSION)
+        Server -> Socket: send(ERROR)
         activate Socket
         Socket -> UI: Forward error
         deactivate Socket
@@ -67,7 +67,7 @@ else User confirms
         
     else Valid session
         == Update User Status ==
-        Server -> DB: UPDATE users SET\nstatus='OFFLINE',\nlast_logout=NOW()\nWHERE userID=?
+        Server -> DB: Update user status
         activate DB
         DB --> Server: Status updated
         deactivate DB
@@ -80,9 +80,9 @@ else User confirms
         == Clear Session ==
         Server -> Server: Delete session:\nsessions.remove(sessionID)
         
-        Server -> Server: Create ResponsePacket:\n{status="SUCCESS",\nmsg="Signed out successfully"}
+        Server -> Server: Prepare success response
         
-        Server -> Socket: send(ResponsePacket)
+        Server -> Socket: send(INFO)
         activate Socket
         Socket -> UI: Forward response
         deactivate Socket
@@ -94,7 +94,7 @@ else User confirms
         UI -> User: Show "Signed out successfully"
         
         == Close TCP Connection ==
-        UI -> Socket: send(CLOSE_CONNECTION)
+        UI -> Socket: send(LOGOUT)
         activate Socket
         Socket -> Server: Forward close request
         deactivate Socket

@@ -1,0 +1,112 @@
+@startuml
+title View Leaderboard Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
+database "Database" as DB
+
+note over UI, Server
+  TCP connection already established
+  from login session
+end note
+
+== View Leaderboard ==
+User -> UI: Click "Leaderboard" / "Rankings"
+activate UI
+
+UI -> UI: Request leaderboard
+
+UI -> Socket: send(LEADER_BOARD)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+== Fetch Top Players ==
+Server -> DB: Get leaderboard
+activate DB
+
+alt No players found
+    DB --> Server: Empty result
+    deactivate DB
+    
+    Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> UI: Forward response
+    deactivate Socket
+    
+    UI -> User: Display "No players yet\nBe the first to play!"
+    deactivate UI
+    
+else Players found
+    DB --> Server: Return top 100 players list:\n[{userID, username, elo,\ntotal_games, wins, losses}...]
+    deactivate DB
+    
+    Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> UI: Forward leaderboard data
+    deactivate Socket
+    
+    UI -> UI: Parse leaderboard data
+    
+    UI -> User: Display leaderboard
+    deactivate UI
+    deactivate Server
+end
+
+== Search Specific Player ==
+User -> UI: Enter username in search box\n(e.g., "Player123")
+activate UI
+
+UI -> UI: Validate input:\nmin 3 characters
+
+alt Input too short
+    UI -> User: Show "Enter at least 3 characters"
+    deactivate UI
+    
+else Valid input
+    UI -> UI: Search player
+    
+    UI -> Socket: send(USER_STATS)
+    activate Socket
+    Socket -> Server: Forward search request
+    deactivate Socket
+    activate Server
+    
+    Server -> DB: Search players
+    activate DB
+    
+    alt No matches found
+        DB --> Server: Empty result
+        deactivate DB
+        
+        Server -> Socket: send(INFO)
+        activate Socket
+        Socket -> UI: Forward response
+        deactivate Socket
+        
+        UI -> User: Display "No player found\nmatching 'Player123'"
+        
+    else Players found
+        DB --> Server: Return matching players:\n[{userID, username, elo, rank}...]
+        deactivate DB
+        
+    deactivate UI
+    deactivate Server
+end
+
+== Leave Leaderboard ==
+User -> UI: Click "Back" button
+activate UI
+
+UI -> User: Return to main menu/lobby
+deactivate UI
+
+@enduml
+
+∂
