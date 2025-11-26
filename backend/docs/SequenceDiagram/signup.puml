@@ -40,9 +40,9 @@ alt Invalid format
 else Valid format
     UI -> UI: Hash password:\nhash = SHA256(password)
     
-    UI -> UI: Create SignUpPacket:\n{type="SIGNUP",\nusername, passwordHash,\nemail, fullName}
+    UI -> UI: Prepare signup request
     
-    UI -> Socket: send(SignUpPacket)
+    UI -> Socket: send(REGISTER)
     activate Socket
     Socket -> Server: Forward packet
     deactivate Socket
@@ -50,18 +50,18 @@ else Valid format
     Server -> Server: Parse registration packet
     
     == Check Username Availability ==
-    Server -> DB: SELECT COUNT(*) FROM users\nWHERE username = ?
+    Server -> DB: Check username availability
     activate DB
     
     alt Username already exists
         DB --> Server: COUNT > 0
         deactivate DB
         
-        Server -> Server: Create ResponsePacket:\n{status="FAIL",\nmsg="Username already taken"}
+        Server -> Server: Prepare error response
         
-        Server -> Socket: send(ResponsePacket)
+        Server -> Socket: send(ERROR)
         activate Socket
-        Socket -> UI: Forward response
+        Socket -> UI: Forward error
         deactivate Socket
         
         UI -> User: Display "Username already exists.\nPlease choose another."
@@ -71,18 +71,18 @@ else Valid format
         deactivate DB
         
         == Check Email Availability ==
-        Server -> DB: SELECT COUNT(*) FROM users\nWHERE email = ?
+        Server -> DB: Check email availability
         activate DB
         
         alt Email already exists
             DB --> Server: COUNT > 0
             deactivate DB
             
-            Server -> Server: Create ResponsePacket:\n{status="FAIL",\nmsg="Email already registered"}
+            Server -> Server: Prepare error response
             
-            Server -> Socket: send(ResponsePacket)
+            Server -> Socket: send(ERROR)
             activate Socket
-            Socket -> UI: Forward response
+            Socket -> UI: Forward error
             deactivate Socket
             
             UI -> User: Display "Email already in use.\nPlease use another email."
@@ -96,14 +96,14 @@ else Valid format
             
             Server -> Server: Set default values:\nelo = 1200,\nstatus = 'OFFLINE',\ncreated_at = NOW()
             
-            Server -> DB: INSERT INTO users\n(userID, username, passwordHash,\nemail, fullName, elo, status,\ncreated_at)
+            Server -> DB: Create user account
             activate DB
             
             alt Database error
                 DB --> Server: INSERT failed
                 deactivate DB
                 
-                Server -> Socket: send(ERROR_DB)
+                Server -> Socket: send(ERROR)
                 activate Socket
                 Socket -> UI: Forward error
                 deactivate Socket
@@ -115,14 +115,14 @@ else Valid format
                 deactivate DB
                 
                 == Initialize User Data ==
-                Server -> DB: INSERT INTO user_stats\n(userID, total_games=0,\nwins=0, losses=0, draws=0)
+                Server -> DB: Initialize user stats
                 activate DB
                 DB --> Server: Stats initialized
                 deactivate DB
                 
-                Server -> Server: Create ResponsePacket:\n{status="SUCCESS",\nuserID, username,\nmsg="Account created successfully"}
+                Server -> Server: Prepare success response
                 
-                Server -> Socket: send(ResponsePacket)
+                Server -> Socket: send(AUTHENTICATED)
                 activate Socket
                 Socket -> UI: Forward response
                 deactivate Socket

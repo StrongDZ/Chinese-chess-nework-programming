@@ -19,9 +19,9 @@ end note
 User -> UI: Navigate to "Lobby" / "Find Players"
 activate UI
 
-UI -> UI: Create GetReadyPlayersPacket:\n{type="GET_READY_PLAYERS",\nsessionID, userID}
+UI -> UI: Request ready players list
 
-UI -> Socket: send(GetReadyPlayersPacket)
+UI -> Socket: send(PLAYER_LIST)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -30,7 +30,7 @@ activate Server
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> UI: Forward error
     deactivate Socket
@@ -39,14 +39,14 @@ alt Invalid session
     
 else Valid session
     == Fetch Online Players ==
-    Server -> DB: SELECT userID, username,\nelo, status FROM users\nWHERE status = 'ONLINE'\nAND userID != ?\nORDER BY elo DESC
+    Server -> DB: Get online players
     activate DB
     
     alt No online players
         DB --> Server: Empty result
         deactivate DB
         
-        Server -> Socket: send(EmptyListPacket)
+        Server -> Socket: send(INFO)
         activate Socket
         Socket -> UI: Forward response
         deactivate Socket
@@ -61,9 +61,9 @@ else Valid session
         == Check Players Ready Status ==
         Server -> Server: Filter players by status:\n- IN_LOBBY (ready to play)\n- IN_GAME (currently playing)
         
-        Server -> Server: Create ReadyPlayersPacket:\n{status="SUCCESS",\nplayers=[\n  {userID, username, elo,\n   player_status, last_active}...\n],\ntotal_online=X}
+        Server -> Server: Prepare ready players response
         
-        Server -> Socket: send(ReadyPlayersPacket)
+        Server -> Socket: send(INFO)
         activate Socket
         Socket -> UI: Forward players list
         deactivate Socket
@@ -78,18 +78,18 @@ end
 
 == Auto Refresh / Real-time Updates ==
 loop Every 5 seconds OR when player status changes
-    UI -> Socket: send(GET_READY_PLAYERS)
+    UI -> Socket: send(PLAYER_LIST)
     activate Socket
     Socket -> Server: Forward request
     deactivate Socket
     activate Server
     
-    Server -> DB: SELECT userID, username,\nelo, status FROM users\nWHERE status IN ('ONLINE', 'IN_LOBBY')\nAND userID != ?
+    Server -> DB: Get ready players
     activate DB
     DB --> Server: Return updated list
     deactivate DB
     
-    Server -> Socket: send(UpdatedPlayersPacket)
+    Server -> Socket: send(INFO)
     activate Socket
     Socket -> UI: Forward updated list
     deactivate Socket
@@ -104,7 +104,7 @@ end
 User -> UI: Click "Refresh" button
 activate UI
 
-UI -> Socket: send(GET_READY_PLAYERS)
+UI -> Socket: send(PLAYER_LIST)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
@@ -115,7 +115,7 @@ activate DB
 DB --> Server: Return latest list
 deactivate DB
 
-Server -> Socket: send(ReadyPlayersPacket)
+Server -> Socket: send(INFO)
 activate Socket
 Socket -> UI: Forward list
 deactivate Socket

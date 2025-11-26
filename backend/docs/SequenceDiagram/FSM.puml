@@ -45,33 +45,33 @@ Connecting --> Disconnected : CONNECT_FAIL | TIMEOUT / [close_socket]
 
 ' Authentication
 Connected --> SigningIn : LOGIN{user,pass} / [send_login]
-SigningIn --> Authenticated : LOGIN_OK [cred_valid] / [set_session]
-SigningIn --> Connected : LOGIN_FAIL / [show_error]
+SigningIn --> Authenticated : AUTHENTICATED [cred_valid] / [set_session]
+SigningIn --> Connected : ERROR / [show_error]
 
 ' Session exit (global)
-Authenticated --> Disconnected : SIGNOUT / [clear_session, close_socket]
-Lobby --> Disconnected : SIGNOUT / [clear_session, close_socket]
-Playing --> Disconnected : SIGNOUT / [save_if_needed]
-GameOver --> Disconnected : SIGNOUT
-SearchingGame --> Disconnected : SIGNOUT
+Authenticated --> Disconnected : LOGOUT / [clear_session, close_socket]
+Lobby --> Disconnected : LOGOUT / [clear_session, close_socket]
+Playing --> Disconnected : LOGOUT / [save_if_needed]
+GameOver --> Disconnected : LOGOUT
+SearchingGame --> Disconnected : LOGOUT
 
 ' Lobby data
-Authenticated --> Lobby : REQUEST_LOBBY / [send_req] \n LOBBY_DATA / [render_lobby]
+Authenticated --> Lobby : PLAYER_LIST / [send_req] \n INFO / [render_lobby]
 
 ' Search game (hierarchical)
-Lobby --> SearchingGame : MATCH_REQUEST [timeMode_ok] / [enqueue]
+Lobby --> SearchingGame : QUICK_MATCHING [timeMode_ok] / [enqueue]
 
 ' Inside SearchingGame
-Lobby --> Matchmaking : MATCH_REQUEST(timeMode)
-Lobby --> Challenging : CHALLENGE_SENT(target)
-Matchmaking --> InGame : MATCH_FOUND / [create_room, start_game]
-Matchmaking --> Lobby : CANCEL
+Lobby --> Matchmaking : QUICK_MATCHING(timeMode)
+Lobby --> Challenging : CHALLENGE_REQUEST(target)
+Matchmaking --> InGame : GAME_START / [create_room, start_game]
+Matchmaking --> Lobby : QUICK_MATCHING
 Matchmaking --> Lobby : MATCH_TIMEOUT / [dequeue]
-Challenging --> InGame : CHALLENGE_ACCEPT [target_online] / [create_room, start_game]
-Challenging --> Lobby : CHALLENGE_DECLINE | CANCEL | TIMEOUT / [notify_user]
+Challenging --> InGame : CHALLENGE_RESPONSE [target_online] / [create_room, start_game]
+Challenging --> Lobby : CHALLENGE_RESPONSE | CHALLENGE_CANCEL | TIMEOUT / [notify_user]
 
 ' AI game path
-Lobby --> InGameAI : START_GAME_AI(difficulty) / [init_ai(difficulty)]
+Lobby --> InGameAI : AI_MATCH(difficulty) / [init_ai(difficulty)]
 
 ' Reconnect flow
 Authenticated --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [start_reconnect]
@@ -84,12 +84,12 @@ Reconnecting --> InGameAI : REJOIN_OK [ai_game] / [sync_state]
 Reconnecting --> Disconnected : REJOIN_FAIL / [go_offline]
 
 ' In-game lifecycle (inside Playing)
-InGame --> GameOver : GAME_RESULT(reason) / [persist_history, update_elo]
-InGameAI --> GameOver : GAME_RESULT(reason) / [persist_history]
+InGame --> GameOver : GAME_END(reason) / [persist_history, update_elo]
+InGameAI --> GameOver : GAME_END(reason) / [persist_history]
 
 ' Rematch / Replay / Return
 GameOver --> Lobby : RETURN
-GameOver --> InGame : REMATCH_ACCEPT / [reuse_room]
+GameOver --> InGame : REMATCH_RESPONSE / [reuse_room]
 GameOver --> Lobby : VIEW_REPLAY (exit replay)
 
 legend right

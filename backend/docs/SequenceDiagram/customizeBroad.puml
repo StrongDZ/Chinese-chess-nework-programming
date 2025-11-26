@@ -14,9 +14,9 @@ database "Database" as DB
 User -> UI: Click "Customize Board" / "Settings"
 activate UI
 
-UI -> UI: Create GetPreferencesPacket:\n{type="GET_PREFERENCES",\nsessionID, userID}
+UI -> UI: Request preferences
 
-UI -> Socket: send(GetPreferencesPacket)
+UI -> Socket: send(INFO)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -25,7 +25,7 @@ activate Server
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> UI: Forward error
     deactivate Socket
@@ -33,7 +33,7 @@ alt Invalid session
     deactivate UI
     
 else Valid session
-    Server -> DB: SELECT * FROM user_preferences\nWHERE userID = ?
+    Server -> DB: Get user preferences
     activate DB
     
     alt No preferences found
@@ -47,7 +47,7 @@ else Valid session
         deactivate DB
     end
     
-    Server -> Socket: send(PreferencesPacket)
+    Server -> Socket: send(INFO)
     activate Socket
     Socket -> UI: Forward preferences
     deactivate Socket
@@ -81,9 +81,9 @@ activate UI
 
 UI -> UI: Collect customizations:\n{board_theme, piece_style}
 
-UI -> UI: Create SavePreferencesPacket:\n{type="SAVE_PREFERENCES",\nsessionID, userID,\nboard_theme, piece_style}
+UI -> UI: Save preferences
 
-UI -> Socket: send(SavePreferencesPacket)
+UI -> Socket: send(INFO)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -91,27 +91,27 @@ deactivate Socket
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> UI: Forward error
     deactivate Socket
     UI -> User: Show "Session expired"
     
 else Valid session
-    Server -> DB: SELECT COUNT(*) FROM user_preferences\nWHERE userID = ?
+    Server -> DB: Check preferences exist
     activate DB
     
     alt First time customization
         DB --> Server: COUNT = 0
         deactivate DB
         
-        Server -> DB: INSERT INTO user_preferences\n(userID, board_theme,\npiece_style, updated_at)\nVALUES (?, ?, ?, NOW())
+        Server -> DB: Save preferences
         activate DB
         
         alt Insert failed
             DB --> Server: Error
             deactivate DB
-            Server -> Socket: send(ERROR_DB)
+            Server -> Socket: send(ERROR)
             activate Socket
             Socket -> UI: Forward error
             deactivate Socket
@@ -121,7 +121,7 @@ else Valid session
             DB --> Server: Preferences saved
             deactivate DB
             
-            Server -> Socket: send(SUCCESS_RESPONSE)
+            Server -> Socket: send(INFO)
             activate Socket
             Socket -> UI: Forward success
             deactivate Socket
@@ -135,13 +135,13 @@ else Valid session
         DB --> Server: COUNT > 0
         deactivate DB
         
-        Server -> DB: UPDATE user_preferences SET\nboard_theme = ?,\npiece_style = ?,\nupdated_at = NOW()\nWHERE userID = ?
+        Server -> DB: Update preferences
         activate DB
         
         alt Update failed
             DB --> Server: Error
             deactivate DB
-            Server -> Socket: send(ERROR_DB)
+            Server -> Socket: send(ERROR)
             activate Socket
             Socket -> UI: Forward error
             deactivate Socket
@@ -151,7 +151,7 @@ else Valid session
             DB --> Server: Preferences updated
             deactivate DB
             
-            Server -> Socket: send(SUCCESS_RESPONSE)
+            Server -> Socket: send(INFO)
             activate Socket
             Socket -> UI: Forward success
             deactivate Socket

@@ -14,9 +14,9 @@ database "Database" as DB
 User -> UI: Click "Profile" / "My Profile"
 activate UI
 
-UI -> UI: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, userID}
+UI -> UI: Request profile data
 
-UI -> Socket: send(ProfileRequestPacket)
+UI -> Socket: send(USER_STATS)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -25,7 +25,7 @@ activate Server
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> UI: Forward error
     deactivate Socket
@@ -34,32 +34,32 @@ alt Invalid session
     
 else Valid session
     == Fetch User Profile ==
-    Server -> DB: SELECT * FROM users\nWHERE userID = ?
+    Server -> DB: Get user data
     activate DB
     DB --> Server: Return user data:\n{userID, username, email,\nfullName, elo, status,\ncreated_at, avatar}
     deactivate DB
     
     == Fetch User Statistics ==
-    Server -> DB: SELECT * FROM user_stats\nWHERE userID = ?
+    Server -> DB: Get user stats
     activate DB
     DB --> Server: Return stats:\n{total_games, wins, losses,\ndraws, win_rate}
     deactivate DB
     
     == Fetch Recent Matches ==
-    Server -> DB: SELECT * FROM game_history\nWHERE player1_id = ? OR player2_id = ?\nORDER BY date DESC\nLIMIT 10
+    Server -> DB: Get recent matches
     activate DB
     DB --> Server: Return recent games:\n[{gameID, opponent, result,\ndate, mode}...]
     deactivate DB
     
     == Fetch Rank Info ==
-    Server -> DB: SELECT COUNT(*) + 1 FROM users\nWHERE elo > ?\n(Calculate user rank)
+    Server -> DB: Calculate user rank
     activate DB
     DB --> Server: Return rank: e.g., #245
     deactivate DB
     
-    Server -> Server: Create ProfileResponsePacket:\n{status="SUCCESS",\nprofile={username, email, elo, rank},\nstats={games, wins, losses, draws},\nrecent_matches=[...]}
+    Server -> Server: Prepare profile response
     
-    Server -> Socket: send(ProfileResponsePacket)
+    Server -> Socket: send(INFO)
     activate Socket
     Socket -> UI: Forward response
     deactivate Socket
@@ -73,9 +73,9 @@ end
 User -> UI: Click on another player's name
 activate UI
 
-UI -> UI: Create ProfileRequestPacket:\n{type="GET_PROFILE",\nsessionID, targetUserID}
+UI -> UI: Request profile data
 
-UI -> Socket: send(ProfileRequestPacket)
+UI -> Socket: send(USER_STATS)
 activate Socket
 Socket -> Server: Forward packet
 deactivate Socket
@@ -83,7 +83,7 @@ deactivate Socket
 Server -> Server: Validate sessionID
 
 alt Invalid session
-    Server -> Socket: send(ERROR_SESSION)
+    Server -> Socket: send(ERROR)
     activate Socket
     Socket -> UI: Forward error
     deactivate Socket
@@ -92,14 +92,14 @@ alt Invalid session
     
 else Valid session
     == Fetch Target User Profile ==
-    Server -> DB: SELECT * FROM users\nWHERE userID = ?
+    Server -> DB: Get user data
     activate DB
     
     alt User not found
         DB --> Server: No record
         deactivate DB
         
-        Server -> Socket: send(ERROR_USER_NOT_FOUND)
+        Server -> Socket: send(ERROR)
         activate Socket
         Socket -> UI: Forward error
         deactivate Socket
@@ -110,19 +110,19 @@ else Valid session
         DB --> Server: Return user data
         deactivate DB
         
-        Server -> DB: SELECT * FROM user_stats\nWHERE userID = ?
+        Server -> DB: Get user stats
         activate DB
         DB --> Server: Return stats
         deactivate DB
         
-        Server -> DB: SELECT * FROM game_history\nWHERE (player1_id = ? OR player2_id = ?)\nAND (player1_id = currentUser\nOR player2_id = currentUser)\nORDER BY date DESC
+        Server -> DB: Get head-to-head matches
         activate DB
         DB --> Server: Return head-to-head matches
         deactivate DB
         
-        Server -> Server: Create ProfileResponsePacket:\n{status="SUCCESS",\nprofile={username, elo, rank},\nstats={games, wins, losses},\nhead_to_head=[...],\nis_online=true/false}
+        Server -> Server: Prepare profile response
         
-        Server -> Socket: send(ProfileResponsePacket)
+        Server -> Socket: send(INFO)
         activate Socket
         Socket -> UI: Forward response
         deactivate Socket
@@ -137,17 +137,17 @@ end
 User -> UI: Click "View Match History"
 activate UI
 
-UI -> Socket: send(GET_MATCH_HISTORY)
+UI -> Socket: send(GAME_HISTORY)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
 
-Server -> DB: SELECT * FROM game_history\nWHERE userID = ?\nORDER BY date DESC\nLIMIT 50
+Server -> DB: Get match history
 activate DB
 DB --> Server: Return match history
 deactivate DB
 
-Server -> Socket: send(MatchHistoryPacket)
+Server -> Socket: send(INFO)
 activate Socket
 Socket -> UI: Forward data
 deactivate Socket

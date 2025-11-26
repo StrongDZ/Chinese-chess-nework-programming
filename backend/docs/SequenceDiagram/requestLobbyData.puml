@@ -11,17 +11,17 @@ participant "Server" as Server
 database "Database" as DB
 
 == Request Lobby Data ==
-UI -> Socket: send(REQUEST_LOBBY)
+UI -> Socket: send(PLAYER_LIST)
 activate Socket
 Socket -> Server: Forward request
 deactivate Socket
             
-Server -> DB: SELECT * FROM users\nWHERE status='ONLINE'
+Server -> DB: Get online players
 activate DB
 DB --> Server: Return online players list
 deactivate DB
             
-Server -> Socket: send(LobbyDataPacket)
+Server -> Socket: send(INFO)
 activate Socket
 Socket -> UI: Forward lobby data
 deactivate Socket

@@ -5,21 +5,13 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "UI" as UI
-participant "TCP Socket" as Socket
-participant "Server" as Server
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
 database "Database" as DB
 
-note over UI, Server
-  TCP connection already established
-  from login session
-end note
 
 == Game Play (Common for all types) ==
-note over UI, Server
-  After game is created from any of the above flows,
-  all games follow the same gameplay loop below
-end note
 
 activate UI
 activate Server
@@ -34,7 +26,7 @@ loop Until game ends (Win/Loss/Draw/Resign)
             UI -> User: Show "Invalid move"
             
         else Valid move
-            UI -> Socket: send(MOVE_PACKET)
+            UI -> Socket: send(MOVE)
             activate Socket
             Socket -> Server: Forward move
             deactivate Socket
@@ -43,23 +35,23 @@ loop Until game ends (Win/Loss/Draw/Resign)
             Server -> Server: Update board state
             Server -> Server: Check game rules
             
-            Server -> DB: INSERT INTO game_moves\n(gameID, move_number, from, to)
+            Server -> DB: Save move
             activate DB
             DB --> Server: Move saved
             deactivate DB
             
             alt Game ended
-                Server -> DB: UPDATE games SET\nstatus="COMPLETED",\nwinner=?, end_time=NOW()
+                Server -> DB: End game
                 activate DB
                 DB --> Server: Game ended
                 deactivate DB
                 
-                Server -> DB: UPDATE user_stats:\nWins/Losses/Draws\nCalculate new ELO rating
+                Server -> DB: Update player stats
                 activate DB
                 DB --> Server: Stats updated
                 deactivate DB
                 
-                Server -> Socket: send(GAME_END,\n{result, winner, new_elo})
+                Server -> Socket: send(GAME_END)
                 activate Socket
                 Socket -> UI: Forward result
                 deactivate Socket
@@ -67,12 +59,12 @@ loop Until game ends (Win/Loss/Draw/Resign)
                 UI -> User: Display game result
                 
             else Game continues
-                Server -> Socket: send(MOVE_SUCCESS)
+                Server -> Socket: send(INFO)
                 activate Socket
                 Socket -> UI: Confirmation
                 deactivate Socket
                 
-                Server -> Socket: Broadcast move to opponent\n(if PVP game)
+                Server -> Socket: send(MOVE)
                 activate Socket
                 Socket --> UI: Update opponent's board
                 deactivate Socket
@@ -85,17 +77,17 @@ loop Until game ends (Win/Loss/Draw/Resign)
     else Special Actions
         alt Resign
             User -> UI: Click "Resign"
-            UI -> Socket: send(RESIGN_PACKET)
+            UI -> Socket: send(RESIGN)
             activate Socket
             Socket -> Server: Forward resign
             deactivate Socket
             
-            Server -> DB: UPDATE games SET\nstatus="RESIGNED",\nwinner=opponent
+            Server -> DB: End game
             activate DB
             DB --> Server: Updated
             deactivate DB
             
-            Server -> Socket: send(GAME_END, result="RESIGN")
+            Server -> Socket: send(GAME_END)
             activate Socket
             Socket -> UI: Forward result
             deactivate Socket
@@ -104,12 +96,12 @@ loop Until game ends (Win/Loss/Draw/Resign)
             
         else Offer Draw
             User -> UI: Click "Offer Draw"
-            UI -> Socket: send(DRAW_OFFER)
+            UI -> Socket: send(DRAW_REQUEST)
             activate Socket
             Socket -> Server: Forward offer
             deactivate Socket
             
-            Server -> Socket: Forward to opponent
+            Server -> Socket: send(DRAW_REQUEST)
             activate Socket
             Socket --> UI: Opponent receives offer
             deactivate Socket

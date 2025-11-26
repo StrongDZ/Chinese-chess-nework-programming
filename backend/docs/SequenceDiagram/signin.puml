@@ -5,9 +5,9 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-participant "UI" as UI
-participant "TCP Socket" as Socket
-participant "Server" as Server
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
 database "Database" as DB
 
 == Signin Authentication ==
@@ -23,25 +23,25 @@ alt Invalid format
     UI -> User: Show "Invalid input format"
     
 else Valid format
-    UI -> UI: Create SigninPacket:\n{type="SIGNIN", username, password}
+    UI -> UI: Prepare signin request
     
-    UI -> Socket: send(SigninPacket)
+    UI -> Socket: send(LOGIN)
     activate Socket
     Socket -> Server: Forward packet
     deactivate Socket
     
     Server -> Server: Parse signin packet
-    Server -> DB: SELECT * FROM users\nWHERE username = ?
+    Server -> DB: Get user data
     activate DB
     
     alt User not found
         DB --> Server: No record
         deactivate DB
-        Server -> Server: Create ResponsePacket:\n{status="FAIL", msg="User not found"}
+        Server -> Server: Prepare error response
         
-        Server -> Socket: send(ResponsePacket)
+        Server -> Socket: send(ERROR)
         activate Socket
-        Socket -> UI: Forward response
+        Socket -> UI: Forward error
         deactivate Socket
         UI -> User: Display "User not found"
         
@@ -52,27 +52,27 @@ else Valid format
         Server -> Server: Verify password hash
         
         alt Incorrect password
-            Server -> Server: Create ResponsePacket:\n{status="FAIL", msg="Incorrect password"}
+            Server -> Server: Prepare error response
             
-            Server -> Socket: send(ResponsePacket)
+            Server -> Socket: send(ERROR)
             activate Socket
-            Socket -> UI: Forward response
+            Socket -> UI: Forward error
             deactivate Socket
             UI -> User: Display "Incorrect password"
             
         else Correct password
             Server -> Server: Generate sessionID
             
-            Server -> DB: UPDATE users SET\nstatus='ONLINE',\nlast_signin=NOW()
+            Server -> DB: Update user status
             activate DB
             DB --> Server: Updated
             deactivate DB
             
             Server -> Server: Store session:\nsessions[sessionID] = {socket, userID}
             
-            Server -> Server: Create ResponsePacket:\n{status="SUCCESS", sessionID,\nuserID, username, elo}
+            Server -> Server: Prepare success response
             
-            Server -> Socket: send(ResponsePacket)
+            Server -> Socket: send(AUTHENTICATED)
             activate Socket
             Socket -> UI: Forward response
             deactivate Socket
