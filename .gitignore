@@ -36,10 +36,11 @@ deps/
 third_party/
 
 # Generated output
-out/
+**/out/
 bin/
 lib/
 
 # OS files
 .DS_Store
 Thumbs.db
+.vscode/
