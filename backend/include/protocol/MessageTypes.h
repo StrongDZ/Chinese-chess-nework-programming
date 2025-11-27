@@ -50,6 +50,10 @@ enum class MessageType {
   PLAYER_LIST,
   INFO,
 
+  // === Friend Management ===
+  REQUEST_ADD_FRIEND,
+  RESPONSE_ADD_FRIEND,
+
   // === System ===
   ERROR,
 
@@ -128,6 +132,18 @@ struct GameHistoryPayload {
   string username;
 };
 
+// Friend management payloads
+struct RequestAddFriendPayload {
+  string to_user;   // Client -> Server: target user
+  string from_user; // Server -> Client: sender user
+};
+
+struct ResponseAddFriendPayload {
+  string to_user;   // Client -> Server: original requester
+  string from_user; // Server -> Client: responder
+  bool accept;
+};
+
 struct ErrorPayload {
   string message;
 };
@@ -146,7 +162,8 @@ using Payload =
             ChallengeRequestPayload, ChallengeCancelPayload,
             ChallengeResponsePayload, AIMatchPayload, GameStartPayload,
             MovePayload, InvalidMovePayload, MessagePayload, GameEndPayload,
-            UserStatsPayload, GameHistoryPayload, ErrorPayload, InfoPayload>;
+            UserStatsPayload, GameHistoryPayload, RequestAddFriendPayload,
+            ResponseAddFriendPayload, ErrorPayload, InfoPayload>;
 
 // ============= nlohmann::json converters ============= //
 using nlohmann::json;
@@ -187,6 +204,24 @@ inline void to_json(json &j, const UserStatsPayload &p) {
 }
 inline void to_json(json &j, const GameHistoryPayload &p) {
   j = json{{"username", p.username}};
+}
+inline void to_json(json &j, const RequestAddFriendPayload &p) {
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}};
+  }
+}
+inline void to_json(json &j, const ResponseAddFriendPayload &p) {
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}, {"accept", p.accept}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}, {"accept", p.accept}};
+  }
 }
 inline void to_json(json &j, const Coord &c) {
   j = json{{"row", c.row}, {"col", c.col}};
@@ -351,6 +386,44 @@ inline optional<Payload> parsePayload(MessageType type,
       return p;
     }
 
+    case MessageType::REQUEST_ADD_FRIEND: {
+      RequestAddFriendPayload p;
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
+        return nullopt;
+      }
+      return p;
+    }
+
+    case MessageType::RESPONSE_ADD_FRIEND: {
+      if (!doc.HasMember("accept") || !doc["accept"].IsBool()) {
+        return nullopt;
+      }
+      ResponseAddFriendPayload p;
+      p.accept = doc["accept"].GetBool();
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
+        return nullopt;
+      }
+      return p;
+    }
+
     case MessageType::MOVE: {
       if (!doc.HasMember("piece") || !doc["piece"].IsString() ||
           !doc.HasMember("from") || !doc["from"].IsObject() ||
@@ -443,6 +516,8 @@ static const unordered_map<string, MessageType> commandMap = {
     {"LEADER_BOARD", MessageType::LEADER_BOARD},
     {"PLAYER_LIST", MessageType::PLAYER_LIST},
     {"INFO", MessageType::INFO},
+    {"REQUEST_ADD_FRIEND", MessageType::REQUEST_ADD_FRIEND},
+    {"RESPONSE_ADD_FRIEND", MessageType::RESPONSE_ADD_FRIEND},
     {"ERROR", MessageType::ERROR}};
 
 inline ParsedMessage parseMessage(const string &msg) {
@@ -495,6 +570,8 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::LEADER_BOARD, "LEADER_BOARD"},
     {MessageType::PLAYER_LIST, "PLAYER_LIST"},
     {MessageType::INFO, "INFO"},
+    {MessageType::REQUEST_ADD_FRIEND, "REQUEST_ADD_FRIEND"},
+    {MessageType::RESPONSE_ADD_FRIEND, "RESPONSE_ADD_FRIEND"},
     {MessageType::ERROR, "ERROR"}};
 
 inline string makeMessage(MessageType type,
