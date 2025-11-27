@@ -17,7 +17,7 @@ public class AuthPanel extends VBox {
         setSpacing(40);
         setAlignment(Pos.CENTER);
         setLayoutX(960 - 180);
-        setLayoutY(450);
+        setLayoutY(400);
 
         ImageButton loginBtn = new ImageButton("login.png", 287);
         ImageButton registerBtn = new ImageButton("register.png", 380);

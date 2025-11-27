@@ -75,16 +75,12 @@ public class Main extends Application {
         StackPane.setAlignment(stageLayer, Pos.CENTER);
         root.getChildren().add(stageLayer);
 
-        Scene scene = new Scene(root, 1200, 800);
-        // Try multiple paths for CSS file
-        Path cssPath1 = Path.of(System.getProperty("user.dir"),
-                "src", "application", "application.css");
-        Path cssPath2 = Path.of(System.getProperty("user.dir"),
-                "frontend", "src", "application", "application.css");
-        Path cssPath = cssPath1.toFile().exists() ? cssPath1 : cssPath2;
-        if (cssPath.toFile().exists()) {
-            scene.getStylesheets().add(cssPath.toUri().toString());
-        }
+        Scene scene = new Scene(root, 1920, 1080);
+        Path cssPath = Path.of(System.getProperty("user.dir"),
+                "src",
+                "application",
+                "application.css");
+        scene.getStylesheets().add(cssPath.toUri().toString());
 
         stage.setTitle("Chinese Chess");
         stage.setScene(scene);

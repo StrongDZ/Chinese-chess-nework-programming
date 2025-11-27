@@ -7,6 +7,8 @@ import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.beans.binding.BooleanBinding;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.geometry.Pos;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.StackPane;
@@ -20,14 +22,17 @@ public class TitleImage extends StackPane {
     private final Timeline transition = new Timeline();
     private final Frame normalFrame;
     private final Frame smallFrame;
+    private final ImageView imageView;
+    private final DoubleProperty imageFitWidth = new SimpleDoubleProperty();
 
     private TitleImage(String assetName, Frame normal, Frame small, UIState state) {
         this.normalFrame = normal;
         this.smallFrame = small;
 
-        ImageView imageView = new ImageView(AssetHelper.image(assetName));
+        imageView = new ImageView(AssetHelper.image(assetName));
         imageView.setPreserveRatio(true);
-        imageView.setFitWidth(normal.width());
+        imageFitWidth.set(normal.width());
+        imageView.fitWidthProperty().bind(imageFitWidth);
         getChildren().add(imageView);
         setAlignment(Pos.TOP_LEFT);
 
@@ -43,14 +48,14 @@ public class TitleImage extends StackPane {
     }
 
     public static TitleImage cnTitle(UIState state) {
-        Frame normal = new Frame(530, 100, 935, 268);
-        Frame small = new Frame(660, 80, 600, 150);
+        Frame normal = new Frame(500, 70, 935, 268);
+        Frame small = new Frame(690, 76, 554, 138);
         return new TitleImage("title_cn.png", normal, small, state);
     }
 
     public static TitleImage enTitle(UIState state) {
-        Frame normal = new Frame(776, 346, 461, 145);
-        Frame small = new Frame(800, 240, 320, 70);
+        Frame normal = new Frame(740, 346, 461, 145);
+        Frame small = new Frame(805, 233, 320, 70);
         return new TitleImage("title_en.png", normal, small, state);
     }
 
@@ -68,13 +73,15 @@ public class TitleImage extends StackPane {
                         new KeyValue(layoutXProperty(), getLayoutX()),
                         new KeyValue(layoutYProperty(), getLayoutY()),
                         new KeyValue(prefWidthProperty(), getPrefWidth()),
-                        new KeyValue(prefHeightProperty(), getPrefHeight())
+                        new KeyValue(prefHeightProperty(), getPrefHeight()),
+                        new KeyValue(imageFitWidth, imageView.getFitWidth())
                 ),
                 new KeyFrame(Duration.millis(450),
                         new KeyValue(layoutXProperty(), frame.x()),
                         new KeyValue(layoutYProperty(), frame.y()),
                         new KeyValue(prefWidthProperty(), frame.width()),
-                        new KeyValue(prefHeightProperty(), frame.height())
+                        new KeyValue(prefHeightProperty(), frame.height()),
+                        new KeyValue(imageFitWidth, frame.width())
                 )
         );
         transition.play();
