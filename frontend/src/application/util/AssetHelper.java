@@ -10,13 +10,13 @@ import javafx.scene.image.Image;
 public final class AssetHelper {
 
     // Resolve asset root based on where the app is launched.
-    // If you run from frontend_javafx/, assets are in "<user.dir>/assets".
-    // If you run from repo root, assets are in "<user.dir>/frontend_javafx/assets".
+    // If you run from frontend/, assets are in "<user.dir>/assets".
+    // If you run from repo root, assets are in "<user.dir>/frontend/assets".
     private static final Path ASSET_ROOT;
     static {
         Path wd = Path.of(System.getProperty("user.dir"));
         Path candidate1 = wd.resolve("assets");
-        Path candidate2 = wd.resolve("frontend_javafx").resolve("assets");
+        Path candidate2 = wd.resolve("frontend").resolve("assets");
         if (candidate1.toFile().isDirectory()) {
             ASSET_ROOT = candidate1;
         } else {

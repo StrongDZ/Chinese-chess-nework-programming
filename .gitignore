@@ -39,8 +39,9 @@ third_party/
 **/out/
 bin/
 lib/
+**/target/
 
 # OS files
-.DS_Store
+**/.DS_Store
 Thumbs.db
 .vscode/
