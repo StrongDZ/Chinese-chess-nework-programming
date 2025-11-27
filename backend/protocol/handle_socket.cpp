@@ -7,6 +7,7 @@
 #include <string>
 
 #include "../include/protocol/MessageTypes.h"
+#include "../include/protocol/handle_socket.h"
 
 using namespace std;
 
@@ -34,8 +35,8 @@ static bool sendAll(int fd, const void *buffer, size_t bytes) {
   return true;
 }
 
-static bool sendMessage(int fd, MessageType type,
-                        const Payload &payload = EmptyPayload{}) {
+bool sendMessage(int fd, MessageType type,
+                 const Payload &payload) {
   string data = makeMessage(type, payload);
   uint32_t len = htonl(static_cast<uint32_t>(data.size()));
   if (!sendAll(fd, &len, sizeof(len)))
@@ -43,7 +44,7 @@ static bool sendMessage(int fd, MessageType type,
   return sendAll(fd, data.data(), data.size());
 }
 
-static bool recvMessage(int fd, string &out) {
+bool recvMessage(int fd, string &out) {
   uint32_t netLen = 0;
   if (!recvAll(fd, &netLen, sizeof(netLen)))
     return false;

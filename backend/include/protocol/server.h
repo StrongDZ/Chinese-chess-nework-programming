@@ -12,6 +12,7 @@ struct PlayerInfo {
   // Handler declarations
   bool in_game{false};
   int opponent_fd{-1};
+  bool is_red{false};  // true if player is playing Red side (goes first)
 };
 
 static void handleLogin(const ParsedMessage &pm, int fd,
