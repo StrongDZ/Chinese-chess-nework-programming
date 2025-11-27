@@ -43,6 +43,7 @@ set(SOURCES
     src/challenge/challenge_handler.cpp
     src/game/game_handler.cpp
     src/player_stat/player_stat_handler.cpp
+    src/friend/friend_handler.cpp
     src/database/mongodb_client.cpp
     src/database/redis_client.cpp
 )
@@ -55,6 +56,7 @@ set(HEADERS
     include/challenge/challenge_handler.h
     include/game/game_handler.h
     include/player_stat/player_stat_handler.h
+    include/friend/friend_handler.h
     include/database/mongodb_client.h
     include/database/redis_client.h
 )

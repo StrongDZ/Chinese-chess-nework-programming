@@ -51,3 +51,5 @@ Thumbs.db
 
 # environment files
 .env
+
+backend/tests/
