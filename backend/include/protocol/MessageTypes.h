@@ -34,6 +34,7 @@ enum class MessageType {
   INVALID_MOVE,
   MESSAGE,
   GAME_END,
+  SUGGEST_MOVE,
 
   // === Game Control ===
   RESIGN,
@@ -93,7 +94,7 @@ struct ChallengeResponsePayload {
 };
 
 struct AIMatchPayload {
-  string gamemode;
+  string gamemode;  // "easy", "medium", "hard"
 };
 
 // Game payloads
@@ -147,6 +148,7 @@ using Payload =
             ChallengeResponsePayload, AIMatchPayload, GameStartPayload,
             MovePayload, InvalidMovePayload, MessagePayload, GameEndPayload,
             UserStatsPayload, GameHistoryPayload, ErrorPayload, InfoPayload>;
+// Note: SUGGEST_MOVE uses EmptyPayload (no input) and returns MovePayload
 
 // ============= nlohmann::json converters ============= //
 using nlohmann::json;
@@ -432,6 +434,7 @@ static const unordered_map<string, MessageType> commandMap = {
     {"INVALID_MOVE", MessageType::INVALID_MOVE},
     {"MESSAGE", MessageType::MESSAGE},
     {"GAME_END", MessageType::GAME_END},
+    {"SUGGEST_MOVE", MessageType::SUGGEST_MOVE},
     {"RESIGN", MessageType::RESIGN},
     {"DRAW_REQUEST", MessageType::DRAW_REQUEST},
     {"DRAW_RESPONSE", MessageType::DRAW_RESPONSE},
@@ -484,6 +487,7 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::INVALID_MOVE, "INVALID_MOVE"},
     {MessageType::MESSAGE, "MESSAGE"},
     {MessageType::GAME_END, "GAME_END"},
+    {MessageType::SUGGEST_MOVE, "SUGGEST_MOVE"},
     {MessageType::RESIGN, "RESIGN"},
     {MessageType::DRAW_REQUEST, "DRAW_REQUEST"},
     {MessageType::DRAW_RESPONSE, "DRAW_RESPONSE"},

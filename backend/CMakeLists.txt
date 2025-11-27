@@ -17,6 +17,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_SOURCE_DIR}/include/rapidjson/include)
 
 # Find required packages
 find_package(Threads REQUIRED)
@@ -25,7 +26,9 @@ find_package(Threads REQUIRED)
 set(SOURCES
     protocol/server.cpp
     protocol/handle_socket.cpp
+    protocol/ai_engine.cpp
 )
+# Note: handle_socket.cpp is compiled separately, not included in server.cpp
 
 # Header files
 set(HEADERS
