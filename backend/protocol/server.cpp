@@ -492,6 +492,16 @@ static void handleChallengeResponse(const ParsedMessage &pm, int fd,
     challenger.in_game = true;
     challenger.opponent_fd = fd;
 
+    // Initialize game state for both players (PvP game)
+    // Challenger (người thách đấu) plays Red, Accepter (người chấp nhận) plays Black
+    // Use EASY as dummy difficulty for PvP (not used for AI)
+    g_game_state.initializeGame(challenger_fd, fd, AIDifficulty::EASY);
+    g_game_state.initializeGame(fd, challenger_fd, AIDifficulty::EASY);
+    
+    // Set player colors: Challenger is Red (goes first), Accepter is Black
+    challenger.is_red = true;
+    sender.is_red = false;
+
     // Send GAME_START to both players
     GameStartPayload gs1, gs2;
     gs1.opponent = challenger.username;
@@ -537,18 +547,109 @@ static void handleMove(const ParsedMessage &pm, int fd,
   
   const MovePayload &move = get<MovePayload>(*pm.payload);
   
-  // Check if playing against AI
+  // 1. Get current board state (works for both AI and PvP games)
+  char board[10][9];
+  bool has_board = g_game_state.getCurrentBoardArray(fd, board);
+  
+  if (!has_board) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Game state not found"});
+    return;
+  }
+  
+  // 2. Check if it's player's turn (validate piece color matches player)
+  GameStateManager::BoardState board_state = g_game_state.getBoardState(fd);
+  if (!board_state.is_valid) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid game state"});
+    return;
+  }
+  
+  // Check if piece belongs to current player
+  char piece = board[move.from.row][move.from.col];
+  if (piece == ' ') {
+    sendMessage(fd, MessageType::INVALID_MOVE,
+                InvalidMovePayload{"No piece at source position"});
+    return;
+  }
+  
+  bool piece_is_red = (piece >= 'A' && piece <= 'Z');
+  bool piece_is_black = (piece >= 'a' && piece <= 'z');
+  
+  // Determine which player should move based on turn
+  // In AI game: player is always Red (goes first), player_turn indicates player's turn
+  // In PvP game: use move count to determine turn (even = Red, odd = Black)
+  bool is_red_turn;
+  bool player_is_red = sender.is_red;
+  
   if (is_ai_game) {
-    // Apply player's move to game state
-    g_game_state.applyMove(fd, move);
-    
-    // Send move to player (echo back)
-    sendMessage(fd, MessageType::MOVE, move);
-    
+    // AI game: player is Red, player_turn indicates if it's player's turn
+    is_red_turn = board_state.player_turn;
+  } else {
+    // PvP game: use total move count to determine turn
+    // Even number of moves (0, 2, 4...) = Red's turn (challenger)
+    // Odd number of moves (1, 3, 5...) = Black's turn (accepter)
+    int move_count = board_state.moves.size();
+    is_red_turn = (move_count % 2 == 0);
+  }
+  
+  // Check if it's this player's turn
+  bool should_be_red_turn = is_red_turn;
+  
+  // Validate piece color matches player and turn
+  if (should_be_red_turn) {
+    // It's Red's turn
+    if (!player_is_red) {
+      sendMessage(fd, MessageType::INVALID_MOVE,
+                  InvalidMovePayload{"Not your turn: Red side should move"});
+      return;
+    }
+    if (!piece_is_red) {
+      sendMessage(fd, MessageType::INVALID_MOVE,
+                  InvalidMovePayload{"You are playing Red, but trying to move Black piece"});
+      return;
+    }
+  } else {
+    // It's Black's turn
+    if (player_is_red) {
+      sendMessage(fd, MessageType::INVALID_MOVE,
+                  InvalidMovePayload{"Not your turn: Black side should move"});
+      return;
+    }
+    if (!piece_is_black) {
+      sendMessage(fd, MessageType::INVALID_MOVE,
+                  InvalidMovePayload{"You are playing Black, but trying to move Red piece"});
+      return;
+    }
+  }
+  
+  // 3. Validate move legality (physical rules)
+  if (!GameStateManager::isValidMoveOnBoard(board, move)) {
+    sendMessage(fd, MessageType::INVALID_MOVE,
+                InvalidMovePayload{"Illegal move: violates Chinese Chess rules"});
+    return;
+  }
+  
+  // 4. Update game state (for both AI and PvP)
+  if (!g_game_state.applyMove(fd, move)) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Failed to apply move"});
+    return;
+  }
+  
+  // 5. If PvP, also update opponent's game state to keep them in sync
+  if (!is_ai_game) {
+    int opp = sender.opponent_fd;
+    if (g_game_state.hasGame(opp)) {
+      g_game_state.applyMove(opp, move);
+    }
+  }
+  
+  // 6. Send responses
+  sendMessage(fd, MessageType::MOVE, move); // Echo to sender
+  
+  if (is_ai_game) {
     // Generate and send AI move
     handleAIMove(fd, clients);
   } else {
-    // Regular PvP game
+    // PvP: send move to opponent
     int opp = sender.opponent_fd;
     sendMessage(opp, MessageType::MOVE, move);
   }
@@ -633,6 +734,7 @@ static void handleAIMatch(const ParsedMessage &pm, int fd,
   
   sender.in_game = true;
   sender.opponent_fd = ai_fd; // Mark as AI game
+  sender.is_red = true; // Player always plays Red (goes first) when playing against AI
   
   g_game_state.initializeGame(fd, ai_fd, difficulty);
   

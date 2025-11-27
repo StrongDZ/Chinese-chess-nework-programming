@@ -464,9 +464,9 @@ MovePayload PikafishEngine::parseUCIMove(const std::string &uci_move) {
   }
 
   int from_col = from_col_char - 'a'; // a=0, b=1, ..., i=8
-  int from_row = 9 - (from_row_char - '0'); // Convert to our row system (0-9)
+  int from_row = from_row_char - '0'; // UCI rank 0 = row 0 (Đỏ bottom), rank 9 = row 9 (Đen top)
   int to_col = to_col_char - 'a';
-  int to_row = 9 - (to_row_char - '0');
+  int to_row = to_row_char - '0';
 
   move.from = {from_row, from_col};
   move.to = {to_row, to_col};
@@ -478,10 +478,11 @@ MovePayload PikafishEngine::parseUCIMove(const std::string &uci_move) {
 // Static method implementation
 std::string PikafishEngine::moveToUCI(const MovePayload &move) {
   // Convert MovePayload to UCI format
+  // Row 0 = Đỏ (bottom) = UCI rank 0, Row 9 = Đen (top) = UCI rank 9
   char from_col = 'a' + move.from.col;
-  char from_row = '0' + (9 - move.from.row);
+  char from_row = '0' + move.from.row;
   char to_col = 'a' + move.to.col;
-  char to_row = '0' + (9 - move.to.row);
+  char to_row = '0' + move.to.row;
 
   std::string uci;
   uci += from_col;
@@ -489,6 +490,201 @@ std::string PikafishEngine::moveToUCI(const MovePayload &move) {
   uci += to_col;
   uci += to_row;
   return uci;
+}
+
+// ===================== Board Array Conversion Functions ===================== //
+
+std::string PikafishEngine::boardArrayToFEN(const char board[10][9], char side_to_move, 
+                                             int halfmove, int fullmove) {
+  std::ostringstream fen;
+  
+  // Convert board array to FEN format
+  // board[0] = Đỏ (bottom) → FEN rank 9, board[9] = Đen (top) → FEN rank 0
+  for (int row = 9; row >= 0; row--) {
+    if (row < 9) fen << '/';
+    
+    int empty_count = 0;
+    for (int col = 0; col < 9; col++) {
+      char piece = board[row][col];
+      
+      if (piece == ' ') {
+        empty_count++;
+      } else {
+        // Output accumulated empty squares
+        if (empty_count > 0) {
+          fen << empty_count;
+          empty_count = 0;
+        }
+        // Output piece
+        fen << piece;
+      }
+    }
+    
+    // Output remaining empty squares at end of row
+    if (empty_count > 0) {
+      fen << empty_count;
+    }
+  }
+  
+  // Add FEN metadata
+  fen << ' ' << side_to_move;
+  fen << " - - ";  // castling and en passant (not used in Chinese Chess)
+  fen << halfmove << ' ' << fullmove;
+  
+  return fen.str();
+}
+
+bool PikafishEngine::FENToBoardArray(const std::string &fen, char board[10][9],
+                                      char &side_to_move, int &halfmove, int &fullmove) {
+  // Initialize board to empty
+  for (int i = 0; i < 10; i++) {
+    for (int j = 0; j < 9; j++) {
+      board[i][j] = ' ';
+    }
+  }
+  
+  // Parse FEN string
+  std::istringstream fen_stream(fen);
+  std::string board_part;
+  
+  // Get board part (first part before space)
+  if (!(fen_stream >> board_part)) {
+    std::cerr << "[AI] Error: Invalid FEN format - missing board" << std::endl;
+    return false;
+  }
+  
+  // Parse remaining parts
+  std::string side_str;
+  fen_stream >> side_str;
+  side_to_move = side_str.empty() ? 'w' : side_str[0];
+  
+  std::string dummy;
+  fen_stream >> dummy; // castling
+  fen_stream >> dummy; // en passant
+  fen_stream >> halfmove;
+  fen_stream >> fullmove;
+  
+  // Default values
+  if (halfmove < 0) halfmove = 0;
+  if (fullmove < 1) fullmove = 1;
+  
+  // Parse board string (ranks separated by '/')
+  std::vector<std::string> ranks;
+  std::istringstream board_stream(board_part);
+  std::string rank_str;
+  while (std::getline(board_stream, rank_str, '/')) {
+    ranks.push_back(rank_str);
+  }
+  
+  if (ranks.size() != 10) {
+    std::cerr << "[AI] Error: Invalid FEN - expected 10 ranks, got " << ranks.size() << std::endl;
+    return false;
+  }
+  
+  // Fill board array
+  // FEN rank 0 = top (Đen) → board[9], FEN rank 9 = bottom (Đỏ) → board[0]
+  for (size_t rank_idx = 0; rank_idx < ranks.size(); rank_idx++) {
+    int board_row = 9 - rank_idx; // Đảo ngược: FEN rank 0 → board row 9
+    int col = 0;
+    for (char c : ranks[rank_idx]) {
+      if (col >= 9) break;
+      
+      if (c >= '1' && c <= '9') {
+        // Empty squares
+        int empty_count = c - '0';
+        for (int i = 0; i < empty_count && col < 9; i++) {
+          board[board_row][col++] = ' ';
+        }
+      } else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+        // Piece
+        board[board_row][col++] = c;
+      }
+    }
+  }
+  
+  return true;
+}
+
+std::string PikafishEngine::boardArrayToPositionString(const char board[10][9],
+                                                        const std::vector<MovePayload> &moves,
+                                                        char side_to_move) {
+  // Convert board array to FEN
+  std::string fen = boardArrayToFEN(board, side_to_move);
+  
+  // Build position string
+  std::ostringstream oss;
+  oss << "position fen " << fen;
+  
+  // Add moves if any
+  if (!moves.empty()) {
+    oss << " moves";
+    for (const auto &move : moves) {
+      std::string uci_move = moveToUCI(move);
+      oss << " " << uci_move;
+    }
+  }
+  
+  return oss.str();
+}
+
+bool PikafishEngine::positionStringToBoardArray(const std::string &position_str,
+                                                 char board[10][9],
+                                                 std::vector<MovePayload> &moves,
+                                                 char &side_to_move) {
+  // Parse position string
+  // Format: "position fen <fen> moves <move1> <move2> ..."
+  
+  std::istringstream iss(position_str);
+  std::string token;
+  
+  // Check for "position"
+  if (!(iss >> token) || token != "position") {
+    std::cerr << "[AI] Error: Invalid position string - missing 'position'" << std::endl;
+    return false;
+  }
+  
+  // Check for "fen"
+  if (!(iss >> token) || token != "fen") {
+    std::cerr << "[AI] Error: Invalid position string - missing 'fen'" << std::endl;
+    return false;
+  }
+  
+  // Read FEN string (until "moves" or end)
+  std::string fen;
+  std::string fen_part;
+  while (iss >> fen_part) {
+    if (fen_part == "moves") {
+      break; // Found moves section
+    }
+    if (!fen.empty()) fen += " ";
+    fen += fen_part;
+  }
+  
+  if (fen.empty()) {
+    std::cerr << "[AI] Error: Invalid position string - missing FEN" << std::endl;
+    return false;
+  }
+  
+  // Parse FEN to board array
+  int halfmove, fullmove;
+  if (!FENToBoardArray(fen, board, side_to_move, halfmove, fullmove)) {
+    return false;
+  }
+  
+  // Parse moves if present
+  moves.clear();
+  std::string uci_move;
+  while (iss >> uci_move) {
+    MovePayload move = parseUCIMove(uci_move);
+    if (move.from.row >= 0 && move.from.col >= 0 && 
+        move.to.row >= 0 && move.to.col >= 0) {
+      moves.push_back(move);
+    } else {
+      std::cerr << "[AI] Warning: Invalid UCI move in position string: " << uci_move << std::endl;
+    }
+  }
+  
+  return true;
 }
 
 // ===================== GameStateManager Implementation ===================== //
@@ -599,6 +795,490 @@ int GameStateManager::getOpponentFD(int player_fd) const {
   }
 
   return it->second.ai_fd;
+}
+
+GameStateManager::BoardState GameStateManager::getBoardState(int player_fd) const {
+  std::lock_guard<std::mutex> lock(games_mutex_);
+  
+  BoardState state;
+  state.is_valid = false;
+  
+  auto it = active_games_.find(player_fd);
+  if (it == active_games_.end()) {
+    return state; // Return invalid state
+  }
+  
+  const auto &game = it->second;
+  
+  // Set valid flag
+  state.is_valid = true;
+  
+  // Get FEN (initial FEN for now, can be enhanced to calculate current FEN)
+  state.fen = game.initial_fen;
+  
+  // Get position string (includes move history)
+  state.position_string = getPositionString(player_fd);
+  
+  // Get move history
+  state.moves = game.move_history;
+  
+  // Get difficulty
+  state.difficulty = game.difficulty;
+  
+  // Get turn
+  state.player_turn = game.player_turn;
+  
+  return state;
+}
+
+bool GameStateManager::getCurrentBoardArray(int player_fd, char board[10][9]) const {
+  std::lock_guard<std::mutex> lock(games_mutex_);
+  
+  auto it = active_games_.find(player_fd);
+  if (it == active_games_.end()) {
+    return false;  // Game doesn't exist
+  }
+  
+  const auto &game = it->second;
+  
+  // Get position string
+  std::string position_str = getPositionString(player_fd);
+  
+  // Convert position string to board array
+  std::vector<MovePayload> moves;
+  char side_to_move;
+  if (!PikafishEngine::positionStringToBoardArray(position_str, board, moves, side_to_move)) {
+    // Fallback: use initial FEN if position string parsing fails
+    char dummy_side;
+    int dummy_halfmove, dummy_fullmove;
+    if (!PikafishEngine::FENToBoardArray(game.initial_fen, board, dummy_side, dummy_halfmove, dummy_fullmove)) {
+      return false;
+    }
+    
+    // Apply all moves from history
+    for (const auto &move : game.move_history) {
+      applyMoveToBoardArray(board, move);
+    }
+  }
+  
+  return true;
+}
+
+// ===================== Board Array Operations ===================== //
+
+// Helper functions for Chinese Chess validation
+namespace {
+  // Check if position is in red palace (bottom, rows 0-2, cols 3-5)
+  bool isInRedPalace(int row, int col) {
+    return row >= 0 && row <= 2 && col >= 3 && col <= 5;
+  }
+  
+  // Check if position is in black palace (top, rows 7-9, cols 3-5)
+  bool isInBlackPalace(int row, int col) {
+    return row >= 7 && row <= 9 && col >= 3 && col <= 5;
+  }
+  
+  // Check if position is in palace (either red or black)
+  bool isInPalace(int row, int col) {
+    return isInRedPalace(row, col) || isInBlackPalace(row, col);
+  }
+  
+  // Check if red piece has crossed the river (row > 4)
+  bool redCrossedRiver(int row) {
+    return row > 4;
+  }
+  
+  // Check if black piece has crossed the river (row < 5)
+  bool blackCrossedRiver(int row) {
+    return row < 5;
+  }
+  
+  // Count pieces between two positions (horizontal or vertical line)
+  int countPiecesBetween(const char board[10][9], int from_row, int from_col, 
+                         int to_row, int to_col) {
+    int count = 0;
+    
+    if (from_row == to_row) {
+      // Horizontal line
+      int start_col = std::min(from_col, to_col);
+      int end_col = std::max(from_col, to_col);
+      for (int col = start_col + 1; col < end_col; col++) {
+        if (board[from_row][col] != ' ') {
+          count++;
+        }
+      }
+    } else if (from_col == to_col) {
+      // Vertical line
+      int start_row = std::min(from_row, to_row);
+      int end_row = std::max(from_row, to_row);
+      for (int row = start_row + 1; row < end_row; row++) {
+        if (board[row][from_col] != ' ') {
+          count++;
+        }
+      }
+    }
+    
+    return count;
+  }
+  
+  // Check if kings face each other directly (illegal position)
+  bool kingsFaceEachOther(const char board[10][9]) {
+    // Find red king (K) and black king (k)
+    int red_king_row = -1, red_king_col = -1;
+    int black_king_row = -1, black_king_col = -1;
+    
+    for (int row = 0; row < 10; row++) {
+      for (int col = 0; col < 9; col++) {
+        if (board[row][col] == 'K') {
+          red_king_row = row;
+          red_king_col = col;
+        } else if (board[row][col] == 'k') {
+          black_king_row = row;
+          black_king_col = col;
+        }
+      }
+    }
+    
+    // If both kings found and in same column
+    if (red_king_row >= 0 && black_king_row >= 0 && red_king_col == black_king_col) {
+      // Check if no pieces between them
+      int start_row = std::min(red_king_row, black_king_row);
+      int end_row = std::max(red_king_row, black_king_row);
+      for (int row = start_row + 1; row < end_row; row++) {
+        if (board[row][red_king_col] != ' ') {
+          return false;  // Piece blocking, kings don't face each other
+        }
+      }
+      return true;  // Kings face each other directly
+    }
+    
+    return false;
+  }
+  
+  // Validate King (K/k) move
+  bool isValidKingMove(const char board[10][9], int from_row, int from_col,
+                       int to_row, int to_col, bool is_red) {
+    // King must stay in palace
+    if (!isInPalace(to_row, to_col)) {
+      return false;
+    }
+    
+    // King can only move 1 square horizontally or vertically
+    int row_diff = std::abs(to_row - from_row);
+    int col_diff = std::abs(to_col - from_col);
+    
+    if ((row_diff == 1 && col_diff == 0) || (row_diff == 0 && col_diff == 1)) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // Validate Advisor (A/a) move
+  bool isValidAdvisorMove(const char board[10][9], int from_row, int from_col,
+                          int to_row, int to_col, bool is_red) {
+    // Advisor must stay in palace
+    if (!isInPalace(to_row, to_col)) {
+      return false;
+    }
+    
+    // Advisor can only move 1 square diagonally
+    int row_diff = std::abs(to_row - from_row);
+    int col_diff = std::abs(to_col - from_col);
+    
+    if (row_diff == 1 && col_diff == 1) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // Validate Elephant (B/b) move
+  bool isValidElephantMove(const char board[10][9], int from_row, int from_col,
+                           int to_row, int to_col, bool is_red) {
+    // Elephant cannot cross the river
+    if (is_red && to_row > 4) {
+      return false;  // Red elephant cannot cross river
+    }
+    if (!is_red && to_row < 5) {
+      return false;  // Black elephant cannot cross river
+    }
+    
+    // Elephant moves 2 squares diagonally
+    int row_diff = std::abs(to_row - from_row);
+    int col_diff = std::abs(to_col - from_col);
+    
+    if (row_diff == 2 && col_diff == 2) {
+      // Check if there's a piece blocking the diagonal path
+      int mid_row = (from_row + to_row) / 2;
+      int mid_col = (from_col + to_col) / 2;
+      
+      if (board[mid_row][mid_col] != ' ') {
+        return false;  // Blocked
+      }
+      
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // Validate Knight (N/n) move
+  bool isValidKnightMove(const char board[10][9], int from_row, int from_col,
+                         int to_row, int to_col, bool is_red) {
+    // Knight moves in L-shape: 2 squares in one direction, then 1 square perpendicular
+    int row_diff = std::abs(to_row - from_row);
+    int col_diff = std::abs(to_col - from_col);
+    
+    // Must be L-shape: (2,1) or (1,2)
+    if (!((row_diff == 2 && col_diff == 1) || (row_diff == 1 && col_diff == 2))) {
+      return false;
+    }
+    
+    // Check for blocking piece (horse leg)
+    int block_row, block_col;
+    if (row_diff == 2) {
+      // Moving 2 rows, block is 1 row away
+      block_row = from_row + (to_row > from_row ? 1 : -1);
+      block_col = from_col;
+    } else {
+      // Moving 2 cols, block is 1 col away
+      block_row = from_row;
+      block_col = from_col + (to_col > from_col ? 1 : -1);
+    }
+    
+    if (board[block_row][block_col] != ' ') {
+      return false;  // Blocked by piece (horse leg blocked)
+    }
+    
+    return true;
+  }
+  
+  // Validate Rook (R/r) move
+  bool isValidRookMove(const char board[10][9], int from_row, int from_col,
+                       int to_row, int to_col, bool is_red) {
+    // Rook moves horizontally or vertically
+    if (from_row != to_row && from_col != to_col) {
+      return false;  // Not horizontal or vertical
+    }
+    
+    // Check if path is clear
+    int pieces_between = countPiecesBetween(board, from_row, from_col, to_row, to_col);
+    if (pieces_between > 0) {
+      return false;  // Path blocked
+    }
+    
+    return true;
+  }
+  
+  // Validate Cannon (C/c) move
+  bool isValidCannonMove(const char board[10][9], int from_row, int from_col,
+                         int to_row, int to_col, bool is_red) {
+    // Cannon moves horizontally or vertically
+    if (from_row != to_row && from_col != to_col) {
+      return false;  // Not horizontal or vertical
+    }
+    
+    char target_piece = board[to_row][to_col];
+    int pieces_between = countPiecesBetween(board, from_row, from_col, to_row, to_col);
+    
+    if (target_piece == ' ') {
+      // Moving to empty square: path must be clear
+      return pieces_between == 0;
+    } else {
+      // Capturing: must have exactly one piece between (screen)
+      return pieces_between == 1;
+    }
+  }
+  
+  // Validate Pawn (P/p) move
+  bool isValidPawnMove(const char board[10][9], int from_row, int from_col,
+                       int to_row, int to_col, bool is_red) {
+    int row_diff = to_row - from_row;
+    int col_diff = std::abs(to_col - from_col);
+    
+    if (is_red) {
+      // Red pawn (P) starts at bottom (row 0-4), moves forward (toward black) = row increases
+      // Forward means moving toward opponent (black at top), so row increases
+      if (redCrossedRiver(from_row)) {
+        // After crossing river (row > 4): can move forward or sideways
+        if (row_diff == 1 && col_diff == 0) {
+          return true;  // Forward (row increases)
+        }
+        if (row_diff == 0 && col_diff == 1) {
+          return true;  // Sideways
+        }
+      } else {
+        // Before crossing river (row <= 4): can only move forward
+        if (row_diff == 1 && col_diff == 0) {
+          return true;  // Forward (row increases)
+        }
+      }
+    } else {
+      // Black pawn (p) starts at top (row 5-9), moves forward (toward red) = row decreases
+      // Forward means moving toward opponent (red at bottom), so row decreases
+      if (blackCrossedRiver(from_row)) {
+        // After crossing river (row < 5): can move forward or sideways
+        if (row_diff == -1 && col_diff == 0) {
+          return true;  // Forward (row decreases)
+        }
+        if (row_diff == 0 && col_diff == 1) {
+          return true;  // Sideways
+        }
+      } else {
+        // Before crossing river (row >= 5): can only move forward
+        if (row_diff == -1 && col_diff == 0) {
+          return true;  // Forward (row decreases)
+        }
+      }
+    }
+    
+    return false;
+  }
+}
+
+bool GameStateManager::isValidMoveOnBoard(const char board[10][9], const MovePayload &move) {
+  // Validate coordinates
+  if (move.from.row < 0 || move.from.row >= 10 || move.from.col < 0 || move.from.col >= 9 ||
+      move.to.row < 0 || move.to.row >= 10 || move.to.col < 0 || move.to.col >= 9) {
+    return false;
+  }
+  
+  // Check if source has a piece
+  char piece = board[move.from.row][move.from.col];
+  if (piece == ' ') {
+    return false;  // No piece at source
+  }
+  
+  // Check if destination is different from source
+  if (move.from.row == move.to.row && move.from.col == move.to.col) {
+    return false;  // Same position
+  }
+  
+  // Determine piece color
+  bool is_red = (piece >= 'A' && piece <= 'Z');
+  bool is_black = (piece >= 'a' && piece <= 'z');
+  
+  if (!is_red && !is_black) {
+    return false;  // Invalid piece character
+  }
+  
+  // Check if capturing own piece
+  char captured = board[move.to.row][move.to.col];
+  if (captured != ' ') {
+    bool captured_is_red = (captured >= 'A' && captured <= 'Z');
+    bool captured_is_black = (captured >= 'a' && captured <= 'z');
+    
+    if ((is_red && captured_is_red) || (is_black && captured_is_black)) {
+      return false;  // Cannot capture own piece
+    }
+  }
+  
+  // Validate move based on piece type
+  bool valid_move = false;
+  
+  switch (piece) {
+    case 'K':  // Red King
+    case 'k':  // Black King
+      valid_move = isValidKingMove(board, move.from.row, move.from.col,
+                                   move.to.row, move.to.col, is_red);
+      break;
+      
+    case 'A':  // Red Advisor
+    case 'a':  // Black Advisor
+      valid_move = isValidAdvisorMove(board, move.from.row, move.from.col,
+                                      move.to.row, move.to.col, is_red);
+      break;
+      
+    case 'B':  // Red Elephant
+    case 'b':  // Black Elephant
+      valid_move = isValidElephantMove(board, move.from.row, move.from.col,
+                                       move.to.row, move.to.col, is_red);
+      break;
+      
+    case 'N':  // Red Knight
+    case 'n':  // Black Knight
+      valid_move = isValidKnightMove(board, move.from.row, move.from.col,
+                                     move.to.row, move.to.col, is_red);
+      break;
+      
+    case 'R':  // Red Rook
+    case 'r':  // Black Rook
+      valid_move = isValidRookMove(board, move.from.row, move.from.col,
+                                   move.to.row, move.to.col, is_red);
+      break;
+      
+    case 'C':  // Red Cannon
+    case 'c':  // Black Cannon
+      valid_move = isValidCannonMove(board, move.from.row, move.from.col,
+                                      move.to.row, move.to.col, is_red);
+      break;
+      
+    case 'P':  // Red Pawn
+    case 'p':  // Black Pawn
+      valid_move = isValidPawnMove(board, move.from.row, move.from.col,
+                                   move.to.row, move.to.col, is_red);
+      break;
+      
+    default:
+      return false;  // Unknown piece type
+  }
+  
+  if (!valid_move) {
+    return false;
+  }
+  
+  // After validating the move, check if it would result in kings facing each other
+  // We need to simulate the move temporarily
+  char temp_board[10][9];
+  for (int i = 0; i < 10; i++) {
+    for (int j = 0; j < 9; j++) {
+      temp_board[i][j] = board[i][j];
+    }
+  }
+  
+  // Apply move temporarily
+  temp_board[move.to.row][move.to.col] = piece;
+  temp_board[move.from.row][move.from.col] = ' ';
+  
+  // Check if kings face each other after this move
+  if (kingsFaceEachOther(temp_board)) {
+    return false;  // Move would result in illegal king position
+  }
+  
+  return true;
+}
+
+bool GameStateManager::applyMoveToBoardArray(char board[10][9], const MovePayload &move) {
+  // Validate move first
+  if (!isValidMoveOnBoard(board, move)) {
+    std::cerr << "[BoardArray] Error: Invalid move" << std::endl;
+    return false;
+  }
+  
+  // Get piece at source
+  char piece = board[move.from.row][move.from.col];
+  if (piece == ' ') {
+    std::cerr << "[BoardArray] Error: No piece at source position" << std::endl;
+    return false;
+  }
+  
+  // Handle capture (if any)
+  char captured_piece = board[move.to.row][move.to.col];
+  if (captured_piece != ' ') {
+    std::cout << "[BoardArray] Capturing piece: " << captured_piece 
+              << " at (" << move.to.row << "," << move.to.col << ")" << std::endl;
+  }
+  
+  // Apply move: move piece from source to destination
+  board[move.from.row][move.from.col] = ' ';  // Clear source
+  board[move.to.row][move.to.col] = piece;     // Place piece at destination
+  
+  std::cout << "[BoardArray] Move applied: (" << move.from.row << "," << move.from.col 
+            << ") -> (" << move.to.row << "," << move.to.col << ")" << std::endl;
+  std::cout << "[BoardArray] Piece moved: " << piece << std::endl;
+  
+  return true;
 }
 
 std::string GameStateManager::getInitialFEN() const {

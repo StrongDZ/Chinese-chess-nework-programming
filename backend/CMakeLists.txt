@@ -58,9 +58,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
 )
 
-# Add tests subdirectory
-enable_testing()
-add_subdirectory(tests)
+# Tests removed - no test files
 
 # Installation
 install(TARGETS ${PROJECT_NAME}

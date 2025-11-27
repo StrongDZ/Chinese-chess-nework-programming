@@ -44,6 +44,38 @@ public:
   // Convert MovePayload to UCI format (static helper)
   static std::string moveToUCI(const MovePayload &move);
 
+  // ========== Board Array Conversion Functions (for Database) ==========
+  
+  // Convert 2D board array to FEN string
+  // board[10][9]: ' ' = empty, 'r'/'R' = rook, 'n'/'N' = knight, etc.
+  // side_to_move: 'w' = red/white, 'b' = black
+  static std::string boardArrayToFEN(const char board[10][9], char side_to_move = 'w', 
+                                      int halfmove = 0, int fullmove = 1);
+  
+  // Convert FEN string to 2D board array
+  // Returns true if successful, false if invalid FEN
+  // board[10][9] will be filled with pieces (' ' = empty, 'r'/'R' = rook, etc.)
+  static bool FENToBoardArray(const std::string &fen, char board[10][9], 
+                               char &side_to_move, int &halfmove, int &fullmove);
+  
+  // Convert 2D board array + move history to Position String (UCI format)
+  // board[10][9]: Current board state
+  // moves: Vector of moves played (in MovePayload format)
+  // Returns: "position fen <fen> moves <move1> <move2> ..."
+  static std::string boardArrayToPositionString(const char board[10][9], 
+                                                 const std::vector<MovePayload> &moves = {},
+                                                 char side_to_move = 'w');
+  
+  // Convert Position String (UCI) to 2D board array
+  // position_str: "position fen <fen> moves <move1> <move2> ..."
+  // board[10][9]: Output board array
+  // moves: Output move history (optional)
+  // Returns true if successful
+  static bool positionStringToBoardArray(const std::string &position_str, 
+                                          char board[10][9],
+                                          std::vector<MovePayload> &moves,
+                                          char &side_to_move);
+
   // Check if engine is ready
   bool isReady() const { return engine_ready_; }
 
@@ -91,6 +123,35 @@ public:
 
   // Get opponent FD
   int getOpponentFD(int player_fd) const;
+
+  // Get board state (for external use - e.g., validation, game logic)
+  // Returns a struct containing FEN, move history, and other game info
+  struct BoardState {
+    std::string fen;                    // Current FEN string
+    std::string position_string;       // Position string for engine
+    std::vector<MovePayload> moves;     // Move history
+    AIDifficulty difficulty;           // AI difficulty level
+    bool player_turn;                  // true if player's turn
+    bool is_valid;                     // false if game doesn't exist
+  };
+  
+  BoardState getBoardState(int player_fd) const;
+
+  // ========== Board Array Operations (for Database Integration) ==========
+  
+  // Apply move to board array manually (for network programming requirement)
+  // This function implements move logic manually instead of using engine
+  // Returns true if move was applied successfully
+  static bool applyMoveToBoardArray(char board[10][9], const MovePayload &move);
+  
+  // Validate move on board array
+  // Checks if move is legal (piece exists, destination valid, etc.)
+  static bool isValidMoveOnBoard(const char board[10][9], const MovePayload &move);
+  
+  // Get current board array for a game
+  // Fills board[10][9] with current position
+  // Returns true if successful, false if game doesn't exist
+  bool getCurrentBoardArray(int player_fd, char board[10][9]) const;
 
 private:
   struct GameInfo {
