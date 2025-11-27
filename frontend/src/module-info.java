@@ -1,7 +1,9 @@
-module ChinessChessProject {
-	requires javafx.controls;
-	requires javafx.graphics;
-	
-	opens application to javafx.graphics, javafx.fxml;
-	opens application.components to javafx.graphics;
+module ChineseChessJavaFX {
+    requires javafx.controls;
+    requires javafx.graphics;
+
+    exports application;
+    exports application.components;
+    exports application.state;
 }
+
