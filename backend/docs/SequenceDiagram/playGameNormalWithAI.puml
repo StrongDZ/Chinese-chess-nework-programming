@@ -1,0 +1,92 @@
+@startuml
+title Play Normal Game with AI - Sequence Diagram (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "Client" as Client
+participant "TCP Socket" as Socket
+participant "Server" as Server
+participant "AI Engine" as AI
+database "Database" as DB
+
+note over Client, Server
+  TCP connection already established
+  from login session
+end note
+
+== Select Normal Game with AI ==
+User -> Client: Click "Play Normal Game with AI"
+activate Client
+
+== Choose Difficulty Mode ==
+Client -> User: Display difficulty selection
+
+User -> Client: Select difficulty 
+
+== Choose Time Mode ==
+Client -> User: Display time mode selection
+
+User -> Client: Select time mode 
+
+== Create Normal AI Game ==
+Client -> Client: Prepare AI game request
+
+Client -> Socket: send(AI_MATCH)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> Client: Forward error
+    deactivate Socket
+    Client -> User: Show "Session expired, please login"
+    deactivate Client
+    
+else Valid session
+    Server -> Server: Generate gameID = UUID()
+    
+    Server -> AI: Initialize AI opponent
+    activate AI
+    AI -> AI: Load AI engine\nSet difficulty parameters
+    AI --> Server: AI initialized successfully
+    deactivate AI
+    
+    Server -> DB: Create game
+    activate DB
+    DB --> Server: Game created successfully
+    deactivate DB
+    
+    Server -> DB: Update player status
+    activate DB
+    DB --> Server: Status updated
+    deactivate DB
+    
+    Server -> Server: Prepare game start response
+    
+    Server -> Socket: send(GAME_START)
+    activate Socket
+    Socket -> Client: Forward packet
+    deactivate Socket
+    
+    Client -> Client: Initialize game state
+    
+    Client -> User: Display game board
+    
+    note right of Client
+      Game is now ready.
+      Enters the common gameplay loop
+      (see "Play Game" sequence diagram)
+    end note
+    
+    deactivate Client
+    deactivate Server
+end
+
+@enduml

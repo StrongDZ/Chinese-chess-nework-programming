@@ -1,0 +1,45 @@
+@startuml
+
+title Challenge Player - Sequence Diagram (Simplified)
+
+actor P1 as "Player 1"
+boundary C1 as "Client 1"
+control Socket
+control Server
+boundary C2 as "Client 2"
+actor P2 as "Player 2"
+database DB
+
+== Send Challenge ==
+P1 -> C1: Click "Challenge"
+C1 -> Socket: send(CHALLENGE_REQUEST)
+Socket -> Server: Forward packet
+Server -> DB: Check target status
+
+alt Target unavailable
+    Server -> C1: ERROR
+else Target online
+    Server -> DB: Save challenge
+    Server -> C1: INFO
+    Server -> C2: CHALLENGE_REQUEST
+end
+
+== Opponent Response ==
+alt Timeout
+    Server -> DB: Update challenge status
+    Server -> C1: INFO
+else Decline
+    P2 -> C2: Decline
+    C2 -> Server: send(CHALLENGE_RESPONSE)
+    Server -> DB: Update challenge status
+    Server -> C1: INFO
+else Accept
+    P2 -> C2: Accept
+    C2 -> Server: send(CHALLENGE_RESPONSE)
+    Server -> DB: Update challenge status
+    Server -> DB: Create game
+    Server -> C1: GAME_START
+    Server -> C2: GAME_START
+end
+
+@enduml

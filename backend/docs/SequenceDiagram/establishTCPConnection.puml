@@ -1,0 +1,31 @@
+@startuml
+title TCP Connection Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
+database "Database" as DB
+
+== Establish TCP Connection ==
+User -> UI: Open application
+activate UI
+
+UI -> Socket: socket(AF_INET, SOCK_STREAM)
+activate Socket
+UI -> Socket: connect(serverIP, 8080)
+
+Socket -> Server: TCP 3-way handshake\n(SYN → SYN-ACK → ACK)
+activate Server
+
+Server -> Server: accept() connection\nCreate thread for UI
+Socket --> UI: Connection established
+deactivate Socket
+
+deactivate UI
+deactivate Server
+== ==
+@enduml

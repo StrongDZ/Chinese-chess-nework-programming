@@ -1,0 +1,118 @@
+@startuml
+title Sign Out Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== Sign Out Request ==
+User -> UI: Click "Sign Out" button
+activate UI
+
+UI -> UI: Show confirmation dialog
+UI -> User: "Are you sure you want to sign out?"
+
+alt User cancels
+    User -> UI: Click "Cancel"
+    UI -> User: Stay in current page
+    deactivate UI
+    
+else User confirms
+    User -> UI: Click "Confirm"
+    
+    == Check Active Game ==
+    alt User is in active game
+        UI -> UI: Detect active game session
+        UI -> UI: Save match
+        
+        UI -> Socket: send(GAME_HISTORY)
+        activate Socket
+        Socket -> Server: Forward packet
+        deactivate Socket
+        
+        Server -> Server: Parse save game request
+        Server -> DB: Save match
+        activate DB
+        DB --> Server: Game saved
+        deactivate DB
+        
+        Server -> Socket: send(INFO)
+        activate Socket
+        Socket -> UI: Game saved confirmation
+        deactivate Socket
+    end
+    
+    == Send Sign Out Request ==
+    UI -> UI: Prepare signout request
+    
+    UI -> Socket: send(LOGOUT)
+    activate Socket
+    Socket -> Server: Forward packet
+    deactivate Socket
+    
+    Server -> Server: Parse sign out request
+    Server -> Server: Validate sessionID
+    
+    alt Invalid session
+        Server -> Socket: send(ERROR)
+        activate Socket
+        Socket -> UI: Forward error
+        deactivate Socket
+        UI -> User: Show "Session expired"
+        
+    else Valid session
+        == Update User Status ==
+        Server -> DB: Update user status
+        activate DB
+        DB --> Server: Status updated
+        deactivate DB
+        
+        == Remove from Online Players ==
+        Server -> Server: Remove from activeUsers list:\nactiveUsers.remove(userID)
+        
+        Server -> Server: Broadcast to other UIs:\nLOBBY_UPDATE (player offline)
+        
+        == Clear Session ==
+        Server -> Server: Delete session:\nsessions.remove(sessionID)
+        
+        Server -> Server: Prepare success response
+        
+        Server -> Socket: send(INFO)
+        activate Socket
+        Socket -> UI: Forward response
+        deactivate Socket
+        
+        == UI Cleanup ==
+        UI -> UI: Clear local session data:\ndelete sessionID,\ndelete userInfo
+        
+        UI -> UI: Close game UI
+        UI -> User: Show "Signed out successfully"
+        
+        == Close TCP Connection ==
+        UI -> Socket: send(LOGOUT)
+        activate Socket
+        Socket -> Server: Forward close request
+        deactivate Socket
+        
+        Server -> Server: Log: "UI disconnected"
+        Server -> Socket: close(UISocket)
+        activate Socket
+        Socket -> UI: Connection closed
+        deactivate Socket
+        
+        UI -> UI: close(socket)
+        
+        UI -> User: Redirect to Login page
+        deactivate UI
+        
+        Server -> Server: Free resources:\ndelete thread/handler
+        deactivate Server
+    end
+end
+
+@enduml

@@ -1,0 +1,153 @@
+@startuml
+title Sign Up Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== Establish TCP Connection ==
+User -> UI: Open application
+activate UI
+
+UI -> Socket: socket(AF_INET, SOCK_STREAM)
+activate Socket
+UI -> Socket: connect(serverIP, 8080)
+
+Socket -> Server: TCP 3-way handshake\n(SYN → SYN-ACK → ACK)
+activate Server
+
+Server -> Server: accept() connection\nCreate thread for UI
+Socket --> UI: Connection established
+deactivate Socket
+
+UI -> User: Display sign up form
+deactivate UI
+
+== Sign Up Process ==
+User -> UI: Enter registration info:\n- Username\n- Password\n- Email\n- Full name
+activate UI
+
+UI -> UI: Validate input format:\n- Username: 3-20 chars, alphanumeric\n- Password: min 6 chars\n- Email: valid format
+
+alt Invalid format
+    UI -> User: Show validation errors:\n"Username too short"\n"Invalid email format"
+    
+else Valid format
+    UI -> UI: Hash password:\nhash = SHA256(password)
+    
+    UI -> UI: Prepare signup request
+    
+    UI -> Socket: send(REGISTER)
+    activate Socket
+    Socket -> Server: Forward packet
+    deactivate Socket
+    
+    Server -> Server: Parse registration packet
+    
+    == Check Username Availability ==
+    Server -> DB: Check username availability
+    activate DB
+    
+    alt Username already exists
+        DB --> Server: COUNT > 0
+        deactivate DB
+        
+        Server -> Server: Prepare error response
+        
+        Server -> Socket: send(ERROR)
+        activate Socket
+        Socket -> UI: Forward error
+        deactivate Socket
+        
+        UI -> User: Display "Username already exists.\nPlease choose another."
+        
+    else Username available
+        DB --> Server: COUNT = 0
+        deactivate DB
+        
+        == Check Email Availability ==
+        Server -> DB: Check email availability
+        activate DB
+        
+        alt Email already exists
+            DB --> Server: COUNT > 0
+            deactivate DB
+            
+            Server -> Server: Prepare error response
+            
+            Server -> Socket: send(ERROR)
+            activate Socket
+            Socket -> UI: Forward error
+            deactivate Socket
+            
+            UI -> User: Display "Email already in use.\nPlease use another email."
+            
+        else Email available
+            DB --> Server: COUNT = 0
+            deactivate DB
+            
+            == Create New Account ==
+            Server -> Server: Generate userID:\nuserID = UUID()
+            
+            Server -> Server: Set default values:\nelo = 1200,\nstatus = 'OFFLINE',\ncreated_at = NOW()
+            
+            Server -> DB: Create user account
+            activate DB
+            
+            alt Database error
+                DB --> Server: INSERT failed
+                deactivate DB
+                
+                Server -> Socket: send(ERROR)
+                activate Socket
+                Socket -> UI: Forward error
+                deactivate Socket
+                
+                UI -> User: Display "Registration failed.\nPlease try again."
+                
+            else Insert successful
+                DB --> Server: Account created
+                deactivate DB
+                
+                == Initialize User Data ==
+                Server -> DB: Initialize user stats
+                activate DB
+                DB --> Server: Stats initialized
+                deactivate DB
+                
+                Server -> Server: Prepare success response
+                
+                Server -> Socket: send(AUTHENTICATED)
+                activate Socket
+                Socket -> UI: Forward response
+                deactivate Socket
+                
+                UI -> User: Show success message:\n"Registration successful!\nYou can now log in."
+                
+                UI -> UI: Clear form data
+                
+                == Auto Login Option ==
+                UI -> User: Show dialog:\n"Login now?" with\n[Yes] [No] buttons
+                
+                alt User chooses Yes
+                    User -> UI: Click "Yes"
+                    UI -> User: Redirect to Login page\nwith username pre-filled
+                    
+                else User chooses No
+                    User -> UI: Click "No"
+                    UI -> User: Stay on Sign Up page
+                end
+            end
+        end
+    end
+end
+
+deactivate UI
+deactivate Server
+
+@enduml

@@ -1,0 +1,25 @@
+/* JavaFX CSS - Chinese Chess Application Styles */
+
+/* Base chessboard container style */
+.chessboard-container {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-color: transparent;
+    -fx-effect: null;
+}
+
+/* Hover effect with light yellow gradient stroke */
+.chessboard-hover {
+    -fx-border-width: 4;
+    -fx-border-color: linear-gradient(to bottom,
+                                     rgba(255, 255, 200, 1.0) 0%,
+                                     rgba(255, 255, 150, 0.9) 50%,
+                                     rgba(255, 255, 200, 1.0) 100%);
+    -fx-border-radius: 10;
+    -fx-background-color: linear-gradient(to bottom,
+                                          rgba(255, 255, 200, 0.2) 0%,
+                                          rgba(255, 255, 150, 0.15) 50%,
+                                          rgba(255, 255, 200, 0.2) 100%);
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(255, 255, 180, 0.7), 12, 0.6, 0, 0);
+}

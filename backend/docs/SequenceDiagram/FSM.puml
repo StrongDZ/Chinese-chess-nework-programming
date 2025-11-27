@@ -1,0 +1,104 @@
+@startuml
+' Finite State Machine - Chinese Chess Client Session (Hierarchical)
+
+left to right direction
+
+skinparam BackgroundColor #0B1418
+skinparam FontColor #E8F1F5
+skinparam shadowing false
+skinparam linetype ortho
+skinparam DefaultTextAlignment center
+skinparam ArrowColor #6EC1E4
+skinparam state {
+  BackgroundColor #0E1E25
+  BorderColor #6EC1E4
+  FontColor #E8F1F5
+  RoundCorner 12
+}
+
+[*] --> Disconnected
+
+state Disconnected
+state Connecting
+state Connected
+state SigningIn
+state Authenticated
+state Lobby
+state Reconnecting
+state GameOver
+
+' Nested states with themed colors
+state SearchingGame #102535 {
+  state Matchmaking
+  state Challenging
+}
+
+state Playing #10201A {
+  state InGame
+  state InGameAI
+}
+
+' Connection lifecycle
+Disconnected --> Connecting : connect() / [open_socket]
+Connecting --> Connected : CONNECT_OK [socket_ok] / [set_channel]
+Connecting --> Disconnected : CONNECT_FAIL | TIMEOUT / [close_socket]
+
+' Authentication
+Connected --> SigningIn : LOGIN{user,pass} / [send_login]
+SigningIn --> Authenticated : AUTHENTICATED [cred_valid] / [set_session]
+SigningIn --> Connected : ERROR / [show_error]
+
+' Session exit (global)
+Authenticated --> Disconnected : LOGOUT / [clear_session, close_socket]
+Lobby --> Disconnected : LOGOUT / [clear_session, close_socket]
+Playing --> Disconnected : LOGOUT / [save_if_needed]
+GameOver --> Disconnected : LOGOUT
+SearchingGame --> Disconnected : LOGOUT
+
+' Lobby data
+Authenticated --> Lobby : PLAYER_LIST / [send_req] \n INFO / [render_lobby]
+
+' Search game (hierarchical)
+Lobby --> SearchingGame : QUICK_MATCHING [timeMode_ok] / [enqueue]
+
+' Inside SearchingGame
+Lobby --> Matchmaking : QUICK_MATCHING(timeMode)
+Lobby --> Challenging : CHALLENGE_REQUEST(target)
+Matchmaking --> InGame : GAME_START / [create_room, start_game]
+Matchmaking --> Lobby : QUICK_MATCHING
+Matchmaking --> Lobby : MATCH_TIMEOUT / [dequeue]
+Challenging --> InGame : CHALLENGE_RESPONSE [target_online] / [create_room, start_game]
+Challenging --> Lobby : CHALLENGE_RESPONSE | CHALLENGE_CANCEL | TIMEOUT / [notify_user]
+
+' AI game path
+Lobby --> InGameAI : AI_MATCH(difficulty) / [init_ai(difficulty)]
+
+' Reconnect flow
+Authenticated --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [start_reconnect]
+Lobby --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [start_reconnect]
+SearchingGame --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [recover_queue]
+Playing --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT / [pause_timers]
+GameOver --> Reconnecting : SOCKET_CLOSED | HEARTBEAT_TIMEOUT
+Reconnecting --> InGame : REJOIN_OK [room_found] / [sync_state]
+Reconnecting --> InGameAI : REJOIN_OK [ai_game] / [sync_state]
+Reconnecting --> Disconnected : REJOIN_FAIL / [go_offline]
+
+' In-game lifecycle (inside Playing)
+InGame --> GameOver : GAME_END(reason) / [persist_history, update_elo]
+InGameAI --> GameOver : GAME_END(reason) / [persist_history]
+
+' Rematch / Replay / Return
+GameOver --> Lobby : RETURN
+GameOver --> InGame : REMATCH_RESPONSE / [reuse_room]
+GameOver --> Lobby : VIEW_REPLAY (exit replay)
+
+legend right
+  <b>Legend</b>
+  Colors:
+  - SearchingGame = #102535
+  - Playing = #10201A
+  - Arrows = #6EC1E4
+  Notation: Trigger [Guard] / [Effect]
+endlegend
+
+@enduml

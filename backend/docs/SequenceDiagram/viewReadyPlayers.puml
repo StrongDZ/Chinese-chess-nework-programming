@@ -1,0 +1,170 @@
+@startuml
+title View Ready Players Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+note over UI, Server
+  TCP connection already established
+  from login session
+end note
+
+== Enter Lobby / View Ready Players ==
+User -> UI: Navigate to "Lobby" / "Find Players"
+activate UI
+
+UI -> UI: Request ready players list
+
+UI -> Socket: send(PLAYER_LIST)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> UI: Forward error
+    deactivate Socket
+    UI -> User: Show "Session expired, please login"
+    deactivate UI
+    
+else Valid session
+    == Fetch Online Players ==
+    Server -> DB: Get online players
+    activate DB
+    
+    alt No online players
+        DB --> Server: Empty result
+        deactivate DB
+        
+        Server -> Socket: send(INFO)
+        activate Socket
+        Socket -> UI: Forward response
+        deactivate Socket
+        
+        UI -> User: Display "No players online\nPlease wait for other players"
+        deactivate UI
+        
+    else Players found
+        DB --> Server: Return online players list:\n[{userID, username, elo, status}...]
+        deactivate DB
+        
+        == Check Players Ready Status ==
+        Server -> Server: Filter players by status:\n- IN_LOBBY (ready to play)\n- IN_GAME (currently playing)
+        
+        Server -> Server: Prepare ready players response
+        
+        Server -> Socket: send(INFO)
+        activate Socket
+        Socket -> UI: Forward players list
+        deactivate Socket
+        
+        UI -> UI: Parse players data
+        
+        UI -> User: Display ready players list:\n━━━━━━━━━━━━━━━━\n👤 Username | ELO | Status\n━━━━━━━━━━━━━━━━\n🟢 Player1 | 1450 | Ready\n🟢 Player2 | 1380 | Ready\n🔴 Player3 | 1520 | In Game\n🟢 Player4 | 1290 | Ready\n━━━━━━━━━━━━━━━━\n[Refresh] [Challenge]
+        deactivate UI
+        deactivate Server
+    end
+end
+
+== Auto Refresh / Real-time Updates ==
+loop Every 5 seconds OR when player status changes
+    UI -> Socket: send(PLAYER_LIST)
+    activate Socket
+    Socket -> Server: Forward request
+    deactivate Socket
+    activate Server
+    
+    Server -> DB: Get ready players
+    activate DB
+    DB --> Server: Return updated list
+    deactivate DB
+    
+    Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> UI: Forward updated list
+    deactivate Socket
+    
+    UI -> UI: Compare with previous list:\n- Highlight new players (green)\n- Mark offline players (gray)\n- Update status changes
+    
+    UI -> User: Update display dynamically
+    deactivate Server
+end
+
+== Manual Refresh ==
+User -> UI: Click "Refresh" button
+activate UI
+
+UI -> Socket: send(PLAYER_LIST)
+activate Socket
+Socket -> Server: Forward request
+deactivate Socket
+activate Server
+
+Server -> DB: SELECT userID, username,\nelo, status FROM users\nWHERE status = 'ONLINE'\nAND userID != ?
+activate DB
+DB --> Server: Return latest list
+deactivate DB
+
+Server -> Socket: send(INFO)
+activate Socket
+Socket -> UI: Forward list
+deactivate Socket
+
+UI -> User: Update display\nShow "List refreshed"
+deactivate UI
+deactivate Server
+
+== Filter Players by ELO ==
+User -> UI: Apply ELO filter\n(e.g., 1200-1500)
+activate UI
+
+UI -> UI: Filter local list:\nShow only players in ELO range
+
+UI -> User: Display filtered list
+deactivate UI
+
+== Select Player to Challenge ==
+User -> UI: Click on a player\nfrom the list
+activate UI
+
+UI -> UI: Check player status
+
+alt Player is in game
+    UI -> User: Show "Player is currently in game\nPlease select another player"
+    
+else Player is ready
+    UI -> User: Highlight selected player\nShow [Challenge] button enabled
+    
+    User -> UI: Click "Challenge"
+    
+    note right
+      This triggers the
+      "Send Challenge" flow
+      (separate sequence diagram)
+    end note
+    
+    UI -> User: Show "Challenge sent to [username]"
+end
+
+deactivate UI
+
+== Leave Lobby ==
+User -> UI: Click "Back" / "Leave Lobby"
+activate UI
+
+UI -> UI: Stop auto-refresh loop
+
+UI -> User: Return to main menu
+deactivate UI
+
+@enduml

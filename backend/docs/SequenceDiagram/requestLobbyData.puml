@@ -1,0 +1,34 @@
+@startuml
+title Request Lobby Data Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== Request Lobby Data ==
+UI -> Socket: send(PLAYER_LIST)
+activate Socket
+Socket -> Server: Forward request
+deactivate Socket
+            
+Server -> DB: Get online players
+activate DB
+DB --> Server: Return online players list
+deactivate DB
+            
+Server -> Socket: send(INFO)
+activate Socket
+Socket -> UI: Forward lobby data
+deactivate Socket
+            
+UI -> User: Display online players
+
+deactivate UI
+deactivate Server
+== ==
+@enduml
