@@ -1,0 +1,166 @@
+@startuml
+title Quick Matching (Random Match) - Sequence Diagram
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Player 1" as P1
+boundary "UI 1" as C1
+control "TCP Socket" as Socket
+control "Server" as Server
+control "Matchmaking Queue" as Queue
+boundary "UI 2" as C2
+actor "Player 2" as P2
+database "Database" as DB
+
+== Join Matchmaking Queue ==
+P1 -> C1: Click "Find Match" / "Quick Play"
+activate C1
+
+C1 -> C1: Show game mode selection:\n[Classic] [Rapid] [Blitz]
+
+P1 -> C1: Select mode (e.g., Rapid)
+
+C1 -> C1: Join matchmaking queue
+
+C1 -> Socket: send(QUICK_MATCHING)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> C1: Forward error
+    deactivate Socket
+    C1 -> P1: Show "Session expired"
+    deactivate C1
+    
+else Valid session
+    Server -> DB: Update player status
+    activate DB
+    DB --> Server: Status updated
+    deactivate DB
+    
+    Server -> Queue: Add player to queue:\nqueue.add({userID, elo, mode, timestamp})
+    activate Queue
+    Queue --> Server: Player queued
+    
+    Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> C1: Confirmation
+    deactivate Socket
+    
+    C1 -> C1: Show searching animation
+    C1 -> P1: Display "Searching for opponent...\nEstimated wait: 30s\n[Cancel]"
+    deactivate C1
+    
+    == Matchmaking Algorithm ==
+    loop Every 2 seconds
+        Server -> Queue: Search for match:\nfindMatch(userID, elo±200, mode)
+        
+        alt No suitable opponent found
+            Queue --> Server: No match
+            
+            Server -> Socket: send(INFO)
+            activate Socket
+            Socket -> C1: Update search status
+            deactivate Socket
+            activate C1
+            C1 -> P1: Update wait time
+            deactivate C1
+            
+        else Suitable opponent found
+            Queue --> Server: Match found:\n{player1, player2, elo_diff}
+            deactivate Queue
+            
+            Server -> Server: Validate both players\nstill available
+            
+            Server -> DB: Check player status
+            activate DB
+            DB --> Server: Both IN_QUEUE
+            deactivate DB
+            
+            == Create Matched Game ==
+            Server -> Server: Generate gameID = UUID()
+            Server -> Server: Assign colors randomly:\nplayer1_color = random(RED, BLACK)
+            
+            Server -> DB: Create game
+            activate DB
+            DB --> Server: Game created
+            deactivate DB
+            
+            Server -> DB: Update player status
+            activate DB
+            DB --> Server: Status updated
+            deactivate DB
+            
+            Server -> Queue: Remove both players from queue
+            activate Queue
+            Queue --> Server: Players removed
+            deactivate Queue
+            
+            == Notify Both Players ==
+            Server -> Socket: send(GAME_START)
+            activate Socket
+            Socket -> C1: Forward match info
+            deactivate Socket
+            activate C1
+            
+            C1 -> C1: Stop searching animation
+            C1 -> P1: Show "Match found!\nOpponent: [username] (ELO: 1420)\nStarting game..."
+            C1 -> C1: Load game board
+            deactivate C1
+            
+            Server -> Socket: send(GAME_START)
+            activate Socket
+            Socket -> C2: Forward match info
+            deactivate Socket
+            activate C2
+            
+            C2 -> C2: Stop searching animation
+            C2 -> P2: Show "Match found!\nOpponent: [username] (ELO: 1450)\nStarting game..."
+            C2 -> C2: Load game board
+            deactivate C2
+            
+            note over C1, C2
+              Both players now enter
+              the game play loop
+              (see Play Game sequence)
+            end note
+        end
+    end
+end
+
+== Cancel Matchmaking ==
+P1 -> C1: Click "Cancel"
+activate C1
+
+C1 -> Socket: send(QUICK_MATCHING)
+activate Socket
+Socket -> Server: Forward request
+deactivate Socket
+
+Server -> Queue: Remove player from queue:\nqueue.remove(userID)
+activate Queue
+Queue --> Server: Player removed
+deactivate Queue
+
+Server -> DB: Update player status
+activate DB
+DB --> Server: Status updated
+deactivate DB
+
+Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> C1: Confirmation
+    deactivate Socket
+
+C1 -> P1: Show "Search cancelled"\nReturn to lobby
+deactivate C1
+deactivate Server
+
+@enduml

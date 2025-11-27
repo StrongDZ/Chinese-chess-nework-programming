@@ -1,0 +1,178 @@
+@startuml
+title Customize Board Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== Open Customize Board ==
+User -> UI: Click "Customize Board" / "Settings"
+activate UI
+
+UI -> UI: Request preferences
+
+UI -> Socket: send(INFO)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> UI: Forward error
+    deactivate Socket
+    UI -> User: Show "Session expired"
+    deactivate UI
+    
+else Valid session
+    Server -> DB: Get user preferences
+    activate DB
+    
+    alt No preferences found
+        DB --> Server: No record (first time)
+        deactivate DB
+        
+        Server -> Server: Use default preferences:\n{board_theme="default",\npiece_style="default"}
+        
+    else Preferences exist
+        DB --> Server: Return saved preferences:\n{board_theme, piece_style}
+        deactivate DB
+    end
+    
+    Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> UI: Forward preferences
+    deactivate Socket
+    
+    UI -> User: Display customization page:\n- Board Theme section\n  (Currently: [theme_name])\n- Piece Style section\n  (Currently: [style_name])\n- [Save] button\n- [Cancel] button
+    deactivate UI
+    deactivate Server
+end
+
+== Customize Board Theme ==
+User -> UI: Select/Enter board theme
+activate UI
+
+UI -> UI: Store temporary selection:\ntemp_board_theme = user_input
+
+UI -> User: Update preview/display
+deactivate UI
+
+== Customize Piece Style ==
+User -> UI: Select/Enter piece style
+activate UI
+
+UI -> UI: Store temporary selection:\ntemp_piece_style = user_input
+
+UI -> User: Update preview/display
+deactivate UI
+
+== Save Customizations ==
+User -> UI: Click "Save"
+activate UI
+
+UI -> UI: Collect customizations:\n{board_theme, piece_style}
+
+UI -> UI: Save preferences
+
+UI -> Socket: send(INFO)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> UI: Forward error
+    deactivate Socket
+    UI -> User: Show "Session expired"
+    
+else Valid session
+    Server -> DB: Check preferences exist
+    activate DB
+    
+    alt First time customization
+        DB --> Server: COUNT = 0
+        deactivate DB
+        
+        Server -> DB: Save preferences
+        activate DB
+        
+        alt Insert failed
+            DB --> Server: Error
+            deactivate DB
+            Server -> Socket: send(ERROR)
+            activate Socket
+            Socket -> UI: Forward error
+            deactivate Socket
+            UI -> User: Show "Failed to save"
+            
+        else Insert successful
+            DB --> Server: Preferences saved
+            deactivate DB
+            
+            Server -> Socket: send(INFO)
+            activate Socket
+            Socket -> UI: Forward success
+            deactivate Socket
+            
+            UI -> UI: Update local preferences
+            UI -> User: Show "Saved successfully"
+            UI -> User: Apply new settings
+        end
+        
+    else Update existing preferences
+        DB --> Server: COUNT > 0
+        deactivate DB
+        
+        Server -> DB: Update preferences
+        activate DB
+        
+        alt Update failed
+            DB --> Server: Error
+            deactivate DB
+            Server -> Socket: send(ERROR)
+            activate Socket
+            Socket -> UI: Forward error
+            deactivate Socket
+            UI -> User: Show "Failed to save"
+            
+        else Update successful
+            DB --> Server: Preferences updated
+            deactivate DB
+            
+            Server -> Socket: send(INFO)
+            activate Socket
+            Socket -> UI: Forward success
+            deactivate Socket
+            
+            UI -> UI: Update local preferences
+            UI -> User: Show "Saved successfully"
+            UI -> User: Apply new settings
+        end
+    end
+end
+
+deactivate UI
+deactivate Server
+
+== Cancel Customization ==
+User -> UI: Click "Cancel"
+activate UI
+
+UI -> UI: Discard temporary changes
+
+UI -> User: Close customization page
+deactivate UI
+
+@enduml

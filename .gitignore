@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 documents/
 examples/
 
@@ -33,10 +34,24 @@ bin/
 # ===========================================
 # CMake
 # ===========================================
+=======
+# Build directories
+build/
+cmake-build-*/
+
+# Compiled files
+*.o
+*.a
+*.so
+*.exe
+
+# CMake files
+>>>>>>> origin/main
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+<<<<<<< HEAD
 compile_commands.json
 CTestTestfile.cmake
 _deps
@@ -63,10 +78,23 @@ logs/
 # ===========================================
 *.tmp
 *.temp
+=======
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# IDE files
+.vscode/
+.idea/
+>>>>>>> origin/main
 *.swp
 *.swo
 *~
 
+<<<<<<< HEAD
 # ===========================================
 # OS Files
 # ===========================================
@@ -80,3 +108,22 @@ Thumbs.db
 
 
 /tests
+=======
+# Logs
+*.log
+GAME_HISTORYs.txt
+
+# Dependencies
+deps/
+third_party/
+
+# Generated output
+**/out/
+bin/
+lib/
+
+# OS files
+.DS_Store
+Thumbs.db
+.vscode/
+>>>>>>> origin/main

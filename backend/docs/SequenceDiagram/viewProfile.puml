@@ -1,0 +1,159 @@
+@startuml
+title View Profile Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+participant "UI" as UI
+participant "TCP Socket" as Socket
+participant "Server" as Server
+database "Database" as DB
+
+== View Own Profile ==
+User -> UI: Click "Profile" / "My Profile"
+activate UI
+
+UI -> UI: Request profile data
+
+UI -> Socket: send(USER_STATS)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+activate Server
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> UI: Forward error
+    deactivate Socket
+    UI -> User: Show "Session expired, please login"
+    deactivate UI
+    
+else Valid session
+    == Fetch User Profile ==
+    Server -> DB: Get user data
+    activate DB
+    DB --> Server: Return user data:\n{userID, username, email,\nfullName, elo, status,\ncreated_at, avatar}
+    deactivate DB
+    
+    == Fetch User Statistics ==
+    Server -> DB: Get user stats
+    activate DB
+    DB --> Server: Return stats:\n{total_games, wins, losses,\ndraws, win_rate}
+    deactivate DB
+    
+    == Fetch Recent Matches ==
+    Server -> DB: Get recent matches
+    activate DB
+    DB --> Server: Return recent games:\n[{gameID, opponent, result,\ndate, mode}...]
+    deactivate DB
+    
+    == Fetch Rank Info ==
+    Server -> DB: Calculate user rank
+    activate DB
+    DB --> Server: Return rank: e.g., #245
+    deactivate DB
+    
+    Server -> Server: Prepare profile response
+    
+    Server -> Socket: send(INFO)
+    activate Socket
+    Socket -> UI: Forward response
+    deactivate Socket
+    
+    UI -> UI: Parse profile data
+    UI -> User: Display profile page:\n- Avatar\n- Username & Full name\n- ELO rating & Rank\n- Win/Loss statistics\n- Recent match history
+    deactivate UI
+end
+
+== View Other User's Profile ==
+User -> UI: Click on another player's name
+activate UI
+
+UI -> UI: Request profile data
+
+UI -> Socket: send(USER_STATS)
+activate Socket
+Socket -> Server: Forward packet
+deactivate Socket
+
+Server -> Server: Validate sessionID
+
+alt Invalid session
+    Server -> Socket: send(ERROR)
+    activate Socket
+    Socket -> UI: Forward error
+    deactivate Socket
+    UI -> User: Show "Session expired"
+    deactivate UI
+    
+else Valid session
+    == Fetch Target User Profile ==
+    Server -> DB: Get user data
+    activate DB
+    
+    alt User not found
+        DB --> Server: No record
+        deactivate DB
+        
+        Server -> Socket: send(ERROR)
+        activate Socket
+        Socket -> UI: Forward error
+        deactivate Socket
+        
+        UI -> User: Show "User not found"
+        
+    else User found
+        DB --> Server: Return user data
+        deactivate DB
+        
+        Server -> DB: Get user stats
+        activate DB
+        DB --> Server: Return stats
+        deactivate DB
+        
+        Server -> DB: Get head-to-head matches
+        activate DB
+        DB --> Server: Return head-to-head matches
+        deactivate DB
+        
+        Server -> Server: Prepare profile response
+        
+        Server -> Socket: send(INFO)
+        activate Socket
+        Socket -> UI: Forward response
+        deactivate Socket
+        
+        UI -> User: Display profile:\n- Username & Rank\n- ELO rating\n- Online status\n- Statistics\n- Head-to-head record\n- [Challenge] button (if online)
+        deactivate UI
+        deactivate Server
+    end
+end
+
+== Optional: View Match History Detail ==
+User -> UI: Click "View Match History"
+activate UI
+
+UI -> Socket: send(GAME_HISTORY)
+activate Socket
+Socket -> Server: Forward request
+deactivate Socket
+
+Server -> DB: Get match history
+activate DB
+DB --> Server: Return match history
+deactivate DB
+
+Server -> Socket: send(INFO)
+activate Socket
+Socket -> UI: Forward data
+deactivate Socket
+
+UI -> User: Display match history list:\n- Date & Time\n- Opponent\n- Result (Win/Loss/Draw)\n- Game mode\n- [Replay] button
+deactivate UI
+deactivate Server
+
+@enduml

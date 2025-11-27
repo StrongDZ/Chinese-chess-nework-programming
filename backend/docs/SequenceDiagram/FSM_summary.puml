@@ -1,0 +1,79 @@
+@startuml
+' Layout tối ưu cho FSM Chinese Chess (Summary)
+left to right direction
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 160
+skinparam ranksep 120
+skinparam ArrowFontSize 12
+skinparam StateRoundCorner 12
+
+'========================
+' States (một hàng ngang)
+'========================
+[*] --> Disconnected
+state Disconnected
+state Connected
+state Authenticated
+state Lobby
+state SearchingGame
+state Playing
+state GameOver
+state Reconnecting
+state "Network Loss<c>" as NetDown <<choice>>
+
+' Căn layout theo hàng ngang
+Disconnected -[hidden]-> Connected
+Connected -[hidden]-> Authenticated
+Authenticated -[hidden]-> Lobby
+Lobby -[hidden]-> SearchingGame
+SearchingGame -[hidden]-> Playing
+Playing -[hidden]-> GameOver
+GameOver -[hidden]-> Reconnecting
+
+'========================
+' Auth / Session
+'========================
+Disconnected --> Connected : connect()
+Connected --> Authenticated : LOGIN[cred_ok]/[setSession] | REGISTER[unique_ok]/[createAccount]
+Authenticated --> Lobby : PLAYER_LIST | USER_STATUS
+Authenticated --> Disconnected : LOGOUT
+
+'========================
+' Settings (internal)
+'========================
+Lobby --> Lobby : CUSTOM_BOARD | TIME_SETTING
+
+'========================
+' PvP & PvE
+'========================
+Lobby --> SearchingGame : CHALLENGE[target_online]/[enqueue]
+SearchingGame --> Playing : ACCEPT[room_ready]/[createRoom,startGame] | GAME_START
+SearchingGame --> Lobby : DECLINE
+Lobby --> Playing : AI_GAME_REQUEST[level_ok]/[initAI]
+
+'========================
+' In game
+'========================
+Playing --> Playing : MOVE | INVALID_MOVE | CHAT | PING/PONG | DRAW_REQUEST
+Playing --> GameOver : GAME_END[reason]/[persist,updateElo] | RESIGN
+
+'========================
+' After game
+'========================
+GameOver --> Lobby : RETURN | REMATCH_RESPONSE(accept)/[newGame]
+Lobby --> Lobby : GAME_HISTORY | REPLAY_REQUEST / REPLAY_DATA
+
+'========================
+' Network loss & Reconnect (đưa xuống dưới để giảm chồng chữ)
+'========================
+Authenticated --> NetDown : SOCKET_CLOSED | ERROR
+Lobby --> NetDown : SOCKET_CLOSED | ERROR
+SearchingGame --> NetDown : SOCKET_CLOSED | ERROR
+Playing --> NetDown : SOCKET_CLOSED | ERROR
+GameOver --> NetDown : SOCKET_CLOSED | ERROR
+NetDown --> Reconnecting : attempt_reconnect
+Reconnecting --> Playing : REJOIN_OK[room_found]/[syncState]
+Reconnecting --> Disconnected : REJOIN_FAIL
+
+@enduml

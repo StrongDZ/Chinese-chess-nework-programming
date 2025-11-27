@@ -1,0 +1,90 @@
+@startuml
+title Signin Sequence Diagram - Chinese Chess (TCP Socket)
+
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor User
+boundary "UI" as UI
+control "TCP Socket" as Socket
+control "Server" as Server
+database "Database" as DB
+
+== Signin Authentication ==
+User -> UI: Open application
+activate UI
+UI -> User: Display Signin form
+User -> UI: Enter username & password
+activate UI
+
+UI -> UI: Validate input format
+
+alt Invalid format
+    UI -> User: Show "Invalid input format"
+    
+else Valid format
+    UI -> UI: Prepare signin request
+    
+    UI -> Socket: send(LOGIN)
+    activate Socket
+    Socket -> Server: Forward packet
+    deactivate Socket
+    
+    Server -> Server: Parse signin packet
+    Server -> DB: Get user data
+    activate DB
+    
+    alt User not found
+        DB --> Server: No record
+        deactivate DB
+        Server -> Server: Prepare error response
+        
+        Server -> Socket: send(ERROR)
+        activate Socket
+        Socket -> UI: Forward error
+        deactivate Socket
+        UI -> User: Display "User not found"
+        
+    else User exists
+        DB --> Server: Return {id, username, password_hash, elo}
+        deactivate DB
+        
+        Server -> Server: Verify password hash
+        
+        alt Incorrect password
+            Server -> Server: Prepare error response
+            
+            Server -> Socket: send(ERROR)
+            activate Socket
+            Socket -> UI: Forward error
+            deactivate Socket
+            UI -> User: Display "Incorrect password"
+            
+        else Correct password
+            Server -> Server: Generate sessionID
+            
+            Server -> DB: Update user status
+            activate DB
+            DB --> Server: Updated
+            deactivate DB
+            
+            Server -> Server: Store session:\nsessions[sessionID] = {socket, userID}
+            
+            Server -> Server: Prepare success response
+            
+            Server -> Socket: send(AUTHENTICATED)
+            activate Socket
+            Socket -> UI: Forward response
+            deactivate Socket
+            
+            UI -> UI: Save sessionID
+            UI -> User: Show "Signin successful!"
+            UI -> User: Redirect to Main Lobby
+        end
+    end
+end
+
+deactivate UI
+deactivate Server
+
+@enduml
