@@ -1,40 +1,3 @@
-<<<<<<< HEAD
-documents/
-examples/
-
-build/
-bin/
-# ===========================================
-# Environment and Secrets
-# ===========================================
-.env
-*.env
-!.env.example
-
-# ===========================================
-# Build Files
-# ===========================================
-build/
-bin/
-*.o
-*.a
-*.so
-*.dylib
-*.exe
-
-# Compiled Object files
-*.slo
-*.lo
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# ===========================================
-# CMake
-# ===========================================
-=======
 # Build directories
 build/
 cmake-build-*/
@@ -46,39 +9,10 @@ cmake-build-*/
 *.exe
 
 # CMake files
->>>>>>> origin/main
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
-<<<<<<< HEAD
-compile_commands.json
-CTestTestfile.cmake
-_deps
-
-# ===========================================
-# IDE
-# ===========================================
-# VSCode
-.vscode/
-*.code-workspace
-
-# CLion
-.idea/
-cmake-build-*/
-
-# ===========================================
-# Logs
-# ===========================================
-logs/
-*.log
-
-# ===========================================
-# Temporary Files
-# ===========================================
-*.tmp
-*.temp
-=======
 
 # Debug files
 *.dSYM/
@@ -89,26 +23,10 @@ logs/
 # IDE files
 .vscode/
 .idea/
->>>>>>> origin/main
 *.swp
 *.swo
 *~
 
-<<<<<<< HEAD
-# ===========================================
-# OS Files
-# ===========================================
-.DS_Store
-Thumbs.db
-
-# ===========================================
-# Development
-# ===========================================
-.specstory/
-
-
-/tests
-=======
 # Logs
 *.log
 GAME_HISTORYs.txt
@@ -126,4 +44,3 @@ lib/
 .DS_Store
 Thumbs.db
 .vscode/
->>>>>>> origin/main
