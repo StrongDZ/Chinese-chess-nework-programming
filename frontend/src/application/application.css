@@ -1,7 +1,19 @@
 /* Load Kolker Brush font */
 @font-face {
     font-family: 'Kolker Brush';
-    src: url('kolker-brush.ttf');
+    src: url('KolkerBrush-Regular.ttf');
+}
+
+/* Load Kristi font */
+@font-face {
+    font-family: 'Kristi';
+    src: url('Kristi-Regular.ttf');
+}
+
+/* Load Kumar One font */
+@font-face {
+    font-family: 'Kumar One';
+    src: url('KumarOne-Regular.ttf');
 }
 
 root,

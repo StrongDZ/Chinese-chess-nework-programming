@@ -13,7 +13,7 @@ import javafx.beans.property.StringProperty;
 public class UIState {
 
     public enum BoardState { NORMAL, SMALL }
-    public enum AppState { LANDING, MAIN_MENU }
+    public enum AppState { LANDING, MAIN_MENU, SETTINGS }
 
     private final ObjectProperty<BoardState> boardState = new SimpleObjectProperty<>(BoardState.NORMAL);
     private final ObjectProperty<AppState> appState = new SimpleObjectProperty<>(AppState.LANDING);
@@ -21,6 +21,7 @@ public class UIState {
     private final BooleanProperty loginVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty registerVisible = new SimpleBooleanProperty(false);
     private final StringProperty username = new SimpleStringProperty("username");  // Thêm username property
+    private final BooleanProperty settingsVisible = new SimpleBooleanProperty(false);
 
     public ObjectProperty<BoardState> boardStateProperty() {
         return boardState;
@@ -52,6 +53,26 @@ public class UIState {
 
     public void setUsername(String value) {
         username.set(value);
+    }
+
+    public BooleanProperty settingsVisibleProperty() {
+        return settingsVisible;
+    }
+
+    public boolean isSettingsVisible() {
+        return settingsVisible.get();
+    }
+
+    public void setSettingsVisible(boolean value) {
+        settingsVisible.set(value);
+    }
+
+    public void openSettings() {
+        setSettingsVisible(true);
+    }
+
+    public void closeSettings() {
+        setSettingsVisible(false);
     }
 
     public void setBoardState(BoardState newState) {

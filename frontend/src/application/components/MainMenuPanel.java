@@ -57,6 +57,12 @@ public class MainMenuPanel extends StackPane {
         menuButtonsContainer.setLayoutX((1920 - containerWidth) / 2);  // Giữa theo chiều ngang
         menuButtonsContainer.setLayoutY((1080 - containerHeight) / 2);  // Giữa theo chiều dọc
 
+        // Bind visibility của menuButtonsContainer với settingsVisible - ẩn khi settings mở
+        menuButtonsContainer.visibleProperty().bind(
+            state.settingsVisibleProperty().not()
+        );
+        menuButtonsContainer.managedProperty().bind(menuButtonsContainer.visibleProperty());
+
         // Bottom-right: Icons với bottom_menu.png background ở góc phải màn hình
         StackPane bottomBar = createBottomBar();
         bottomBar.setLayoutX(1920 - 300 - 250);  // Sang trái 50px
@@ -105,9 +111,9 @@ public class MainMenuPanel extends StackPane {
         clip.setArcHeight(18);
         avatarInSquare.setClip(clip);
         
-        // Hình vuông xám với viền đỏ 130x130
+        // Hình vuông trong suốt với viền đỏ 130x130
         Rectangle squareFrame = new Rectangle(130, 130);
-        squareFrame.setFill(Color.color(217.0/255.0, 217.0/255.0, 217.0/255.0, 0.7));  // Xám trong suốt
+        squareFrame.setFill(Color.TRANSPARENT);  // Trong suốt hoàn toàn
         squareFrame.setStroke(Color.web("#A65252"));  // Viền đỏ
         squareFrame.setStrokeWidth(6);
         squareFrame.setArcWidth(18);  // Bo góc
@@ -299,8 +305,11 @@ public class MainMenuPanel extends StackPane {
         // Friends icon với hover effect
         StackPane friendsContainer = createIconWithHover(AssetHelper.image("icon_friend.png"), 100);
         
-        // Settings icon với hover effect
+        // Settings icon với hover effect và click handler
         StackPane settingsContainer = createIconWithHover(AssetHelper.image("icon_setting.png"), 100);
+        settingsContainer.setOnMouseClicked(e -> {
+            state.openSettings();
+        });
 
         icons.getChildren().addAll(storeContainer, friendsContainer, settingsContainer);
         
