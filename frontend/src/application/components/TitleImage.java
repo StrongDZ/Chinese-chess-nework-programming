@@ -38,8 +38,12 @@ public class TitleImage extends StackPane {
 
         applyFrame(normalFrame);
 
-        BooleanBinding showBinding = state.loginVisibleProperty().not().and(state.registerVisibleProperty().not());
+        // Ẩn khi login/register visible hoặc khi ở MAIN_MENU
+        BooleanBinding showBinding = state.loginVisibleProperty().not()
+                .and(state.registerVisibleProperty().not())
+                .and(state.appStateProperty().isEqualTo(UIState.AppState.LANDING));
         visibleProperty().bind(showBinding);
+        managedProperty().bind(visibleProperty());
 
         state.boardStateProperty().addListener((obs, oldVal, newVal) -> {
             Frame target = newVal == BoardState.SMALL ? smallFrame : normalFrame;

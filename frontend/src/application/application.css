@@ -1,3 +1,9 @@
+/* Load Kolker Brush font */
+@font-face {
+    font-family: 'Kolker Brush';
+    src: url('kolker-brush.ttf');
+}
+
 root,
 .root {
     -fx-font-family: "Segoe UI", "Roboto", "Arial";

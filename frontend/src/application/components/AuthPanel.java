@@ -17,7 +17,7 @@ public class AuthPanel extends VBox {
         setSpacing(40);
         setAlignment(Pos.CENTER);
         setLayoutX(960 - 180);
-        setLayoutY(400);
+        setLayoutY(450);
 
         ImageButton loginBtn = new ImageButton("login.png", 287);
         ImageButton registerBtn = new ImageButton("register.png", 380);
@@ -27,7 +27,11 @@ public class AuthPanel extends VBox {
 
         getChildren().addAll(loginBtn, registerBtn);
 
-        visibleProperty().bind(state.authPanelVisibleProperty());
+        // Ẩn khi authPanelVisible là false hoặc khi ở MAIN_MENU
+        visibleProperty().bind(
+            state.authPanelVisibleProperty()
+                .and(state.appStateProperty().isEqualTo(UIState.AppState.LANDING))
+        );
         managedProperty().bind(visibleProperty());
         setOpacity(0);
 

@@ -41,7 +41,20 @@ public class LoginPanel extends StackPane {
         InputField password = new InputField("Password", true);
 
         NextButton nextButton = new NextButton();
-        nextButton.setOnMouseClicked(e -> state.closeLoginPanel());
+        nextButton.setOnMouseClicked(e -> {
+            // Validate input
+            String usernameValue = username.getValue();
+            String passwordValue = password.getValue();
+            
+            if (usernameValue != null && !usernameValue.trim().isEmpty() &&
+                passwordValue != null && !passwordValue.trim().isEmpty()) {
+                // Lưu username vào state
+                state.setUsername(usernameValue.trim());
+                // TODO: Gọi API để validate
+                // Nếu hợp lệ, chuyển sang main menu
+                state.navigateToMainMenu();
+            }
+        });
 
         // Input row với vị trí pixel
         HBox inputRow = new HBox(20, new VBox(20, username, password), nextButton);

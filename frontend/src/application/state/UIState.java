@@ -4,6 +4,8 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
 
 /**
  * Central state container that mimics the custom-event flow in the React code.
@@ -11,14 +13,21 @@ import javafx.beans.property.SimpleObjectProperty;
 public class UIState {
 
     public enum BoardState { NORMAL, SMALL }
+    public enum AppState { LANDING, MAIN_MENU }
 
     private final ObjectProperty<BoardState> boardState = new SimpleObjectProperty<>(BoardState.NORMAL);
+    private final ObjectProperty<AppState> appState = new SimpleObjectProperty<>(AppState.LANDING);
     private final BooleanProperty authPanelVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty loginVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty registerVisible = new SimpleBooleanProperty(false);
+    private final StringProperty username = new SimpleStringProperty("username");  // Thêm username property
 
     public ObjectProperty<BoardState> boardStateProperty() {
         return boardState;
+    }
+
+    public ObjectProperty<AppState> appStateProperty() {
+        return appState;
     }
 
     public BooleanProperty authPanelVisibleProperty() {
@@ -33,6 +42,18 @@ public class UIState {
         return registerVisible;
     }
 
+    public StringProperty usernameProperty() {
+        return username;
+    }
+
+    public String getUsername() {
+        return username.get();
+    }
+
+    public void setUsername(String value) {
+        username.set(value);
+    }
+
     public void setBoardState(BoardState newState) {
         boardState.set(newState);
         if (newState == BoardState.NORMAL) {
@@ -40,6 +61,10 @@ public class UIState {
         } else {
             authPanelVisible.set(true);
         }
+    }
+
+    public void setAppState(AppState newState) {
+        appState.set(newState);
     }
 
     public void toggleBoardState() {
@@ -90,6 +115,14 @@ public class UIState {
         if (boardState.get() == BoardState.SMALL && !loginVisible.get()) {
             authPanelVisible.set(true);
         }
+    }
+
+    public void navigateToMainMenu() {
+        setAppState(AppState.MAIN_MENU);
+        loginVisible.set(false);
+        registerVisible.set(false);
+        authPanelVisible.set(false);
+        boardState.set(BoardState.NORMAL);
     }
 }
 

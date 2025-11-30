@@ -45,29 +45,35 @@ public class BoardComponent extends StackPane {
         setPickOnBounds(false);
         setCursor(Cursor.HAND);
 
+        // Ẩn khi ở MAIN_MENU
+        visibleProperty().bind(state.appStateProperty().isEqualTo(UIState.AppState.LANDING));
+        managedProperty().bind(visibleProperty());
+
         // Thiết lập hover transition
         hoverTransition.setFromX(1.0);
         hoverTransition.setFromY(1.0);
-        hoverTransition.setToX(1.1);  // Phóng to 10% khi hover
+        hoverTransition.setToX(1.1);
         hoverTransition.setToY(1.1);
 
         // Hiệu ứng khi trỏ chuột vào - hoạt động ở cả hai frame
         setOnMouseEntered(e -> {
-            hoverTransition.setToX(1.1);
-            hoverTransition.setToY(1.1);
-            hoverTransition.play();
+            if (state.appStateProperty().get() == UIState.AppState.LANDING) {
+                hoverTransition.setToX(1.1);
+                hoverTransition.setToY(1.1);
+                hoverTransition.play();
+            }
         });
 
         // Hiệu ứng khi trỏ chuột ra ngoài - hoạt động ở cả hai frame
         setOnMouseExited(e -> {
-            hoverTransition.setToX(1.0);
-            hoverTransition.setToY(1.0);
-            hoverTransition.play();
+            if (state.appStateProperty().get() == UIState.AppState.LANDING) {
+                hoverTransition.setToX(1.0);
+                hoverTransition.setToY(1.0);
+                hoverTransition.play();
+            }
         });
 
         state.boardStateProperty().addListener((obs, oldVal, newVal) -> {
-            // Reset scale về 1.0 khi state thay đổi, nhưng không dừng hover transition
-            // Nếu đang hover, hover effect sẽ tự động được áp dụng lại
             setScaleX(1.0);
             setScaleY(1.0);
             animateTo(newVal == BoardState.SMALL ? SMALL : NORMAL);

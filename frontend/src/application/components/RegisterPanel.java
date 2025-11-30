@@ -41,7 +41,23 @@ public class RegisterPanel extends StackPane {
         InputField confirm = new InputField("Confirm Password", true);
 
         NextButton nextButton = new NextButton();
-        nextButton.setOnMouseClicked(e -> state.closeRegisterPanel());
+        nextButton.setOnMouseClicked(e -> {
+            // Validate input
+            String usernameValue = username.getValue();
+            String passwordValue = password.getValue();
+            String confirmValue = confirm.getValue();
+            
+            if (usernameValue != null && !usernameValue.trim().isEmpty() &&
+                passwordValue != null && !passwordValue.trim().isEmpty() &&
+                confirmValue != null && !confirmValue.trim().isEmpty() &&
+                passwordValue.equals(confirmValue)) {
+                // Lưu username vào state
+                state.setUsername(usernameValue.trim());
+                // TODO: Gọi API để register
+                // Nếu hợp lệ, chuyển sang main menu
+                state.navigateToMainMenu();
+            }
+        });
 
         // Input row với vị trí pixel
         VBox inputColumn = new VBox(20, username, password, confirm);
