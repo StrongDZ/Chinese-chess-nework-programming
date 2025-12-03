@@ -47,6 +47,12 @@ public class MainMenuPanel extends StackPane {
         socialIcons.setLayoutX(1920 - 350);  // Dịch sang trái từ 250 lên 350 (dịch trái 100px)
         socialIcons.setLayoutY(50);
 
+        // Ẩn social icons khi friends panel mở
+        socialIcons.visibleProperty().bind(
+            state.friendsVisibleProperty().not()
+        );
+        socialIcons.managedProperty().bind(socialIcons.visibleProperty());
+
         // Center: Menu buttons với layout đặc biệt - đặt giữa màn hình
         Pane menuButtonsContainer = createMenuButtons();
         // Tính toán để đặt giữa màn hình
@@ -302,8 +308,16 @@ public class MainMenuPanel extends StackPane {
         // Inventory icon với hover effect
         StackPane storeContainer = createIconWithHover(AssetHelper.image("icon_inventory.png"), 55);
         
-        // Friends icon với hover effect
+        // Friends icon với hover effect và click handler
         StackPane friendsContainer = createIconWithHover(AssetHelper.image("icon_friend.png"), 100);
+        friendsContainer.setOnMouseClicked(e -> {
+            // Toggle: nếu đang mở thì đóng, nếu đang đóng thì mở
+            if (state.isFriendsVisible()) {
+                state.closeFriends();
+            } else {
+                state.openFriends();
+            }
+        });
         
         // Settings icon với hover effect và click handler
         StackPane settingsContainer = createIconWithHover(AssetHelper.image("icon_setting.png"), 100);

@@ -20,6 +20,7 @@ import javafx.stage.Stage;
 import java.nio.file.Path;
 import application.components.MainMenuPanel;
 import application.components.SettingsPanel;
+import application.components.FriendsPanel;
 
 /**
  * JavaFX port of the React landing page for the Chinese Chess project.
@@ -65,6 +66,7 @@ public class Main extends Application {
         RegisterPanel registerPanel = new RegisterPanel(state);
         MainMenuPanel mainMenuPanel = new MainMenuPanel(state);
         SettingsPanel settingsPanel = new SettingsPanel(state);
+        FriendsPanel friendsPanel = new FriendsPanel(state);
 
         stageLayer.getChildren().addAll(
                 background,
@@ -75,7 +77,8 @@ public class Main extends Application {
                 loginPanel,
                 registerPanel,
                 mainMenuPanel,
-                settingsPanel
+                settingsPanel,
+                friendsPanel
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);

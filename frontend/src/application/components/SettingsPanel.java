@@ -14,6 +14,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
+import javafx.scene.shape.Path;
+import javafx.scene.shape.MoveTo;
+import javafx.scene.shape.LineTo;
 
 /**
  * Settings panel that appears when clicking the settings icon.
@@ -74,8 +77,8 @@ public class SettingsPanel extends StackPane {
         // Main background panel
         Rectangle bg = new Rectangle(1000, 700);
         bg.setFill(Color.color(0.85, 0.85, 0.85));  // Light grey
-        bg.setArcWidth(20);
-        bg.setArcHeight(20);
+        bg.setArcWidth(40);
+        bg.setArcHeight(40);
         bg.setStroke(Color.color(0.3, 0.3, 0.3));  // Dark grey border
         bg.setStrokeWidth(2);
         
@@ -195,14 +198,50 @@ public class SettingsPanel extends StackPane {
         int remainingHeight = 620 - 40 - 80;  // 500px
         int boxHeight = 80;
         int fullBoxesCount = remainingHeight / boxHeight;  // 6 boxes
-        
-        // Placeholder navigation items - chỉ thêm các box đầy đủ
+        int lastBoxHeight = remainingHeight % boxHeight;  // 20px dư   
+        // Placeholder navigation items - box cuối cùng có viền dưới và trái trong suốt
         for (int i = 0; i < fullBoxesCount; i++) {
-            Rectangle placeholder = new Rectangle(250, boxHeight);
-            placeholder.setFill(Color.color(0.85, 0.85, 0.85));  // Light grey
-            placeholder.setStroke(Color.color(0.3, 0.3, 0.3));  // Dark grey border
-            placeholder.setStrokeWidth(2);
-            leftNav.getChildren().add(placeholder);
+            boolean isLastBox = (i == fullBoxesCount - 1);
+            
+            if (isLastBox) {
+                // Box cuối cùng - viền dưới và viền trái trong suốt
+                // Background rectangle (không có viền)
+                Rectangle lastBoxBg = new Rectangle(250, boxHeight);
+                lastBoxBg.setFill(Color.color(0.85, 0.85, 0.85));  // Light grey
+                lastBoxBg.setStroke(Color.TRANSPARENT);  // Không có viền
+                
+                // Vẽ chỉ viền trên và viền phải
+                javafx.scene.shape.Path lastBoxBorder = new javafx.scene.shape.Path();
+                double width = 250;
+                double height = boxHeight;
+                
+                // Viền trên (từ trái sang phải)
+                javafx.scene.shape.MoveTo moveToTop = new javafx.scene.shape.MoveTo(0, 0);
+                javafx.scene.shape.LineTo lineToTop = new javafx.scene.shape.LineTo(width, 0);
+                
+                // Viền phải (từ trên xuống dưới)
+                javafx.scene.shape.LineTo lineToRight = new javafx.scene.shape.LineTo(width, height);
+                
+                lastBoxBorder.getElements().addAll(moveToTop, lineToTop, lineToRight);
+                lastBoxBorder.setStroke(Color.color(0.3, 0.3, 0.3));  // Dark grey border
+                lastBoxBorder.setStrokeWidth(2);
+                lastBoxBorder.setFill(Color.TRANSPARENT);
+                
+                // Stack background và border
+                StackPane lastBoxContainer = new StackPane();
+                lastBoxContainer.getChildren().addAll(lastBoxBg, lastBoxBorder);
+                StackPane.setAlignment(lastBoxBg, Pos.TOP_LEFT);
+                StackPane.setAlignment(lastBoxBorder, Pos.TOP_LEFT);
+                
+                leftNav.getChildren().add(lastBoxContainer);
+            } else {
+                // Các box khác - viền đầy đủ
+                Rectangle placeholder = new Rectangle(250, boxHeight);
+                placeholder.setFill(Color.color(0.85, 0.85, 0.85));  // Light grey
+                placeholder.setStroke(Color.color(0.3, 0.3, 0.3));  // Dark grey border
+                placeholder.setStrokeWidth(2);
+                leftNav.getChildren().add(placeholder);
+            }
         }
         
         leftNav.getChildren().add(0, spacer);  // Thêm spacer ở đầu

@@ -22,6 +22,7 @@ public class UIState {
     private final BooleanProperty registerVisible = new SimpleBooleanProperty(false);
     private final StringProperty username = new SimpleStringProperty("username");  // Thêm username property
     private final BooleanProperty settingsVisible = new SimpleBooleanProperty(false);
+    private final BooleanProperty friendsVisible = new SimpleBooleanProperty(false);
 
     public ObjectProperty<BoardState> boardStateProperty() {
         return boardState;
@@ -73,6 +74,26 @@ public class UIState {
 
     public void closeSettings() {
         setSettingsVisible(false);
+    }
+
+    public BooleanProperty friendsVisibleProperty() {
+        return friendsVisible;
+    }
+
+    public boolean isFriendsVisible() {
+        return friendsVisible.get();
+    }
+
+    public void setFriendsVisible(boolean value) {
+        friendsVisible.set(value);
+    }
+
+    public void openFriends() {
+        setFriendsVisible(true);
+    }
+
+    public void closeFriends() {
+        setFriendsVisible(false);
     }
 
     public void setBoardState(BoardState newState) {
