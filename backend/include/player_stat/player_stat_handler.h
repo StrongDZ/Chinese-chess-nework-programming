@@ -1,7 +1,7 @@
 #ifndef PLAYER_STAT_HANDLER_H
 #define PLAYER_STAT_HANDLER_H
 
-#include "../database/mongodb_client.h"
+#include "database/mongodb_client.h"
 #include "../database/redis_client.h"
 #include <json/json.h>
 #include <string>
