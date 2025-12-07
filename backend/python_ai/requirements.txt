@@ -1,0 +1,10 @@
+# Python AI Engine Requirements
+# No external dependencies required - uses only standard library
+
+# Optional: For better type checking
+# mypy>=1.0.0
+
+# Optional: For testing
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+
