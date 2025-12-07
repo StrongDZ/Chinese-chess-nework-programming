@@ -21,7 +21,16 @@ set(MONGOCXX_LIB_DIR /usr/local/lib)
 set(BSONCXX_INCLUDE_DIR /usr/local/include/bsoncxx/v_noabi)
 
 # Include directories
-include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
+    ${MONGOCXX_INCLUDE_DIR}
+    ${BSONCXX_INCLUDE_DIR}
+    /usr/local/include/libmongoc-1.0
+    /usr/local/include/libbson-1.0
+    /usr/include/jsoncpp
+)
+
+link_directories(${MONGOCXX_LIB_DIR})
 
 # Find required packages
 find_package(Threads REQUIRED)
@@ -29,6 +38,7 @@ find_package(Threads REQUIRED)
 # Source files (NO REDIS - MongoDB only)
 set(SOURCES
     protocol/server.cpp
+    protocol/ai_engine.cpp
     protocol/handle_socket.cpp
     src/auth/auth_controller.cpp
     src/auth/auth_service.cpp
@@ -49,6 +59,7 @@ set(SOURCES
 set(HEADERS
     include/protocol/MessageTypes.h
     include/protocol/server.h
+    include/protocol/ai_engine.h
     include/auth/auth_controller.h
     include/auth/auth_service.h
     include/auth/auth_repository.h
@@ -93,7 +104,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
 )
 
-# Tests removed - no test files
+enable_testing()
+add_subdirectory(tests)
 
 # Installation
 install(TARGETS ${PROJECT_NAME}
