@@ -116,6 +116,11 @@ public:
     
     // Get player rating
     int getPlayerRating(const std::string& username, const std::string& timeControl);
+
+    // Find random opponent within rating window (±ratingWindow Elo) for given time control
+    std::optional<std::string> findRandomOpponentByElo(const std::string& username,
+                                                       const std::string& timeControl,
+                                                       int ratingWindow = 200);
     
     // ============ Helper Operations ============
     

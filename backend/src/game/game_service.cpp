@@ -118,6 +118,30 @@ GameResult GameService::createGame(const string& challengerUsername,
     return result;
 }
 
+GameResult GameService::autoMatchAndCreateGame(const string& username,
+                                               const string& timeControl,
+                                               bool rated,
+                                               int ratingWindow) {
+    GameResult result{};
+    result.success = false;
+
+    // 1) Verify user exists
+    if (!repository.userExists(username)) {
+        result.message = "User not found";
+        return result;
+    }
+
+    // 2) Ask repository for a random opponent within rating window
+    auto opponentOpt = repository.findRandomOpponentByElo(username, timeControl, ratingWindow);
+    if (!opponentOpt) {
+        result.message = "No opponent found within rating window";
+        return result;
+    }
+
+    // 3) Reuse existing createGame flow (random color assignment inside)
+    return createGame(username, opponentOpt.value(), timeControl, rated);
+}
+
 GameResult GameService::makeMove(const string& username,
                                   const string& gameId,
                                   int fromX, int fromY,

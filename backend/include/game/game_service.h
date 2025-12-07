@@ -82,6 +82,12 @@ public:
     // Lấy danh sách game của user
     // filter: "active", "completed", "all"
     GameResult listGames(const std::string& username, const std::string& filter = "active");
+
+    // Tìm đối thủ ngẫu nhiên trong khoảng rating (elo) cho matchmaking nhanh
+    GameResult autoMatchAndCreateGame(const std::string& username,
+                                      const std::string& timeControl = "blitz",
+                                      bool rated = true,
+                                      int ratingWindow = 200);
 };
 
 #endif

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(ChineseChessNetworkProgramming VERSION 1.0.0 LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -53,6 +55,9 @@ set(SOURCES
     src/friend/friend_service.cpp
     src/friend/friend_repository.cpp
     src/database/mongodb_client.cpp
+    src/player_stat/player_stat_controller.cpp
+    src/player_stat/player_stat_service.cpp
+    src/player_stat/player_stat_repository.cpp
 )
 
 # Header files (NO REDIS)
@@ -73,6 +78,9 @@ set(HEADERS
     include/friend/friend_service.h
     include/friend/friend_repository.h
     include/database/mongodb_client.h
+    include/player_stat/player_stat_controller.h
+    include/player_stat/player_stat_service.h
+    include/player_stat/player_stat_repository.h
 )
 
 # Third-party libraries (if using submodules or installed packages)
