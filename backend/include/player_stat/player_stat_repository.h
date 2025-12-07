@@ -1,7 +1,7 @@
 #ifndef PLAYER_STAT_REPOSITORY_H
 #define PLAYER_STAT_REPOSITORY_H
 
-#include "../database/mongodb_client.h"
+#include "database/mongodb_client.h"
 #include <optional>
 #include <string>
 #include <vector>

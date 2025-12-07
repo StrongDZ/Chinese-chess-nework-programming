@@ -1,4 +1,4 @@
-#include "../../include/player_stat/player_stat_controller.h"
+#include "player_stat/player_stat_controller.h"
 
 using namespace std;
 

@@ -1,4 +1,4 @@
-#include "../../include/player_stat/player_stat_service.h"
+#include "player_stat/player_stat_service.h"
 #include <algorithm>
 
 using namespace std;

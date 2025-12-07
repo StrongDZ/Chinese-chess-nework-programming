@@ -1,4 +1,4 @@
-#include "../../include/friend/friend_controller.h"
+#include "friend/friend_controller.h"
 
 using namespace std;
 

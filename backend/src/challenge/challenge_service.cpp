@@ -1,4 +1,4 @@
-#include "../../include/challenge/challenge_service.h"
+#include "challenge/challenge_service.h"
 #include <regex>
 #include <chrono>
 

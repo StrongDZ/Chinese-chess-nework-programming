@@ -1,4 +1,4 @@
-#include "../../include/challenge/challenge_repository.h"
+#include "challenge/challenge_repository.h"
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/builder/basic/document.hpp>
 #include <bsoncxx/json.hpp>

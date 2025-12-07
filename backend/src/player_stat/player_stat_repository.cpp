@@ -1,4 +1,4 @@
-#include "../../include/player_stat/player_stat_repository.h"
+#include "player_stat/player_stat_repository.h"
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
 

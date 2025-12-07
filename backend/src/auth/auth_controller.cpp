@@ -1,4 +1,4 @@
-#include "../../include/auth/auth_controller.h"
+#include "auth/auth_controller.h"
 
 using namespace std;
 

@@ -1,4 +1,4 @@
-#include "../../include/auth/auth_repository.h"
+#include "auth/auth_repository.h"
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
 #include <chrono>

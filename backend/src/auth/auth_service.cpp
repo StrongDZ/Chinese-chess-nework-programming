@@ -1,4 +1,4 @@
-#include "../../include/auth/auth_service.h"
+#include "auth/auth_service.h"
 #include <openssl/sha.h>
 #include <regex>
 #include <iomanip>

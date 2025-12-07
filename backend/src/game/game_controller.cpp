@@ -1,4 +1,4 @@
-#include "../../include/game/game_controller.h"
+#include "game/game_controller.h"
 #include <chrono>
 #include <iomanip>
 #include <sstream>

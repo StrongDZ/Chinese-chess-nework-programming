@@ -1,4 +1,4 @@
-#include "../../include/challenge/challenge_controller.h"
+#include "challenge/challenge_controller.h"
 #include <chrono>
 #include <iomanip>
 #include <sstream>

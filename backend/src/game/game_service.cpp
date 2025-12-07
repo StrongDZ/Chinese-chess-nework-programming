@@ -1,4 +1,4 @@
-#include "../../include/game/game_service.h"
+#include "game/game_service.h"
 #include <cmath>
 #include <random>
 #include <algorithm>

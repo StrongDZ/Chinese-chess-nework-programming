@@ -1,4 +1,4 @@
-#include "../../include/game/game_repository.h"
+#include "game/game_repository.h"
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/builder/basic/document.hpp>
 #include <bsoncxx/json.hpp>

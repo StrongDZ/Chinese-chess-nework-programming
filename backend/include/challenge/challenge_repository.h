@@ -1,7 +1,7 @@
 #ifndef CHALLENGE_REPOSITORY_H
 #define CHALLENGE_REPOSITORY_H
 
-#include "../database/mongodb_client.h"
+#include "database/mongodb_client.h"
 #include <string>
 #include <vector>
 #include <optional>

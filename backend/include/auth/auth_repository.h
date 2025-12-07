@@ -1,7 +1,7 @@
 #ifndef AUTH_REPOSITORY_H
 #define AUTH_REPOSITORY_H
 
-#include "../database/mongodb_client.h"
+#include "database/mongodb_client.h"
 #include <string>
 #include <optional>
 

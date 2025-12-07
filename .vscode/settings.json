@@ -126,5 +126,6 @@
     "typeinfo": "cpp",
     "valarray": "cpp",
     "variant": "cpp"
-  }
+  },
+  "cmake.sourceDirectory": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/backend"
 }

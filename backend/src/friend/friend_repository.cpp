@@ -1,4 +1,4 @@
-#include "../../include/friend/friend_repository.h"
+#include "friend/friend_repository.h"
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/builder/stream/helpers.hpp>
 #include <bsoncxx/json.hpp>
