@@ -2,6 +2,8 @@
 
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 #include <algorithm>
 #include <cctype>
 #include <nlohmann/json.hpp>
@@ -23,6 +25,7 @@ enum class MessageType {
 
   // === Game Management ===
   QUICK_MATCHING,
+  CANCEL_QM,
   CHALLENGE_CANCEL,
   CHALLENGE_REQUEST,
   CHALLENGE_RESPONSE,
@@ -50,6 +53,11 @@ enum class MessageType {
   LEADER_BOARD,
   PLAYER_LIST,
   INFO,
+
+  // === Friend Management ===
+  REQUEST_ADD_FRIEND,
+  RESPONSE_ADD_FRIEND,
+  UNFRIEND,
 
   // === System ===
   ERROR,
@@ -81,20 +89,23 @@ struct LogoutPayload {
 
 // Challenge payloads
 struct ChallengeRequestPayload {
-  string username;
+  string to_user;   // Client -> Server: target user
+  string from_user; // Server -> Client: sender user (when forwarding)
 };
 
 struct ChallengeCancelPayload {
-  string username;
+  string to_user;   // Client -> Server: target user
+  string from_user; // Server -> Client: sender user (when forwarding)
 };
 
 struct ChallengeResponsePayload {
-  string username;
+  string to_user;   // Client -> Server: original challenger
+  string from_user; // Server -> Client: responder (when forwarding)
   bool accept;
 };
 
 struct AIMatchPayload {
-  string gamemode;  // "easy", "medium", "hard"
+  string gamemode;
 };
 
 // Game payloads
@@ -105,7 +116,8 @@ struct MovePayload {
 };
 
 struct GameStartPayload {
-  string opponent;
+  string opponent;              // Empty if playing with AI
+  nlohmann::json opponent_data; // Optional opponent data
   string game_mode;
 };
 
@@ -122,11 +134,31 @@ struct MessagePayload {
 };
 
 struct UserStatsPayload {
-  string username;
+  string target_username;
 };
 
 struct GameHistoryPayload {
-  string username;
+  string target_username;
+};
+
+struct ReplayRequestPayload {
+  string game_id;
+};
+
+// Friend management payloads
+struct RequestAddFriendPayload {
+  string to_user;   // Client -> Server: target user
+  string from_user; // Server -> Client: sender user
+};
+
+struct ResponseAddFriendPayload {
+  string to_user;   // Client -> Server: original requester
+  string from_user; // Server -> Client: responder
+  bool accept;
+};
+
+struct UnfriendPayload {
+  string to_user;
 };
 
 struct ErrorPayload {
@@ -138,6 +170,28 @@ struct InfoPayload {
   nlohmann::json data;
 };
 
+// Game control payloads
+struct DrawRequestPayload {
+  // Empty payload - no data needed
+};
+
+struct DrawResponsePayload {
+  bool accept_draw;
+};
+
+struct RematchRequestPayload {
+  // Empty payload - no data needed
+};
+
+struct RematchResponsePayload {
+  bool accept_rematch;
+};
+
+// Quick matching payload
+struct CancelQMPayload {
+  // Empty payload - no data needed
+};
+
 // Empty payload cho các message không cần data
 struct EmptyPayload {};
 
@@ -147,8 +201,10 @@ using Payload =
             ChallengeRequestPayload, ChallengeCancelPayload,
             ChallengeResponsePayload, AIMatchPayload, GameStartPayload,
             MovePayload, InvalidMovePayload, MessagePayload, GameEndPayload,
-            UserStatsPayload, GameHistoryPayload, ErrorPayload, InfoPayload>;
-// Note: SUGGEST_MOVE uses EmptyPayload (no input) and returns MovePayload
+            UserStatsPayload, GameHistoryPayload, ReplayRequestPayload,
+            RequestAddFriendPayload, ResponseAddFriendPayload, UnfriendPayload,
+            DrawRequestPayload, DrawResponsePayload, RematchRequestPayload,
+            RematchResponsePayload, CancelQMPayload, ErrorPayload, InfoPayload>;
 
 // ============= nlohmann::json converters ============= //
 using nlohmann::json;
@@ -164,19 +220,40 @@ inline void to_json(json &j, const LogoutPayload &p) {
   j = json{{"username", p.username}};
 }
 inline void to_json(json &j, const ChallengeRequestPayload &p) {
-  j = json{{"username", p.username}};
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}};
+  }
 }
 inline void to_json(json &j, const ChallengeCancelPayload &p) {
-  j = json{{"username", p.username}};
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}};
+  }
 }
 inline void to_json(json &j, const ChallengeResponsePayload &p) {
-  j = json{{"username", p.username}, {"accept", p.accept}};
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}, {"accept", p.accept}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}, {"accept", p.accept}};
+  }
 }
 inline void to_json(json &j, const AIMatchPayload &p) {
   j = json{{"gamemode", p.gamemode}};
 }
 inline void to_json(json &j, const GameStartPayload &p) {
   j = json{{"opponent", p.opponent}, {"game_mode", p.game_mode}};
+  if (!p.opponent_data.is_null()) {
+    j["opponent_data"] = p.opponent_data;
+  }
 }
 inline void to_json(json &j, const InvalidMovePayload &p) {
   j = json{{"reason", p.reason}};
@@ -185,10 +262,49 @@ inline void to_json(json &j, const MessagePayload &p) {
   j = json{{"message", p.message}};
 }
 inline void to_json(json &j, const UserStatsPayload &p) {
-  j = json{{"username", p.username}};
+  j = json{{"target_username", p.target_username}};
 }
 inline void to_json(json &j, const GameHistoryPayload &p) {
-  j = json{{"username", p.username}};
+  j = json{{"target_username", p.target_username}};
+}
+inline void to_json(json &j, const ReplayRequestPayload &p) {
+  j = json{{"game_id", p.game_id}};
+}
+inline void to_json(json &j, const UnfriendPayload &p) {
+  j = json{{"to_user", p.to_user}};
+}
+inline void to_json(json &j, const DrawRequestPayload &) {
+  j = json(); // Empty payload
+}
+inline void to_json(json &j, const DrawResponsePayload &p) {
+  j = json{{"accept_draw", p.accept_draw}};
+}
+inline void to_json(json &j, const RematchRequestPayload &) {
+  j = json(); // Empty payload
+}
+inline void to_json(json &j, const RematchResponsePayload &p) {
+  j = json{{"accept_rematch", p.accept_rematch}};
+}
+inline void to_json(json &j, const CancelQMPayload &) {
+  j = json(); // Empty payload
+}
+inline void to_json(json &j, const RequestAddFriendPayload &p) {
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}};
+  }
+}
+inline void to_json(json &j, const ResponseAddFriendPayload &p) {
+  if (!p.from_user.empty()) {
+    // Server -> Client format
+    j = json{{"from_user", p.from_user}, {"accept", p.accept}};
+  } else {
+    // Client -> Server format
+    j = json{{"to_user", p.to_user}, {"accept", p.accept}};
+  }
 }
 inline void to_json(json &j, const Coord &c) {
   j = json{{"row", c.row}, {"col", c.col}};
@@ -269,31 +385,57 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::CHALLENGE_REQUEST: {
-      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+      ChallengeRequestPayload p;
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
         return nullopt;
       }
-      ChallengeRequestPayload p;
-      p.username = doc["username"].GetString();
       return p;
     }
 
     case MessageType::CHALLENGE_CANCEL: {
-      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+      ChallengeCancelPayload p;
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
         return nullopt;
       }
-      ChallengeCancelPayload p;
-      p.username = doc["username"].GetString();
       return p;
     }
 
     case MessageType::CHALLENGE_RESPONSE: {
-      if (!doc.HasMember("username") || !doc["username"].IsString() ||
-          !doc.HasMember("accept") || !doc["accept"].IsBool()) {
+      if (!doc.HasMember("accept") || !doc["accept"].IsBool()) {
         return nullopt;
       }
       ChallengeResponsePayload p;
-      p.username = doc["username"].GetString();
       p.accept = doc["accept"].GetBool();
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
+        return nullopt;
+      }
       return p;
     }
 
@@ -314,6 +456,16 @@ inline optional<Payload> parsePayload(MessageType type,
       GameStartPayload p;
       p.opponent = doc["opponent"].GetString();
       p.game_mode = doc["game_mode"].GetString();
+      // Optional opponent_data field
+      if (doc.HasMember("opponent_data")) {
+        // Convert rapidjson::Value to nlohmann::json
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        doc["opponent_data"].Accept(writer);
+        p.opponent_data = nlohmann::json::parse(buffer.GetString());
+      } else {
+        p.opponent_data = nlohmann::json();
+      }
       return p;
     }
 
@@ -336,20 +488,111 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::USER_STATS: {
-      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+      if (!doc.HasMember("target_username") ||
+          !doc["target_username"].IsString()) {
         return nullopt;
       }
       UserStatsPayload p;
-      p.username = doc["username"].GetString();
+      p.target_username = doc["target_username"].GetString();
       return p;
     }
 
     case MessageType::GAME_HISTORY: {
-      if (!doc.HasMember("username") || !doc["username"].IsString()) {
+      if (!doc.HasMember("target_username") ||
+          !doc["target_username"].IsString()) {
         return nullopt;
       }
       GameHistoryPayload p;
-      p.username = doc["username"].GetString();
+      p.target_username = doc["target_username"].GetString();
+      return p;
+    }
+
+    case MessageType::REPLAY_REQUEST: {
+      if (!doc.HasMember("game_id") || !doc["game_id"].IsString()) {
+        return nullopt;
+      }
+      ReplayRequestPayload p;
+      p.game_id = doc["game_id"].GetString();
+      return p;
+    }
+
+    case MessageType::UNFRIEND: {
+      if (!doc.HasMember("to_user") || !doc["to_user"].IsString()) {
+        return nullopt;
+      }
+      UnfriendPayload p;
+      p.to_user = doc["to_user"].GetString();
+      return p;
+    }
+
+    case MessageType::DRAW_REQUEST: {
+      // Empty payload
+      return DrawRequestPayload{};
+    }
+
+    case MessageType::DRAW_RESPONSE: {
+      if (!doc.HasMember("accept_draw") || !doc["accept_draw"].IsBool()) {
+        return nullopt;
+      }
+      DrawResponsePayload p;
+      p.accept_draw = doc["accept_draw"].GetBool();
+      return p;
+    }
+
+    case MessageType::REMATCH_REQUEST: {
+      // Empty payload
+      return RematchRequestPayload{};
+    }
+
+    case MessageType::REMATCH_RESPONSE: {
+      if (!doc.HasMember("accept_rematch") || !doc["accept_rematch"].IsBool()) {
+        return nullopt;
+      }
+      RematchResponsePayload p;
+      p.accept_rematch = doc["accept_rematch"].GetBool();
+      return p;
+    }
+
+    case MessageType::CANCEL_QM: {
+      // Empty payload
+      return CancelQMPayload{};
+    }
+
+    case MessageType::REQUEST_ADD_FRIEND: {
+      RequestAddFriendPayload p;
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
+        return nullopt;
+      }
+      return p;
+    }
+
+    case MessageType::RESPONSE_ADD_FRIEND: {
+      if (!doc.HasMember("accept") || !doc["accept"].IsBool()) {
+        return nullopt;
+      }
+      ResponseAddFriendPayload p;
+      p.accept = doc["accept"].GetBool();
+      // Client -> Server: has "to_user"
+      if (doc.HasMember("to_user") && doc["to_user"].IsString()) {
+        p.to_user = doc["to_user"].GetString();
+        p.from_user = "";
+      }
+      // Server -> Client: has "from_user"
+      else if (doc.HasMember("from_user") && doc["from_user"].IsString()) {
+        p.from_user = doc["from_user"].GetString();
+        p.to_user = "";
+      } else {
+        return nullopt;
+      }
       return p;
     }
 
@@ -425,6 +668,7 @@ static const unordered_map<string, MessageType> commandMap = {
     {"LOGOUT", MessageType::LOGOUT},
     {"AUTHENTICATED", MessageType::AUTHENTICATED},
     {"QUICK_MATCHING", MessageType::QUICK_MATCHING},
+    {"CANCEL_QM", MessageType::CANCEL_QM},
     {"CHALLENGE_CANCEL", MessageType::CHALLENGE_CANCEL},
     {"CHALLENGE_REQUEST", MessageType::CHALLENGE_REQUEST},
     {"CHALLENGE_RESPONSE", MessageType::CHALLENGE_RESPONSE},
@@ -446,6 +690,9 @@ static const unordered_map<string, MessageType> commandMap = {
     {"LEADER_BOARD", MessageType::LEADER_BOARD},
     {"PLAYER_LIST", MessageType::PLAYER_LIST},
     {"INFO", MessageType::INFO},
+    {"REQUEST_ADD_FRIEND", MessageType::REQUEST_ADD_FRIEND},
+    {"RESPONSE_ADD_FRIEND", MessageType::RESPONSE_ADD_FRIEND},
+    {"UNFRIEND", MessageType::UNFRIEND},
     {"ERROR", MessageType::ERROR}};
 
 inline ParsedMessage parseMessage(const string &msg) {
@@ -478,6 +725,7 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::LOGOUT, "LOGOUT"},
     {MessageType::AUTHENTICATED, "AUTHENTICATED"},
     {MessageType::QUICK_MATCHING, "QUICK_MATCHING"},
+    {MessageType::CANCEL_QM, "CANCEL_QM"},
     {MessageType::CHALLENGE_CANCEL, "CHALLENGE_CANCEL"},
     {MessageType::CHALLENGE_REQUEST, "CHALLENGE_REQUEST"},
     {MessageType::CHALLENGE_RESPONSE, "CHALLENGE_RESPONSE"},
@@ -499,6 +747,9 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::LEADER_BOARD, "LEADER_BOARD"},
     {MessageType::PLAYER_LIST, "PLAYER_LIST"},
     {MessageType::INFO, "INFO"},
+    {MessageType::REQUEST_ADD_FRIEND, "REQUEST_ADD_FRIEND"},
+    {MessageType::RESPONSE_ADD_FRIEND, "RESPONSE_ADD_FRIEND"},
+    {MessageType::UNFRIEND, "UNFRIEND"},
     {MessageType::ERROR, "ERROR"}};
 
 inline string makeMessage(MessageType type,
