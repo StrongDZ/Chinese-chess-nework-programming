@@ -1,0 +1,26 @@
+root,
+.root {
+    -fx-font-family: "Segoe UI", "Roboto", "Arial";
+    -fx-text-fill: white;
+}
+
+.cc-input {
+    -fx-background-color: rgba(0, 0, 0, 0.45);
+    -fx-border-color: rgba(255, 255, 255, 0.25);
+    -fx-border-radius: 40;
+    -fx-background-radius: 40;
+}
+
+.cc-input:focused {
+    -fx-background-color: rgba(0, 0, 0, 0.55);
+    -fx-border-color: rgba(255, 255, 255, 0.45);
+}
+
+.cc-link {
+    -fx-text-fill: #dc3545;
+    -fx-font-size: 18px;
+}
+
+.cc-link:hover {
+    -fx-text-fill: #e73f50;
+}
