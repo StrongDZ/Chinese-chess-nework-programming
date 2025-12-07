@@ -1,1 +1,116 @@
-backend/build/compile_commands.json
+[
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/auth/auth_controller.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/auth/auth_controller.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/auth/auth_controller.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/auth/auth_controller.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/auth/auth_repository.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/auth/auth_repository.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/auth/auth_repository.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/auth/auth_repository.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/auth/auth_service.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/auth/auth_service.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/auth/auth_service.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/auth/auth_service.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/challenge/challenge_controller.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/challenge/challenge_controller.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/challenge/challenge_controller.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/challenge/challenge_controller.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/challenge/challenge_repository.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/challenge/challenge_repository.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/challenge/challenge_repository.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/challenge/challenge_repository.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/challenge/challenge_service.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/challenge/challenge_service.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/challenge/challenge_service.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/challenge/challenge_service.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/database/mongodb_client.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/database/mongodb_client.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/database/mongodb_client.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/database/mongodb_client.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/friend/friend_controller.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/friend/friend_controller.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/friend/friend_controller.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/friend/friend_controller.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/friend/friend_repository.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/friend/friend_repository.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/friend/friend_repository.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/friend/friend_repository.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/friend/friend_service.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/friend/friend_service.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/friend/friend_service.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/friend/friend_service.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/game/game_controller.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/game/game_controller.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/game/game_controller.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/game/game_controller.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/game/game_repository.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/game/game_repository.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/game/game_repository.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/game/game_repository.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/game/game_service.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/game/game_service.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/game/game_service.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/game/game_service.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/player_stat/player_stat_controller.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/player_stat/player_stat_controller.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/player_stat/player_stat_controller.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/player_stat/player_stat_controller.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/player_stat/player_stat_repository.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/player_stat/player_stat_repository.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/player_stat/player_stat_repository.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/player_stat/player_stat_repository.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/player_stat/player_stat_service.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/player_stat/player_stat_service.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/player_stat/player_stat_service.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/player_stat/player_stat_service.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/protocol/ai_engine.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/protocol/ai_engine.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/protocol/ai_engine.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/protocol/ai_engine.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/protocol/handle_socket.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/protocol/handle_socket.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/protocol/handle_socket.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/protocol/handle_socket.cpp.o"
+},
+{
+  "directory": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/build",
+  "command": "/usr/bin/c++  -I/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/include -I/usr/local/include/mongocxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi -I/usr/local/include/bsoncxx/v_noabi/bsoncxx/third_party/mnmlstc -I/usr/local/include/libmongoc-1.0 -I/usr/local/include/libbson-1.0 -I/usr/include/jsoncpp -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/ChineseChessNetworkProgramming.dir/src/protocol/server.cpp.o -c /home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/protocol/server.cpp",
+  "file": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/src/protocol/server.cpp",
+  "output": "CMakeFiles/ChineseChessNetworkProgramming.dir/src/protocol/server.cpp.o"
+}
+]
