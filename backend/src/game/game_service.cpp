@@ -8,9 +8,9 @@ using namespace std;
 GameService::GameService(GameRepository& repo) 
     : repository(repo) {}
 
-bool GameService::isValidCoordinate(int x, int y) {
-    return (x >= 0 && x <= 8 && y >= 0 && y <= 9);
-}
+// bool GameService::isValidCoordinate(int x, int y) {
+//     return (x >= 0 && x <= 8 && y >= 0 && y <= 9);
+// }
 
 bool GameService::isGameOver(const string& status) {
     return (status == "completed" || status == "abandoned");
@@ -155,10 +155,10 @@ GameResult GameService::makeMove(const string& username,
     result.success = false;
     
     // 1. Validate coordinates
-    if (!isValidCoordinate(fromX, fromY) || !isValidCoordinate(toX, toY)) {
-        result.message = "Invalid coordinates (x: 0-8, y: 0-9)";
-        return result;
-    }
+    // if (!isValidCoordinate(fromX, fromY) || !isValidCoordinate(toX, toY)) {
+    //     result.message = "Invalid coordinates (x: 0-8, y: 0-9)";
+    //     return result;
+    // }
     
     // 2. Load game
     auto gameOpt = repository.findById(gameId);
@@ -230,112 +230,60 @@ GameResult GameService::makeMove(const string& username,
     return result;
 }
 
-GameResult GameService::offerDraw(const string& username, const string& gameId) {
-    GameResult result;
-    result.success = false;
+// Kết thúc game với result và termination cụ thể
+GameResult GameService::endGame(const string& gameId,
+                                 const string& result,
+                                 const string& termination) {
+    GameResult gameResult;
+    gameResult.success = false;
     
     // 1. Load game
     auto gameOpt = repository.findById(gameId);
     if (!gameOpt) {
-        result.message = "Game not found";
-        return result;
+        gameResult.message = "Game not found";
+        return gameResult;
     }
     
     Game game = gameOpt.value();
     
-    // 2. Check game is in progress
+    // 2. Check game is still in progress
     if (game.status != "in_progress") {
-        result.message = "Game is not in progress";
-        return result;
+        gameResult.message = "Game is not in progress";
+        return gameResult;
     }
     
-    // 3. Check user is a player
-    if (game.red_player != username && game.black_player != username) {
-        result.message = "You are not a player in this game";
-        return result;
+    // 3. Determine winner
+    string winnerUsername = "";
+    if (result == "red_win") {
+        winnerUsername = game.red_player;
+    } else if (result == "black_win") {
+        winnerUsername = game.black_player;
+    }
+    // else: draw or abandoned - no winner
+    
+    // 4. End game in repository
+    bool ended = repository.endGame(gameId, "completed", result, winnerUsername);
+    
+    if (!ended) {
+        gameResult.message = "Failed to end game";
+        return gameResult;
     }
     
-    // 4. Create draw offer
-    DrawOffer offer;
-    offer.game_id = gameId;
-    offer.from_player = username;
-    offer.created_at = chrono::system_clock::now();
-    offer.expires_at = offer.created_at + chrono::seconds(DRAW_OFFER_TTL_SECONDS);
-    
-    bool created = repository.createDrawOffer(offer);
-    
-    if (!created) {
-        result.message = "Failed to create draw offer";
-        return result;
+    // 5. Update ratings if rated
+    if (game.rated) {
+        calculateAndUpdateRatings(game.red_player, game.black_player,
+                                  result, game.time_control);
     }
     
-    result.success = true;
-    result.message = "Draw offer sent";
-    result.game = game;
+    game.status = "completed";
+    game.result = result;
+    game.winner = winnerUsername;
     
-    return result;
-}
-
-GameResult GameService::respondDraw(const string& username, const string& gameId, bool accept) {
-    GameResult result;
-    result.success = false;
+    gameResult.success = true;
+    gameResult.message = "Game ended: " + termination;
+    gameResult.game = game;
     
-    // 1. Check draw offer exists
-    auto offerOpt = repository.getDrawOffer(gameId);
-    if (!offerOpt) {
-        result.message = "No draw offer to respond to";
-        return result;
-    }
-    
-    DrawOffer offer = offerOpt.value();
-    
-    // 2. Check user is not the one who offered
-    if (offer.from_player == username) {
-        result.message = "Cannot respond to your own draw offer";
-        return result;
-    }
-    
-    // 3. Load game
-    auto gameOpt = repository.findById(gameId);
-    if (!gameOpt) {
-        result.message = "Game not found";
-        return result;
-    }
-    
-    Game game = gameOpt.value();
-    
-    // 4. Check user is a player
-    if (game.red_player != username && game.black_player != username) {
-        result.message = "You are not a player in this game";
-        return result;
-    }
-    
-    // 5. Delete draw offer
-    repository.deleteDrawOffer(gameId);
-    
-    if (accept) {
-        // 6. End game as draw
-        repository.endGame(gameId, "completed", "draw", "");
-        
-        // 7. Update ratings if rated
-        if (game.rated) {
-            calculateAndUpdateRatings(game.red_player, game.black_player, 
-                                      "draw", game.time_control);
-        }
-        
-        game.status = "completed";
-        game.result = "draw";
-        
-        result.success = true;
-        result.message = "Draw accepted - Game ended";
-        result.game = game;
-    } else {
-        result.success = true;
-        result.message = "Draw declined";
-        result.game = game;
-    }
-    
-    return result;
+    return gameResult;
 }
 
 GameResult GameService::resign(const string& username, const string& gameId) {
@@ -357,44 +305,20 @@ GameResult GameService::resign(const string& username, const string& gameId) {
         return result;
     }
     
-    // 3. Determine result
+    // 3. Determine result based on who resigned
     string gameResult;
-    string winnerUsername;
     
     if (username == game.red_player) {
         gameResult = "black_win";
-        winnerUsername = game.black_player;
     } else if (username == game.black_player) {
         gameResult = "red_win";
-        winnerUsername = game.red_player;
     } else {
         result.message = "You are not a player in this game";
         return result;
     }
     
-    // 4. End game
-    bool ended = repository.endGame(gameId, "completed", gameResult, winnerUsername);
-    
-    if (!ended) {
-        result.message = "Failed to end game";
-        return result;
-    }
-    
-    // 5. Update ratings if rated
-    if (game.rated) {
-        calculateAndUpdateRatings(game.red_player, game.black_player,
-                                  gameResult, game.time_control);
-    }
-    
-    game.status = "completed";
-    game.result = gameResult;
-    game.winner = winnerUsername;
-    
-    result.success = true;
-    result.message = "Resigned successfully";
-    result.game = game;
-    
-    return result;
+    // 4. Call endGame with resignation
+    return endGame(gameId, gameResult, "resignation");
 }
 
 GameResult GameService::getGame(const string& gameId) {

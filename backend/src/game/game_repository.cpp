@@ -1,4 +1,5 @@
 #include "game/game_repository.h"
+#include <bsoncxx/builder/basic/array.hpp>
 #include <bsoncxx/builder/basic/document.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
@@ -22,7 +23,6 @@ string GameRepository::createGame(const Game &game) {
   try {
     auto db = mongoClient.getDatabase();
     auto games = db["active_games"];
-
     auto gameDoc = document{}
                    << "red_player" << game.red_player << "black_player"
                    << game.black_player << "status" << game.status
@@ -199,8 +199,13 @@ bool GameRepository::endGame(const string &gameId, const string &status,
   try {
     auto db = mongoClient.getDatabase();
     auto games = db["active_games"];
+    auto archive = db["game_archive"];
     auto now = chrono::system_clock::now();
 
+    // Load full game for archiving (if available)
+    auto gameOpt = findById(gameId);
+
+    // Update active_games status/result/end_time/winner
     bsoncxx::builder::basic::document setDoc;
     setDoc.append(kvp("status", status));
     setDoc.append(kvp("result", result));
@@ -216,7 +221,80 @@ bool GameRepository::endGame(const string &gameId, const string &status,
         document{} << "_id" << bsoncxx::oid(gameId) << finalize,
         make_document(kvp("$set", setDoc.view())));
 
-    return updateResult && updateResult->matched_count() > 0;
+    if (!(updateResult && updateResult->matched_count() > 0)) {
+      return false;
+    }
+
+    // Archive and clean up active record if we have full game data
+    if (gameOpt) {
+      const Game &g = gameOpt.value();
+
+      bsoncxx::builder::basic::document archiveDoc;
+      archiveDoc.append(kvp("original_game_id", bsoncxx::oid(gameId)));
+      archiveDoc.append(kvp("red_player", g.red_player));
+      archiveDoc.append(kvp("black_player", g.black_player));
+      archiveDoc.append(kvp(
+          "winner",
+          winner.empty() ? bsoncxx::types::bson_value::value{bsoncxx::types::b_null{}}
+                         : bsoncxx::types::bson_value::value{winner}));
+      archiveDoc.append(kvp("result", result));
+      archiveDoc.append(kvp("start_time", bsoncxx::types::b_date{g.start_time}));
+      archiveDoc.append(kvp("end_time", bsoncxx::types::b_date{now}));
+      archiveDoc.append(kvp("initial_xfen", g.xfen));
+      archiveDoc.append(kvp("final_xfen", g.xfen));
+      archiveDoc.append(kvp("move_count", bsoncxx::types::b_int32{g.move_count}));
+      archiveDoc.append(kvp("time_control", g.time_control));
+      archiveDoc.append(kvp("time_limit", bsoncxx::types::b_int32{g.time_limit}));
+      archiveDoc.append(kvp("increment", bsoncxx::types::b_int32{g.increment}));
+
+      bsoncxx::builder::basic::array movesArray;
+      for (const auto &m : g.moves) {
+        bsoncxx::builder::basic::document moveDoc;
+        moveDoc.append(kvp("move_number", bsoncxx::types::b_int32{m.move_number}));
+        moveDoc.append(kvp("player", m.player));
+
+        bsoncxx::builder::basic::document fromDoc;
+        fromDoc.append(kvp("x", bsoncxx::types::b_int32{m.from_x}));
+        fromDoc.append(kvp("y", bsoncxx::types::b_int32{m.from_y}));
+        moveDoc.append(kvp("from", fromDoc.extract()));
+
+        bsoncxx::builder::basic::document toDoc;
+        toDoc.append(kvp("x", bsoncxx::types::b_int32{m.to_x}));
+        toDoc.append(kvp("y", bsoncxx::types::b_int32{m.to_y}));
+        moveDoc.append(kvp("to", toDoc.extract()));
+
+        moveDoc.append(kvp("piece", m.piece));
+        moveDoc.append(kvp(
+            "captured",
+            m.captured.empty()
+                ? bsoncxx::types::bson_value::value{bsoncxx::types::b_null{}}
+                : bsoncxx::types::bson_value::value{m.captured}));
+        moveDoc.append(kvp("notation", m.notation));
+        moveDoc.append(kvp("xfen_after", m.xfen_after));
+        moveDoc.append(kvp("timestamp", bsoncxx::types::b_date{m.timestamp}));
+        moveDoc.append(kvp("time_taken", bsoncxx::types::b_int32{m.time_taken}));
+
+        movesArray.append(moveDoc.extract());
+      }
+
+      archiveDoc.append(kvp("moves", movesArray.extract()));
+
+      // Insert to game_archive (best-effort)
+      try {
+        archive.insert_one(archiveDoc.view());
+      } catch (const exception &) {
+        // If archiving fails, we still keep active update; no throw
+      }
+
+      // Remove from active_games to keep only ongoing games
+      try {
+        games.delete_one(document{} << "_id" << bsoncxx::oid(gameId) << finalize);
+      } catch (const exception &) {
+        // best-effort cleanup
+      }
+    }
+
+    return true;
 
   } catch (const exception &) {
     return false;
@@ -271,75 +349,6 @@ vector<Game> GameRepository::findByUser(const string &username,
   }
 
   return result;
-}
-
-// ============ Draw Offer Operations ============
-
-bool GameRepository::createDrawOffer(const DrawOffer &offer) {
-  try {
-    auto db = mongoClient.getDatabase();
-    auto drawOffers = db["draw_offers"];
-
-    // Delete any existing offer for this game first
-    drawOffers.delete_many(document{} << "game_id" << offer.game_id
-                                      << finalize);
-
-    auto doc =
-        document{} << "game_id" << offer.game_id << "from_player"
-                   << offer.from_player << "created_at"
-                   << bsoncxx::types::b_date{offer.created_at} << "expires_at"
-                   << bsoncxx::types::b_date{offer.expires_at} << finalize;
-
-    auto result = drawOffers.insert_one(doc.view());
-    return result.has_value();
-
-  } catch (const exception &) {
-    return false;
-  }
-}
-
-optional<DrawOffer> GameRepository::getDrawOffer(const string &gameId) {
-  try {
-    auto db = mongoClient.getDatabase();
-    auto drawOffers = db["draw_offers"];
-    auto now = chrono::system_clock::now();
-
-    auto result = drawOffers.find_one(
-        document{} << "game_id" << gameId << "expires_at" << open_document
-                   << "$gt" << bsoncxx::types::b_date{now} << close_document
-                   << finalize);
-
-    if (!result) {
-      return nullopt;
-    }
-
-    auto view = result->view();
-    DrawOffer offer;
-    offer.game_id = string(view["game_id"].get_string().value);
-    offer.from_player = string(view["from_player"].get_string().value);
-    offer.created_at = chrono::system_clock::time_point(
-        chrono::milliseconds(view["created_at"].get_date().value.count()));
-    offer.expires_at = chrono::system_clock::time_point(
-        chrono::milliseconds(view["expires_at"].get_date().value.count()));
-
-    return offer;
-
-  } catch (const exception &) {
-    return nullopt;
-  }
-}
-
-bool GameRepository::deleteDrawOffer(const string &gameId) {
-  try {
-    auto db = mongoClient.getDatabase();
-    auto drawOffers = db["draw_offers"];
-
-    drawOffers.delete_many(document{} << "game_id" << gameId << finalize);
-    return true;
-
-  } catch (const exception &) {
-    return false;
-  }
 }
 
 // ============ Player Stats Operations ============

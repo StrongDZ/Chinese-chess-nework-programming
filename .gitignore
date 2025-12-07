@@ -53,3 +53,5 @@ Thumbs.db
 .env
 
 backend/tests/
+
+/python_backend
