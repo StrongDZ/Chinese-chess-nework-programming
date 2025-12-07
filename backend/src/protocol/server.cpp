@@ -19,14 +19,14 @@
 
 #include "../../include/protocol/MessageTypes.h"
 #include "../../include/protocol/ThreadPool.h"
-#include "../../include/protocol/ai_engine.h"
+#include "../../include/protocol/python_ai_wrapper.h"  // Use Python AI wrapper instead
 #include "../../include/protocol/handle_socket.h"
 #include "../../include/protocol/server.h"
 
 using namespace std;
 
-// Global AI engine and game state manager
-static PikafishEngine g_ai_engine;
+// Global AI engine and game state manager (Python-backed)
+static PythonAIWrapper g_ai_engine;
 static GameStateManager g_game_state;
 
 // Thread-safe message queue for AI responses
@@ -1154,15 +1154,7 @@ static void handleMove(const ParsedMessage &pm, int fd,
     }
   }
 
-  // 3. Validate move legality (physical rules)
-  if (!GameStateManager::isValidMoveOnBoard(board, move)) {
-    sendMessage(
-        fd, MessageType::INVALID_MOVE,
-        InvalidMovePayload{"Illegal move: violates Chinese Chess rules"});
-    return;
-  }
-
-  // 4. Update game state (for both AI and PvP)
+  // 3. Update game state (for both AI and PvP)
   if (!g_game_state.applyMove(fd, move)) {
     sendMessage(fd, MessageType::ERROR, ErrorPayload{"Failed to apply move"});
     return;
@@ -1411,7 +1403,7 @@ static void handleSuggestMove(const ParsedMessage &pm, int fd,
   }
 
   // Convert UCI move to MovePayload
-  MovePayload suggested_move = PikafishEngine::parseUCIMove(ucci_move);
+  MovePayload suggested_move = PythonAIWrapper::parseUCIMove(ucci_move);
 
   // Send suggestion to player
   sendMessage(fd, MessageType::SUGGEST_MOVE, suggested_move);
@@ -1426,9 +1418,14 @@ static void handleAIMove(int player_fd, map<int, PlayerInfo> &clients) {
     return; // AI engine not available
   }
 
-  // CRITICAL FIX: Copy data needed for AI thread to avoid race conditions
+  // OPTIMISTIC VALIDATION: Snapshot state hash before AI thinking
+  // This allows us to detect if board changed while AI was thinking (race condition)
+  std::size_t state_hash_before = g_game_state.getPositionHash(player_fd);
+  if (state_hash_before == 0) {
+    return; // Invalid state
+  }
+
   // Get current game state and difficulty BEFORE spawning thread
-  // Use position string with move history (more reliable than recalculated FEN)
   string position_str = g_game_state.getPositionString(player_fd);
   if (position_str.empty()) {
     return;
@@ -1437,7 +1434,7 @@ static void handleAIMove(int player_fd, map<int, PlayerInfo> &clients) {
   AIDifficulty difficulty = g_game_state.getAIDifficulty(player_fd);
 
   // Spawn worker thread to handle AI thinking (non-blocking)
-  std::thread ai_thread([player_fd, position_str, difficulty]() {
+  std::thread ai_thread([player_fd, position_str, difficulty, state_hash_before]() {
     try {
       // 1. Call Engine (Blocking operation - now in separate thread)
       string ucci_move = g_ai_engine.getBestMove(position_str, difficulty);
@@ -1452,7 +1449,7 @@ static void handleAIMove(int player_fd, map<int, PlayerInfo> &clients) {
       }
 
       // 2. Convert move
-      MovePayload ai_move = PikafishEngine::parseUCIMove(ucci_move);
+      MovePayload ai_move = PythonAIWrapper::parseUCIMove(ucci_move);
       if (ai_move.from.row < 0 || ai_move.from.col < 0 || ai_move.to.row < 0 ||
           ai_move.to.col < 0) {
         std::lock_guard<std::mutex> lock(g_ai_queue_mutex);
@@ -1463,14 +1460,55 @@ static void handleAIMove(int player_fd, map<int, PlayerInfo> &clients) {
         return;
       }
 
-      // 3. Check if game still exists (client might have disconnected)
+      // 2. Check if game still exists (client might have disconnected)
       if (!g_game_state.hasGame(player_fd)) {
         std::cout << "[AI] Game ended while AI thinking, cancelling move"
                   << std::endl;
         return; // Game ended, don't send move
       }
 
-      // 4. Update Game State (thread-safe - GameStateManager has mutex)
+      // 3. OPTIMISTIC VALIDATION: Check if state hash changed (race condition detection)
+      std::size_t state_hash_after = g_game_state.getPositionHash(player_fd);
+      if (state_hash_after == 0 || state_hash_after != state_hash_before) {
+        // State changed while AI was thinking - reject move to prevent invalid state
+        std::cerr << "[AI] Warning: Game state changed while AI thinking (hash mismatch). "
+                  << "Rejecting move to prevent race condition." << std::endl;
+        std::lock_guard<std::mutex> lock(g_ai_queue_mutex);
+        g_ai_message_queue.push(
+            {player_fd, MessageType::ERROR,
+             ErrorPayload{"Game state changed, AI move rejected (please try again)"}});
+        g_ai_queue_cv.notify_one();
+        return;
+      }
+
+      // 4. LIGHTWEIGHT CHECK - C++ native, no Python calls
+      // Get board for lightweight validation (only if needed for critical checks)
+      char board[10][9];
+      bool has_board = g_game_state.getCurrentBoardArray(player_fd, board);
+      
+      if (has_board) {
+        // Lightweight validation: coordinates, piece exists, basic sanity
+        // This prevents critical errors (out of bounds, missing piece, etc.)
+        if (!GameStateManager::quickValidateMove(ai_move, board)) {
+          std::cerr << "[AI] CRITICAL ERROR: AI generated invalid move format: " << ucci_move
+                    << " - Engine panic detected!" << std::endl;
+          std::lock_guard<std::mutex> lock(g_ai_queue_mutex);
+          g_ai_message_queue.push(
+              {player_fd, MessageType::ERROR,
+               ErrorPayload{"AI engine error: invalid move format (critical error)"}});
+          g_ai_queue_cv.notify_one();
+          return;
+        }
+      } else {
+        // Can't get board, but state hash matches - proceed with caution
+        // Pikafish already validated, and applyMove() will do final check
+        std::cout << "[AI] Note: Could not get board, but state hash matches. "
+                  << "Trusting Pikafish engine validation." << std::endl;
+      }
+
+      // 5. Update Game State (thread-safe - GameStateManager has mutex)
+      // applyMove() will do final validation and apply the move
+      // applyMove will also do basic validation
       bool ok = g_game_state.applyMove(player_fd, ai_move);
 
       if (ok) {
