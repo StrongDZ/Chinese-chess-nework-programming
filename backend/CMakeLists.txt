@@ -35,30 +35,42 @@ link_directories(${MONGOCXX_LIB_DIR})
 # Find required packages
 find_package(Threads REQUIRED)
 
-# Source files
+# Source files (NO REDIS - MongoDB only)
 set(SOURCES
     protocol/server.cpp
     protocol/handle_socket.cpp
-    src/auth/auth_handler.cpp
-    src/challenge/challenge_handler.cpp
-    src/game/game_handler.cpp
-    src/player_stat/player_stat_handler.cpp
-    src/friend/friend_handler.cpp
+    src/auth/auth_controller.cpp
+    src/auth/auth_service.cpp
+    src/auth/auth_repository.cpp
+    src/challenge/challenge_controller.cpp
+    src/challenge/challenge_service.cpp
+    src/challenge/challenge_repository.cpp
+    src/game/game_controller.cpp
+    src/game/game_service.cpp
+    src/game/game_repository.cpp
+    src/friend/friend_controller.cpp
+    src/friend/friend_service.cpp
+    src/friend/friend_repository.cpp
     src/database/mongodb_client.cpp
-    src/database/redis_client.cpp
 )
 
-# Header files
+# Header files (NO REDIS)
 set(HEADERS
     include/protocol/MessageTypes.h
     include/protocol/server.h
-    include/auth/auth_handler.h
-    include/challenge/challenge_handler.h
-    include/game/game_handler.h
-    include/player_stat/player_stat_handler.h
-    include/friend/friend_handler.h
+    include/auth/auth_controller.h
+    include/auth/auth_service.h
+    include/auth/auth_repository.h
+    include/challenge/challenge_controller.h
+    include/challenge/challenge_service.h
+    include/challenge/challenge_repository.h
+    include/game/game_controller.h
+    include/game/game_service.h
+    include/game/game_repository.h
+    include/friend/friend_controller.h
+    include/friend/friend_service.h
+    include/friend/friend_repository.h
     include/database/mongodb_client.h
-    include/database/redis_client.h
 )
 
 # Third-party libraries (if using submodules or installed packages)
@@ -68,13 +80,12 @@ set(HEADERS
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
-# Link libraries
+# Link libraries (NO hiredis - Redis removed)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     Threads::Threads
     mongocxx
     bsoncxx
     jsoncpp
-    hiredis
     ssl
     crypto
 )

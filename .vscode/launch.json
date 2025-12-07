@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/protocol",
-      "program": "/home/hoangmanh/HUST/NetworkProgramming/Chinese-chess-nework-programming/backend/protocol/build/Debug/outDebug",
+      "cwd": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/backend/src/auth",
+      "program": "/home/dangg/net_pro/chess_server_game/src/server/Chinese-chess-nework-programming/backend/src/auth/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
