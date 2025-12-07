@@ -53,14 +53,6 @@ struct Game {
     std::vector<Move> moves;
 };
 
-// Draw offer model (stored in MongoDB instead of Redis)
-struct DrawOffer {
-    std::string game_id;
-    std::string from_player;      // Username of player who offered draw
-    std::chrono::system_clock::time_point created_at;
-    std::chrono::system_clock::time_point expires_at;
-};
-
 class GameRepository {
 private:
     MongoDBClient& mongoClient;
@@ -94,17 +86,6 @@ public:
     std::vector<Game> findByUser(const std::string& username,
                                   const std::string& filter = "all",
                                   int limit = 50);
-    
-    // ============ Draw Offer Operations (MongoDB instead of Redis) ============
-    
-    // Create draw offer
-    bool createDrawOffer(const DrawOffer& offer);
-    
-    // Get active draw offer for game
-    std::optional<DrawOffer> getDrawOffer(const std::string& gameId);
-    
-    // Delete draw offer
-    bool deleteDrawOffer(const std::string& gameId);
     
     // ============ Player Stats Operations ============
     

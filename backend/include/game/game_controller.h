@@ -38,15 +38,11 @@ public:
     //          "piece": "...", "captured": "...", "notation": "...", "xfen_after": "...", "time_taken": N }
     Json::Value handleMakeMove(const Json::Value& request);
     
-    // Đề nghị hòa
-    // Input: { "username": "...", "game_id": "..." }
-    Json::Value handleOfferDraw(const Json::Value& request);
+    // Kết thúc game (gọi từ protocol khi checkmate, draw agreement, timeout, etc.)
+    // Input: { "game_id": "...", "result": "red_win|black_win|draw", "termination": "checkmate|draw_agreement|..." }
+    Json::Value handleEndGame(const Json::Value& request);
     
-    // Chấp nhận/từ chối hòa
-    // Input: { "username": "...", "game_id": "...", "accept": true/false }
-    Json::Value handleRespondDraw(const Json::Value& request);
-    
-    // Đầu hàng
+    // Đầu hàng (wrapper gọi endGame)
     // Input: { "username": "...", "game_id": "..." }
     Json::Value handleResign(const Json::Value& request);
     

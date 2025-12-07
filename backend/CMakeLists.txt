@@ -75,6 +75,9 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 enable_testing()
 
+# Unit/Integration tests
+add_subdirectory(tests)
+
 # Installation
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin

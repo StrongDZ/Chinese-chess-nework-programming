@@ -169,70 +169,37 @@ Json::Value GameController::handleMakeMove(const Json::Value& request) {
     return response;
 }
 
-Json::Value GameController::handleOfferDraw(const Json::Value& request) {
+// Kết thúc game với result cụ thể (được gọi từ protocol khi checkmate, draw agreement, timeout, etc.)
+Json::Value GameController::handleEndGame(const Json::Value& request) {
     Json::Value response;
     
     try {
         // 1. Validate required fields
-        if (!request.isMember("username") || !request.isMember("game_id")) {
+        if (!request.isMember("game_id") || !request.isMember("result")) {
             response["status"] = "error";
-            response["message"] = "Missing required fields: username, game_id";
+            response["message"] = "Missing required fields: game_id, result";
             return response;
         }
         
-        string username = request["username"].asString();
         string gameId = request["game_id"].asString();
+        string result = request["result"].asString();
+        string termination = request.get("termination", "normal").asString();
         
         // 2. Call service
-        auto result = service.offerDraw(username, gameId);
+        auto gameResult = service.endGame(gameId, result, termination);
         
         // 3. Build response
-        if (result.success) {
+        if (gameResult.success) {
             response["status"] = "success";
-            response["message"] = result.message;
-        } else {
-            response["status"] = "error";
-            response["message"] = result.message;
-        }
-        
-    } catch (const exception& e) {
-        response["status"] = "error";
-        response["message"] = string("Exception: ") + e.what();
-    }
-    
-    return response;
-}
-
-Json::Value GameController::handleRespondDraw(const Json::Value& request) {
-    Json::Value response;
-    
-    try {
-        // 1. Validate required fields
-        if (!request.isMember("username") || !request.isMember("game_id") ||
-            !request.isMember("accept")) {
-            response["status"] = "error";
-            response["message"] = "Missing required fields: username, game_id, accept";
-            return response;
-        }
-        
-        string username = request["username"].asString();
-        string gameId = request["game_id"].asString();
-        bool accept = request["accept"].asBool();
-        
-        // 2. Call service
-        auto result = service.respondDraw(username, gameId, accept);
-        
-        // 3. Build response
-        if (result.success) {
-            response["status"] = "success";
-            response["message"] = result.message;
+            response["message"] = gameResult.message;
             
-            if (accept && result.game) {
-                response["result"] = result.game->result;
+            if (gameResult.game) {
+                response["result"] = gameResult.game->result;
+                response["winner"] = gameResult.game->winner;
             }
         } else {
             response["status"] = "error";
-            response["message"] = result.message;
+            response["message"] = gameResult.message;
         }
         
     } catch (const exception& e) {

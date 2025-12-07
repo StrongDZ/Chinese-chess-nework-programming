@@ -28,14 +28,11 @@ class GameService {
 private:
     GameRepository& repository;
     
-    // Constants
-    static constexpr int DRAW_OFFER_TTL_SECONDS = 300; // 5 minutes
-    
     // Initial XFEN for Xiangqi
     static constexpr const char* INITIAL_XFEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
     
     // Validation helpers
-    bool isValidCoordinate(int x, int y);
+    // bool isValidCoordinate(int x, int y);
     bool isGameOver(const std::string& status);
     
     // Time control helpers
@@ -67,13 +64,14 @@ public:
                         const std::string& xfenAfter = "",
                         int timeTaken = 0);
     
-    // Đề nghị hòa
-    GameResult offerDraw(const std::string& username, const std::string& gameId);
+    // Kết thúc game với result cụ thể (dùng cho draw agreement từ protocol, checkmate, etc.)
+    // result: "red_win", "black_win", "draw", "abandoned"
+    // termination: "checkmate", "resignation", "timeout", "draw_agreement", etc.
+    GameResult endGame(const std::string& gameId,
+                       const std::string& result,
+                       const std::string& termination = "normal");
     
-    // Chấp nhận/từ chối hòa
-    GameResult respondDraw(const std::string& username, const std::string& gameId, bool accept);
-    
-    // Đầu hàng
+    // Đầu hàng (wrapper gọi endGame với result thích hợp)
     GameResult resign(const std::string& username, const std::string& gameId);
     
     // Lấy thông tin game
