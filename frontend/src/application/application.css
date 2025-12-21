@@ -16,6 +16,12 @@
     src: url('KumarOne-Regular.ttf');
 }
 
+/* Load Lily Scripts One font */
+@font-face {
+    font-family: 'Lily Scripts One';
+    src: url('LilyScriptOne-Regular.ttf');
+}
+
 root,
 .root {
     -fx-font-family: "Segoe UI", "Roboto", "Arial";

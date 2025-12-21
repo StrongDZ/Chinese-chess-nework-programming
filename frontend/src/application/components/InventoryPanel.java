@@ -32,6 +32,7 @@ public class InventoryPanel extends StackPane {
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
     private VBox selectedSlot = null;
+    private List<VBox> slots = new ArrayList<>();  // Lưu danh sách slots
 
     public InventoryPanel(UIState state) {
         this.state = state;
@@ -69,6 +70,15 @@ public class InventoryPanel extends StackPane {
         state.inventoryVisibleProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU) {
                 fadeTo(1);
+                
+                // Tự động chọn board đầu tiên nếu chưa có board nào được chọn
+                if (slots.size() > 0 && (state.getSelectedBoardImagePath() == null || state.getSelectedBoardImagePath().isEmpty())) {
+                    VBox firstSlot = slots.get(0);
+                    if (firstSlot != null && firstSlot.getChildren().size() > 1) {
+                        Label firstButton = (Label) firstSlot.getChildren().get(1);
+                        selectSlot(firstSlot, firstButton);
+                    }
+                }
             } else {
                 fadeTo(0);
             }
@@ -199,6 +209,7 @@ public class InventoryPanel extends StackPane {
         
         // Tạo slots dựa trên số ảnh
         int totalSlots = boardImages.size();
+        slots.clear();  // Clear danh sách cũ
         for (int i = 0; i < totalSlots; i++) {
             int row = i / colsPerRow;
             int col = i % colsPerRow;
@@ -211,6 +222,26 @@ public class InventoryPanel extends StackPane {
             slot.setLayoutX(x);
             slot.setLayoutY(y);
             slotsPane.getChildren().add(slot);
+            slots.add(slot);  // Lưu vào danh sách
+        }
+        
+        // Tự động chọn board đầu tiên nếu chưa có board nào được chọn
+        if (boardImages.size() > 0 && (state.getSelectedBoardImagePath() == null || state.getSelectedBoardImagePath().isEmpty())) {
+            // Chọn board đầu tiên
+            VBox firstSlot = slots.get(0);
+            Label firstButton = (Label) firstSlot.getChildren().get(1);
+            selectSlot(firstSlot, firstButton);
+        } else if (boardImages.size() > 0) {
+            // Nếu đã có board được chọn, tìm và highlight slot tương ứng
+            String currentPath = state.getSelectedBoardImagePath();
+            for (VBox slot : slots) {
+                String slotPath = (String) slot.getUserData();
+                if (currentPath != null && currentPath.equals(slotPath)) {
+                    Label button = (Label) slot.getChildren().get(1);
+                    selectSlot(slot, button);
+                    break;
+                }
+            }
         }
         
         // Tính chiều cao cần thiết cho slotsPane
@@ -328,6 +359,9 @@ public class InventoryPanel extends StackPane {
         slot.setPadding(new Insets(15));
         slot.setStyle("-fx-background-color: transparent;");
         
+        // Lưu imagePath vào userData để có thể lấy lại khi chọn
+        slot.setUserData(imagePath);
+        
         // Slot background
         Rectangle slotBg = new Rectangle(250, 320);
         slotBg.setFill(Color.TRANSPARENT);
@@ -434,6 +468,15 @@ public class InventoryPanel extends StackPane {
         selectedSlot = slot;
         chooseButton.setText("Selected");
         chooseButton.setStyle(selectedButtonStyle());
+        
+        // Lưu path của ảnh bàn cờ đã chọn vào state
+        String imagePath = (String) slot.getUserData();
+        if (imagePath != null && !imagePath.isEmpty()) {
+            System.out.println("Setting selected board image path: " + imagePath);
+            state.setSelectedBoardImagePath(imagePath);
+        } else {
+            System.out.println("Warning: imagePath is null or empty for selected slot");
+        }
     }
     
     private void fadeTo(double target) {

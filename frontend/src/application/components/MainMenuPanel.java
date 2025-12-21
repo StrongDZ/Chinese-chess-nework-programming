@@ -41,15 +41,19 @@ public class MainMenuPanel extends StackPane {
         HBox profileSection = createProfileSection();
         profileSection.setLayoutX(50);
         profileSection.setLayoutY(50);
+        
+        // Không ẩn profileSection khi gameMode mở - luôn hiển thị
+        // Bỏ binding visibility hoàn toàn
 
         // Top-right: Social icons
         HBox socialIcons = createSocialIcons();
-        socialIcons.setLayoutX(1920 - 350);  // Dịch sang trái từ 250 lên 350 (dịch trái 100px)
+        socialIcons.setLayoutX(1920 - 350);
         socialIcons.setLayoutY(50);
 
-        // Ẩn social icons khi friends panel mở
+        // Ẩn social icons khi friends panel mở hoặc gameMode mở
         socialIcons.visibleProperty().bind(
             state.friendsVisibleProperty().not()
+                .and(state.gameModeVisibleProperty().not())  // Thêm điều kiện này
         );
         socialIcons.managedProperty().bind(socialIcons.visibleProperty());
 
@@ -63,16 +67,23 @@ public class MainMenuPanel extends StackPane {
         menuButtonsContainer.setLayoutX((1920 - containerWidth) / 2);  // Giữa theo chiều ngang
         menuButtonsContainer.setLayoutY((1080 - containerHeight) / 2);  // Giữa theo chiều dọc
 
-        // Bind visibility của menuButtonsContainer với settingsVisible - ẩn khi settings mở
+        // Bind visibility của menuButtonsContainer với settingsVisible và gameModeVisible - ẩn khi settings hoặc gameMode mở
         menuButtonsContainer.visibleProperty().bind(
             state.settingsVisibleProperty().not()
+                .and(state.gameModeVisibleProperty().not())  // Thêm dòng này
         );
         menuButtonsContainer.managedProperty().bind(menuButtonsContainer.visibleProperty());
 
         // Bottom-right: Icons với bottom_menu.png background ở góc phải màn hình
         StackPane bottomBar = createBottomBar();
-        bottomBar.setLayoutX(1920 - 300 - 250);  // Sang trái 50px
-        bottomBar.setLayoutY(980);  // Lên trên 20px (từ 1040 xuống 1020)
+        bottomBar.setLayoutX(1920 - 300 - 250);
+        bottomBar.setLayoutY(980);
+        
+        // Ẩn bottomBar khi gameMode mở
+        bottomBar.visibleProperty().bind(
+            state.gameModeVisibleProperty().not()
+        );
+        bottomBar.managedProperty().bind(bottomBar.visibleProperty());
 
         container.getChildren().addAll(profileSection, socialIcons, menuButtonsContainer, bottomBar);
         getChildren().add(container);
@@ -148,10 +159,17 @@ public class MainMenuPanel extends StackPane {
         username.setLayoutY(-10);
         
         // Elo
-        Label elo = new Label("elo 100");
+        Label elo = new Label();
+        // Bind với elo từ state và format thành "elo [elo]"
+        elo.textProperty().bind(
+            javafx.beans.binding.Bindings.createStringBinding(
+                () -> "elo " + state.getElo(),
+                state.eloProperty()
+            )
+        );
         elo.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 50px; -fx-text-fill: white; -fx-background-color: transparent;");
         elo.setLayoutX(-310);
-        elo.setLayoutY(35);  // Điều chỉnh vị trí Y để không bị che
+        elo.setLayoutY(35);
         
         textSection.getChildren().addAll(brushStroke, username, elo);
 
@@ -231,6 +249,9 @@ public class MainMenuPanel extends StackPane {
         Label gameMode = createMenuButton("Game mode", 300, 215);
         gameMode.setLayoutX(480);
         gameMode.setLayoutY(235);
+        gameMode.setOnMouseClicked(e -> {
+            state.openGameMode();
+        });
 
         container.getChildren().addAll(playNow, history, gameMode);
         return container;
@@ -305,8 +326,16 @@ public class MainMenuPanel extends StackPane {
         icons.setAlignment(Pos.CENTER);
         icons.setPadding(new Insets(0, 20, 0, 70));
 
-        // Inventory icon với hover effect
+        // Inventory icon với hover effect và click handler
         StackPane storeContainer = createIconWithHover(AssetHelper.image("icon_inventory.png"), 55);
+        storeContainer.setOnMouseClicked(e -> {
+            // Toggle: nếu đang mở thì đóng, nếu đang đóng thì mở
+            if (state.isInventoryVisible()) {
+                state.closeInventory();
+            } else {
+                state.openInventory();
+            }
+        });
         
         // Friends icon với hover effect và click handler
         StackPane friendsContainer = createIconWithHover(AssetHelper.image("icon_friend.png"), 100);

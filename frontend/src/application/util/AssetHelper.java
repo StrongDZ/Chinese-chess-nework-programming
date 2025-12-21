@@ -31,5 +31,9 @@ public final class AssetHelper {
         Path path = ASSET_ROOT.resolve(fileName);
         return new Image(path.toUri().toString(), true);
     }
+    
+    public static Path getAssetRoot() {
+        return ASSET_ROOT;
+    }
 }
 

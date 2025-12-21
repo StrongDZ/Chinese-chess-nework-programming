@@ -21,6 +21,12 @@ import java.nio.file.Path;
 import application.components.MainMenuPanel;
 import application.components.SettingsPanel;
 import application.components.FriendsPanel;
+import application.components.InventoryPanel;
+import application.components.GameModePanel;
+import application.components.ClassicModePanel;
+import application.components.BlitzModePanel;
+import application.components.CustomModePanel;
+import application.components.GamePanel;
 
 /**
  * JavaFX port of the React landing page for the Chinese Chess project.
@@ -67,6 +73,12 @@ public class Main extends Application {
         MainMenuPanel mainMenuPanel = new MainMenuPanel(state);
         SettingsPanel settingsPanel = new SettingsPanel(state);
         FriendsPanel friendsPanel = new FriendsPanel(state);
+        InventoryPanel inventoryPanel = new InventoryPanel(state);
+        GameModePanel gameModePanel = new GameModePanel(state);
+        ClassicModePanel classicModePanel = new ClassicModePanel(state);
+        BlitzModePanel blitzModePanel = new BlitzModePanel(state);
+        CustomModePanel customModePanel = new CustomModePanel(state);
+        GamePanel gamePanel = new GamePanel(state);
 
         stageLayer.getChildren().addAll(
                 background,
@@ -76,9 +88,17 @@ public class Main extends Application {
                 authPanel,
                 loginPanel,
                 registerPanel,
+               
+                //classicModePanel,
                 mainMenuPanel,
+                gameModePanel,
+                classicModePanel,
+                blitzModePanel,
+                customModePanel,
+                gamePanel,
                 settingsPanel,
-                friendsPanel
+                friendsPanel,
+                inventoryPanel
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);
