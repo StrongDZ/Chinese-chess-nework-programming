@@ -23,56 +23,6 @@ import java.nio.file.Path;
  * JavaFX port of the React landing page for the Chinese Chess project.
  */
 public class Main extends Application {
-<<<<<<< Updated upstream
-	
-	private static final double WINDOW_WIDTH = 1200;
-	private static final double WINDOW_HEIGHT = 800;
-	
-	@Override
-	public void start(Stage primaryStage) {
-		try {
-			// Create main container using StackPane for layering
-			StackPane root = new StackPane();
-			
-			// Initialize components
-			BackgroundComponent background = new BackgroundComponent();
-			TitleComponent titles = new TitleComponent();
-			ChessBoardComponent chessBoard = new ChessBoardComponent();
-			
-			// Set component sizes and positions
-			background.setPrefSize(WINDOW_WIDTH, WINDOW_HEIGHT);
-			
-			// Set chessboard size (adjust as needed based on image dimensions)
-			chessBoard.setBoardSize(450, 450);
-			
-			// Position titles at top center
-			StackPane.setAlignment(titles, Pos.TOP_CENTER);
-			StackPane.setMargin(titles, new Insets(50, 0, 0, 0));
-			
-			// Position chessboard in center
-			StackPane.setAlignment(chessBoard, Pos.CENTER);
-			
-			// Add components to root in proper z-order (background first, then board, then titles)
-			root.getChildren().addAll(background, chessBoard, titles);
-			
-			// Create scene and apply stylesheet
-			Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
-			scene.getStylesheets().add(getClass().getResource("application.css").toExternalForm());
-			
-			// Configure stage
-			primaryStage.setTitle("Chinese Chess");
-			primaryStage.setScene(scene);
-			primaryStage.setResizable(true);
-			primaryStage.show();
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
-	}
-	
-	public static void main(String[] args) {
-		launch(args);
-	}
-=======
 
     private static final double CANVAS_WIDTH = 1920;
     private static final double CANVAS_HEIGHT = 1080;
@@ -141,6 +91,5 @@ public class Main extends Application {
     public static void main(String[] args) {
         launch(args);
     }
->>>>>>> Stashed changes
 }
 

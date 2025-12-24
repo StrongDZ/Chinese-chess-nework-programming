@@ -1,7 +1,6 @@
 #pragma once
 
-#include "MessageTypes.h"
-#include <map>
+#include "message_types.h"
 #include <string>
 
 using namespace std;
@@ -9,20 +8,23 @@ using namespace std;
 struct PlayerInfo {
   int playerId{-1};
   string username;
-  // Handler declarations
   bool in_game{false};
   int opponent_fd{-1};
-  bool is_red{false};  // true if player is playing Red side (goes first)
+  bool is_red{false}; // true if player is playing Red side (goes first)
 };
 
-static void handleLogin(const ParsedMessage &pm, int fd,
-                        map<int, PlayerInfo> &clients,
-                        map<string, int> &username_to_fd);
-static void handleChallenge(const ParsedMessage &pm, int fd,
-                            map<int, PlayerInfo> &clients,
-                            map<string, int> &username_to_fd);
-static void handleAccept(const ParsedMessage &pm, int fd,
-                         map<int, PlayerInfo> &clients,
-                         map<string, int> &username_to_fd);
-static void handleMove(const ParsedMessage &pm, int fd,
-                       map<int, PlayerInfo> &clients);
+// ===================== Handler Declarations ===================== //
+// Note: All handlers use global variables (g_clients, g_username_to_fd,
+// g_clients_mutex) instead of passing them as parameters
+void handleLogin(const ParsedMessage &pm, int fd);
+void handleChallenge(const ParsedMessage &pm, int fd);
+void handleChallengeResponse(const ParsedMessage &pm, int fd);
+void handleMove(const ParsedMessage &pm, int fd);
+void handleMessage(const ParsedMessage &pm, int fd);
+void handleRequestAddFriend(const ParsedMessage &pm, int fd);
+void handleResponseAddFriend(const ParsedMessage &pm, int fd);
+void processMessage(const ParsedMessage &pm, int fd);
+void processAIMatch(const ParsedMessage &pm, int fd);
+void handleAIMatch(const ParsedMessage &pm, int fd);
+void handleSuggestMove(const ParsedMessage &pm, int fd);
+void handleAIMove(int player_fd);

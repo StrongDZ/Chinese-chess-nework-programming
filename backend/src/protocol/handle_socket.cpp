@@ -6,8 +6,8 @@
 #include <cstring>
 #include <string>
 
-#include "../../include/protocol/MessageTypes.h"
 #include "../../include/protocol/handle_socket.h"
+#include "protocol/message_types.h"
 
 using namespace std;
 
@@ -35,8 +35,7 @@ static bool sendAll(int fd, const void *buffer, size_t bytes) {
   return true;
 }
 
-bool sendMessage(int fd, MessageType type,
-                 const Payload &payload) {
+bool sendMessage(int fd, MessageType type, const Payload &payload) {
   string data = makeMessage(type, payload);
   uint32_t len = htonl(static_cast<uint32_t>(data.size()));
   if (!sendAll(fd, &len, sizeof(len)))

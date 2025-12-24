@@ -46,6 +46,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     /usr/local/include/libmongoc-1.0
     /usr/local/include/libbson-1.0
     /usr/include/jsoncpp
+    /usr/include/nlohmann
 )
 
 # Link directories

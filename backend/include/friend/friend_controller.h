@@ -2,26 +2,26 @@
 #define FRIEND_CONTROLLER_H
 
 #include "friend_service.h"
-#include <json/json.h>
+#include <nlohmann/json.hpp>
 
 class FriendController {
 private:
-    FriendService& service;
+  FriendService &service;
 
 public:
-    explicit FriendController(FriendService& svc);
+  explicit FriendController(FriendService &svc);
 
-    Json::Value handleSendFriendRequest(const Json::Value& request);
-    Json::Value handleAcceptFriendRequest(const Json::Value& request);
-    Json::Value handleDeclineFriendRequest(const Json::Value& request);
-    Json::Value handleUnfriend(const Json::Value& request);
-    Json::Value handleBlockUser(const Json::Value& request);
-    Json::Value handleUnblockUser(const Json::Value& request);
-    Json::Value handleListFriends(const Json::Value& request);
-    Json::Value handleListPendingRequests(const Json::Value& request);
-    Json::Value handleListSentRequests(const Json::Value& request);
-    Json::Value handleListBlockedUsers(const Json::Value& request);
-    Json::Value handleSearchFriends(const Json::Value& request);
+  nlohmann::json handleSendFriendRequest(const nlohmann::json &request);
+  nlohmann::json handleAcceptFriendRequest(const nlohmann::json &request);
+  nlohmann::json handleDeclineFriendRequest(const nlohmann::json &request);
+  nlohmann::json handleUnfriend(const nlohmann::json &request);
+  nlohmann::json handleBlockUser(const nlohmann::json &request);
+  nlohmann::json handleUnblockUser(const nlohmann::json &request);
+  nlohmann::json handleListFriends(const nlohmann::json &request);
+  nlohmann::json handleListPendingRequests(const nlohmann::json &request);
+  nlohmann::json handleListSentRequests(const nlohmann::json &request);
+  nlohmann::json handleListBlockedUsers(const nlohmann::json &request);
+  nlohmann::json handleSearchFriends(const nlohmann::json &request);
 };
 
 #endif
