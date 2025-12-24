@@ -15,21 +15,35 @@ public class InputField extends HBox {
 
     public InputField(String placeholder, boolean password) {
         this.password = password;
-        setPadding(new Insets(12));
+        setPadding(new Insets(16));  // Tăng từ 12 lên 16
         setSpacing(10);
         getStyleClass().add("cc-input");
 
         if (password) {
             PasswordField pf = new PasswordField();
             pf.setPromptText(placeholder);
+            pf.setStyle("-fx-text-fill: white; -fx-font-size: 16px;");  // Thêm font size
             textField = pf;
         } else {
             TextField tf = new TextField();
             tf.setPromptText(placeholder);
+            tf.setStyle("-fx-text-fill: white; -fx-font-size: 16px;");  // Thêm font size
             textField = tf;
         }
-        textField.setPrefWidth(360);
+        textField.setPrefWidth(420);  // Tăng từ 360 lên 420
+        textField.setPrefHeight(40);  // Thêm chiều cao
         textField.setFocusTraversable(false);
+
+        // Thêm listener để thêm/xóa style class khi focus
+        textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+            if (isNowFocused) {
+                if (!getStyleClass().contains("cc-input-focused")) {
+                    getStyleClass().add("cc-input-focused");
+                }
+            } else {
+                getStyleClass().remove("cc-input-focused");
+            }
+        });
 
         getChildren().add(textField);
     }

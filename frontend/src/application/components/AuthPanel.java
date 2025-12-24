@@ -27,7 +27,11 @@ public class AuthPanel extends VBox {
 
         getChildren().addAll(loginBtn, registerBtn);
 
-        visibleProperty().bind(state.authPanelVisibleProperty());
+        // Ẩn khi authPanelVisible là false hoặc khi ở MAIN_MENU
+        visibleProperty().bind(
+            state.authPanelVisibleProperty()
+                .and(state.appStateProperty().isEqualTo(UIState.AppState.LANDING))
+        );
         managedProperty().bind(visibleProperty());
         setOpacity(0);
 
