@@ -18,6 +18,15 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import java.nio.file.Path;
+import application.components.MainMenuPanel;
+import application.components.SettingsPanel;
+import application.components.FriendsPanel;
+import application.components.InventoryPanel;
+import application.components.GameModePanel;
+import application.components.ClassicModePanel;
+import application.components.BlitzModePanel;
+import application.components.CustomModePanel;
+import application.components.GamePanel;
 
 /**
  * JavaFX port of the React landing page for the Chinese Chess project.
@@ -61,6 +70,15 @@ public class Main extends Application {
 
         LoginPanel loginPanel = new LoginPanel(state);
         RegisterPanel registerPanel = new RegisterPanel(state);
+        MainMenuPanel mainMenuPanel = new MainMenuPanel(state);
+        SettingsPanel settingsPanel = new SettingsPanel(state);
+        FriendsPanel friendsPanel = new FriendsPanel(state);
+        InventoryPanel inventoryPanel = new InventoryPanel(state);
+        GameModePanel gameModePanel = new GameModePanel(state);
+        ClassicModePanel classicModePanel = new ClassicModePanel(state);
+        BlitzModePanel blitzModePanel = new BlitzModePanel(state);
+        CustomModePanel customModePanel = new CustomModePanel(state);
+        GamePanel gamePanel = new GamePanel(state);
 
         stageLayer.getChildren().addAll(
                 background,
@@ -69,18 +87,29 @@ public class Main extends Application {
                 board,
                 authPanel,
                 loginPanel,
-                registerPanel
+                registerPanel,
+               
+                //classicModePanel,
+                mainMenuPanel,
+                gameModePanel,
+                classicModePanel,
+                blitzModePanel,
+                customModePanel,
+                gamePanel,
+                settingsPanel,
+                friendsPanel,
+                inventoryPanel
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);
         root.getChildren().add(stageLayer);
 
-        Scene scene = new Scene(root, 1200, 800);
+        Scene scene = new Scene(root, 1920, 1080);
         Path cssPath = Path.of(System.getProperty("user.dir"),
                 "src",
                 "application",
                 "application.css");
-        scene.getStylesheets().add(cssPath.toUri().toString());
+            scene.getStylesheets().add(cssPath.toUri().toString());
 
         stage.setTitle("Chinese Chess");
         stage.setScene(scene);
