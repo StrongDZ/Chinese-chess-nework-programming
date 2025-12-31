@@ -45,8 +45,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${BSONCXX_INCLUDE_DIR}
     /usr/local/include/libmongoc-1.0
     /usr/local/include/libbson-1.0
-    /usr/include/jsoncpp
     /usr/include/nlohmann
+    /usr/include
 )
 
 # Link directories
@@ -57,7 +57,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Threads::Threads
     mongocxx
     bsoncxx
-    jsoncpp
     ssl
     crypto
 )
