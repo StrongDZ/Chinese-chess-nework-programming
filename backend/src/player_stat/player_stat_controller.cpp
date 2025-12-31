@@ -3,8 +3,8 @@
 using namespace std;
 
 namespace {
-Json::Value statToJson(const PlayerStat &stat) {
-  Json::Value json;
+nlohmann::json statToJson(const PlayerStat &stat) {
+  nlohmann::json json;
   json["username"] = stat.username;
   json["time_control"] = stat.time_control;
   json["rating"] = stat.rating;
@@ -25,17 +25,18 @@ Json::Value statToJson(const PlayerStat &stat) {
 PlayerStatController::PlayerStatController(PlayerStatService &svc)
     : service(svc) {}
 
-Json::Value PlayerStatController::handleGetStats(const Json::Value &request) {
-  Json::Value response;
+nlohmann::json
+PlayerStatController::handleGetStats(const nlohmann::json &request) {
+  nlohmann::json response;
 
-  if (!request.isMember("username")) {
+  if (!request.contains("username")) {
     response["status"] = "error";
     response["message"] = "Missing required field: username";
     return response;
   }
 
-  string username = request["username"].asString();
-  string timeControl = request.get("time_control", "all").asString();
+  string username = request["username"].get<string>();
+  string timeControl = request.value("time_control", string("all"));
 
   auto result = service.getStats(username, timeControl);
   if (!result.success) {
@@ -52,21 +53,21 @@ Json::Value PlayerStatController::handleGetStats(const Json::Value &request) {
   }
 
   if (!result.stats.empty()) {
-    response["stats"] = Json::Value(Json::arrayValue);
+    response["stats"] = nlohmann::json::array();
     for (const auto &stat : result.stats) {
-      response["stats"].append(statToJson(stat));
+      response["stats"].push_back(statToJson(stat));
     }
   }
 
   return response;
 }
 
-Json::Value
-PlayerStatController::handleGetLeaderboard(const Json::Value &request) {
-  Json::Value response;
+nlohmann::json
+PlayerStatController::handleGetLeaderboard(const nlohmann::json &request) {
+  nlohmann::json response;
 
-  string timeControl = request.get("time_control", "blitz").asString();
-  int limit = request.get("limit", 100).asInt();
+  string timeControl = request.value("time_control", string("blitz"));
+  int limit = request.value("limit", 100);
 
   auto result = service.getLeaderboard(timeControl, limit);
   if (!result.success) {
@@ -77,10 +78,10 @@ PlayerStatController::handleGetLeaderboard(const Json::Value &request) {
 
   response["status"] = "success";
   response["message"] = result.message;
-  response["leaderboard"] = Json::Value(Json::arrayValue);
+  response["leaderboard"] = nlohmann::json::array();
 
   for (const auto &entry : result.leaderboard) {
-    Json::Value json;
+    nlohmann::json json;
     json["username"] = entry.username;
     json["rating"] = entry.rating;
     json["rd"] = entry.rd;
@@ -89,7 +90,7 @@ PlayerStatController::handleGetLeaderboard(const Json::Value &request) {
     json["losses"] = entry.losses;
     json["draws"] = entry.draws;
     json["time_control"] = timeControl;
-    response["leaderboard"].append(json);
+    response["leaderboard"].push_back(json);
   }
 
   return response;
