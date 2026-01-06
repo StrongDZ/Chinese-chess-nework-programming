@@ -1,4 +1,5 @@
 module ChineseChessJavaFX {
+    requires javafx.base;
     requires javafx.controls;
     requires javafx.graphics;
 
