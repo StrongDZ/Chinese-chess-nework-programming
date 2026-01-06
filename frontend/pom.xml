@@ -51,7 +51,9 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>application.Main</mainClass>
-                    <moduleName>ChineseChessJavaFX</moduleName>
+                    <options>
+                        <option>-Dserver=${server}</option>
+                    </options>
                 </configuration>
             </plugin>
             <plugin>

@@ -32,6 +32,7 @@ public class AuthHandler implements MessageHandler {
     
     @Override
     public boolean handle(String messageType, String payload) {
+        System.out.println("[DEBUG AuthHandler] Handling: " + messageType + " payload: " + payload);
         switch (messageType) {
             case "AUTHENTICATED":
                 handleAuthenticated();
@@ -45,28 +46,36 @@ public class AuthHandler implements MessageHandler {
     }
     
     private void handleAuthenticated() {
+        System.out.println("[DEBUG AuthHandler] AUTHENTICATED received!");
         if (uiState != null) {
             // Set username in socket client context
             String username = uiState.getUsername();
+            System.out.println("[DEBUG AuthHandler] Username from UIState: " + username);
             if (username != null && !username.isEmpty() && onUsernameSet != null) {
                 onUsernameSet.accept(username);
             }
             // Navigate to main menu on successful authentication
+            System.out.println("[DEBUG AuthHandler] Navigating to main menu...");
             uiState.navigateToMainMenu();
+            System.out.println("[DEBUG AuthHandler] Navigation called");
+        } else {
+            System.err.println("[DEBUG AuthHandler] ERROR: uiState is null!");
         }
     }
     
     private void handleError(String payload) {
+        System.err.println("[DEBUG AuthHandler] ERROR received: " + payload);
         try {
             JsonObject errorJson = JsonParser.parseString(payload).getAsJsonObject();
             String errorMessage = errorJson.has("message") 
                 ? errorJson.get("message").getAsString() 
                 : "Unknown error";
+            System.err.println("[DEBUG AuthHandler] Error message: " + errorMessage);
             
             // TODO: Show error message to user via UIState
             // uiState.showError(errorMessage);
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[DEBUG AuthHandler] Failed to parse error: " + e.getMessage());
         }
     }
 }

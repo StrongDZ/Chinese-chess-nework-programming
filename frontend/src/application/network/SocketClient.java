@@ -181,6 +181,7 @@ public class SocketClient {
         output.write(buffer.array());
         output.write(messageBytes);
         output.flush();
+        System.out.println("[DEBUG SocketClient] Sent (len=" + length + "): " + message);
     }
 
     /**
@@ -298,10 +299,15 @@ public class SocketClient {
             }
 
             String message = new String(messageBytes, "UTF-8");
+            System.out.println("[DEBUG SocketClient] Received message (len=" + length + "): " + message);
 
             // Notify listener
             if (messageListener != null) {
+                System.out.println("[DEBUG SocketClient] Notifying messageListener...");
                 messageListener.accept(message);
+                System.out.println("[DEBUG SocketClient] messageListener notified");
+            } else {
+                System.err.println("[DEBUG SocketClient] WARNING: messageListener is null!");
             }
             
             return true;
