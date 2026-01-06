@@ -1,50 +1,20 @@
 """
-AI Engine for Chinese Chess - Python Implementation
+AI Engine for Chinese Chess - Simple and Complete
+Chỉ giữ lại những tính năng cần thiết để predict move
 """
 
-from .ai_engine import (
-    PikafishEngine,
+from .ai import (
+    AI,
     AIDifficulty,
-    MovePayload,
-    Coord
-)
-
-from .game_state import (
-    GameStateManager,
-    BoardState
-)
-
-from .board_validator import (
-    isValidKingMove,
-    isValidAdvisorMove,
-    isValidElephantMove,
-    isValidKnightMove,
-    isValidRookMove,
-    isValidCannonMove,
-    isValidPawnMove,
-    kings_face_each_other,
-    is_red_piece,
-    is_black_piece,
-    is_in_palace
+    Move,
+    Coord,
+    predict_move,
 )
 
 __all__ = [
-    'PikafishEngine',
+    'AI',
     'AIDifficulty',
-    'MovePayload',
+    'Move',
     'Coord',
-    'GameStateManager',
-    'BoardState',
-    'isValidKingMove',
-    'isValidAdvisorMove',
-    'isValidElephantMove',
-    'isValidKnightMove',
-    'isValidRookMove',
-    'isValidCannonMove',
-    'isValidPawnMove',
-    'kings_face_each_other',
-    'is_red_piece',
-    'is_black_piece',
-    'is_in_palace'
+    'predict_move',
 ]
-
