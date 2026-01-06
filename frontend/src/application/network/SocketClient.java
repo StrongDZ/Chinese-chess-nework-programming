@@ -12,6 +12,8 @@ import java.util.function.Consumer;
 /**
  * Socket client for connecting to the C++ backend server.
  * Handles connection, message sending/receiving, and maintains user context.
+ * 
+ * Connection is kept alive until explicitly disconnected via logout.
  */
 public class SocketClient {
     private Socket socket;
@@ -19,51 +21,81 @@ public class SocketClient {
     private DataOutputStream output;
     private String username; // Context: username after login
     private final AtomicBoolean connected = new AtomicBoolean(false);
+    private final AtomicBoolean intentionalDisconnect = new AtomicBoolean(false);
     private Thread receiveThread;
     private Consumer<String> messageListener;
+    private Consumer<String> disconnectListener; // Called when disconnected unexpectedly
 
     /**
      * Connect to the server.
+     * If already connected, does nothing (returns immediately).
      * 
      * @param host Server hostname or IP
      * @param port Server port
      * @throws IOException if connection fails
      */
-    public void connect(String host, int port) throws IOException {
-        if (connected.get()) {
-            disconnect();
+    public synchronized void connect(String host, int port) throws IOException {
+        // If already connected, don't reconnect
+        if (isConnected()) {
+            return;
         }
 
+        // Reset flags
+        intentionalDisconnect.set(false);
+        
+        // Clean up any stale state
+        cleanupSocket();
+
         socket = new Socket(host, port);
+        
+        // Configure socket
+        socket.setKeepAlive(true); // Enable TCP keepalive
+        socket.setTcpNoDelay(true); // Disable Nagle's algorithm for lower latency
+        
         input = new DataInputStream(socket.getInputStream());
         output = new DataOutputStream(socket.getOutputStream());
         connected.set(true);
 
         // Start receive thread
-        receiveThread = new Thread(this::receiveLoop);
+        receiveThread = new Thread(this::receiveLoop, "SocketClient-ReceiveThread");
         receiveThread.setDaemon(true);
         receiveThread.start();
+        
+        System.out.println("[SocketClient] Connected to " + host + ":" + port);
     }
-
+    
     /**
-     * Disconnect from server.
+     * Clean up socket resources.
      */
-    public void disconnect() {
-        connected.set(false);
-        try {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
+    private void cleanupSocket() {
+        if (socket != null) {
+            try {
+                if (!socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException e) {
+                // Ignore
             }
-        } catch (IOException e) {
-            // Ignore
+            socket = null;
         }
-        socket = null;
         input = null;
         output = null;
     }
 
     /**
-     * Check if connected.
+     * Disconnect from server intentionally (e.g., on logout).
+     * This is the ONLY way to properly close the connection.
+     */
+    public synchronized void disconnect() {
+        intentionalDisconnect.set(true);
+        connected.set(false);
+        cleanupSocket();
+        username = null;
+        System.out.println("[SocketClient] Disconnected");
+    }
+
+    /**
+     * Check if connected to server.
      */
     public boolean isConnected() {
         return connected.get() && socket != null && !socket.isClosed();
@@ -89,21 +121,27 @@ public class SocketClient {
     public void setMessageListener(Consumer<String> listener) {
         this.messageListener = listener;
     }
+    
+    /**
+     * Set disconnect listener (called when connection is lost unexpectedly).
+     */
+    public void setDisconnectListener(Consumer<String> listener) {
+        this.disconnectListener = listener;
+    }
 
     /**
      * Send a message with MessageType and JSON payload.
-     * Automatically adds username to payload if available and needed.
      * 
      * @param type Message type
      * @param payloadJson JSON payload as string (can be empty string or "{}")
      * @throws IOException if send fails
      */
-    public void send(MessageType type, String payloadJson) throws IOException {
+    public synchronized void send(MessageType type, String payloadJson) throws IOException {
         if (!isConnected()) {
             throw new IOException("Not connected to server");
         }
 
-        // Process payload JSON and add username if needed
+        // Process payload JSON
         String finalPayload = payloadJson;
         if (payloadJson == null || payloadJson.trim().isEmpty()) {
             finalPayload = "{}";
@@ -115,13 +153,11 @@ public class SocketClient {
                 case LOGOUT:
                 case USER_STATS:
                 case GAME_HISTORY:
-                    // Add username if not already present
                     if (!finalPayload.contains("\"username\"")) {
                         finalPayload = addUsernameToJson(finalPayload, username);
                     }
                     break;
                 default:
-                    // Other messages may or may not need username
                     break;
             }
         }
@@ -162,7 +198,6 @@ public class SocketClient {
         if (json.equals("{}") || json.isEmpty()) {
             return "{\"username\":\"" + escapeJson(username) + "\"}";
         }
-        // Remove closing brace and add username field
         if (json.endsWith("}")) {
             String content = json.substring(1, json.length() - 1).trim();
             if (!content.isEmpty() && !content.endsWith(",")) {
@@ -186,68 +221,96 @@ public class SocketClient {
 
     /**
      * Receive loop running in background thread.
+     * Blocks waiting for messages from server.
+     * Only exits when disconnected or error occurs.
      */
     private void receiveLoop() {
         try {
-            while (connected.get() && socket != null && !socket.isClosed()) {
-                // Read 4-byte length (network byte order)
-                byte[] lengthBytes = new byte[4];
-                int bytesRead = 0;
-                while (bytesRead < 4) {
-                    int n = input.read(lengthBytes, bytesRead, 4 - bytesRead);
-                    if (n < 0) {
-                        // Connection closed
-                        connected.set(false);
-                        break;
+            while (!intentionalDisconnect.get() && isConnected()) {
+                // Read one message - this BLOCKS until data arrives
+                if (!readMessage()) {
+                    // readMessage returned false - connection was closed
+                    if (!intentionalDisconnect.get()) {
+                        System.out.println("[SocketClient] Server closed connection");
                     }
-                    bytesRead += n;
-                }
-
-                if (!connected.get()) {
                     break;
-                }
-
-                // Convert to int (big-endian)
-                ByteBuffer buffer = ByteBuffer.wrap(lengthBytes);
-                buffer.order(ByteOrder.BIG_ENDIAN);
-                int length = buffer.getInt();
-
-                // Guard against too large messages (10MB limit)
-                if (length < 0 || length > 10 * 1024 * 1024) {
-                    System.err.println("Invalid message length: " + length);
-                    connected.set(false);
-                    break;
-                }
-
-                // Read message bytes
-                byte[] messageBytes = new byte[length];
-                bytesRead = 0;
-                while (bytesRead < length) {
-                    int n = input.read(messageBytes, bytesRead, length - bytesRead);
-                    if (n < 0) {
-                        connected.set(false);
-                        break;
-                    }
-                    bytesRead += n;
-                }
-
-                if (!connected.get()) {
-                    break;
-                }
-
-                String message = new String(messageBytes, "UTF-8");
-
-                // Notify listener
-                if (messageListener != null) {
-                    messageListener.accept(message);
                 }
             }
+        } catch (Exception e) {
+            if (!intentionalDisconnect.get()) {
+                System.err.println("[SocketClient] Receive error: " + e.getMessage());
+            }
+        }
+        
+        // Mark as disconnected
+        connected.set(false);
+        
+        // Notify disconnect listener if not intentional
+        if (!intentionalDisconnect.get() && disconnectListener != null) {
+            disconnectListener.accept("Connection lost");
+        }
+    }
+    
+    /**
+     * Read a single message from the socket.
+     * BLOCKS until data arrives or connection is closed.
+     * 
+     * @return true if message was read successfully, false if connection closed
+     */
+    private boolean readMessage() {
+        try {
+            if (input == null) {
+                return false;
+            }
+            
+            // Read 4-byte length (network byte order) - BLOCKS HERE
+            byte[] lengthBytes = new byte[4];
+            int bytesRead = 0;
+            while (bytesRead < 4) {
+                int n = input.read(lengthBytes, bytesRead, 4 - bytesRead);
+                if (n < 0) {
+                    // Server closed connection
+                    return false;
+                }
+                bytesRead += n;
+            }
+
+            // Convert to int (big-endian)
+            ByteBuffer buffer = ByteBuffer.wrap(lengthBytes);
+            buffer.order(ByteOrder.BIG_ENDIAN);
+            int length = buffer.getInt();
+
+            // Guard against invalid/too large messages
+            if (length < 0 || length > 10 * 1024 * 1024) {
+                System.err.println("[SocketClient] Invalid message length: " + length);
+                return false;
+            }
+
+            // Read message bytes
+            byte[] messageBytes = new byte[length];
+            bytesRead = 0;
+            while (bytesRead < length) {
+                int n = input.read(messageBytes, bytesRead, length - bytesRead);
+                if (n < 0) {
+                    return false;
+                }
+                bytesRead += n;
+            }
+
+            String message = new String(messageBytes, "UTF-8");
+
+            // Notify listener
+            if (messageListener != null) {
+                messageListener.accept(message);
+            }
+            
+            return true;
+            
         } catch (IOException e) {
-            if (connected.get()) {
-                System.err.println("Receive error: " + e.getMessage());
+            if (!intentionalDisconnect.get()) {
+                System.err.println("[SocketClient] Read error: " + e.getMessage());
             }
-            connected.set(false);
+            return false;
         }
     }
 }
-

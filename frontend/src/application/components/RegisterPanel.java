@@ -1,9 +1,8 @@
 package application.components;
 
+import application.network.NetworkManager;
 import application.state.UIState;
 import javafx.animation.FadeTransition;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -11,12 +10,15 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
+import java.io.IOException;
+
 /**
  * Register form mirroring the custom element from the React UI.
  */
 public class RegisterPanel extends StackPane {
 
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
+    private final NetworkManager networkManager = NetworkManager.getInstance();
 
     public RegisterPanel(UIState state) {
         setPrefSize(700, 500);
@@ -51,11 +53,20 @@ public class RegisterPanel extends StackPane {
                 passwordValue != null && !passwordValue.trim().isEmpty() &&
                 confirmValue != null && !confirmValue.trim().isEmpty() &&
                 passwordValue.equals(confirmValue)) {
-                // Lưu username vào state
-                state.setUsername(usernameValue.trim());
-                // TODO: Gọi API để register
-                // Nếu hợp lệ, chuyển sang main menu
-                state.navigateToMainMenu();
+                // Send register request via socket
+                try {
+                    if (!networkManager.isConnected()) {
+                        // Connect to server (default: localhost:8080)
+                        networkManager.connect("localhost", 8080);
+                    }
+                    networkManager.auth().register(usernameValue.trim(), passwordValue.trim());
+                    // Username will be set after successful authentication
+                    state.setUsername(usernameValue.trim());
+                } catch (IOException ex) {
+                    System.err.println("Failed to send register request: " + ex.getMessage());
+                    ex.printStackTrace();
+                    // TODO: Show error message to user
+                }
             }
         });
 

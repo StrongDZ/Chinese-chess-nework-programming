@@ -42,6 +42,10 @@ public enum MessageType {
     // Friend Management
     REQUEST_ADD_FRIEND,
     RESPONSE_ADD_FRIEND,
+    UNFRIEND,
+
+    // AI
+    SUGGEST_MOVE,
 
     // System
     ERROR,
