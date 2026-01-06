@@ -46,6 +46,9 @@ public class Main extends Application {
     @Override
     public void start(Stage stage) {
         UIState state = new UIState();
+        
+        // Initialize NetworkManager with UIState
+        NetworkManager.getInstance().initialize(state);
 
         StackPane root = new StackPane();
         root.setStyle("-fx-background-color: black;");
@@ -129,9 +132,10 @@ public class Main extends Application {
     }
 
     public static void main(String[] args) {
-        // Parse server config from command-line: java Main [ip:port]
-        if (args.length > 0) {
-            String serverArg = args[0];
+        // Parse server config from system property: -Dserver=ip:port
+        String serverArg = System.getProperty("server");
+        
+        if (serverArg != null && !serverArg.isEmpty()) {
             String[] parts = serverArg.split(":");
             String host = parts[0];
             int port = 8080; // default
@@ -144,7 +148,7 @@ public class Main extends Application {
             }
             NetworkManager.setServerConfig(host, port);
         } else {
-            System.out.println("Usage: java Main [server_ip:port]");
+            System.out.println("Usage: ./mvnw javafx:run -Dserver=ip:port");
             System.out.println("Default: localhost:8080");
         }
         

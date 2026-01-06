@@ -118,27 +118,38 @@ public class NetworkManager {
      * Routes message to appropriate handler.
      */
     private void handleMessage(String message) {
+        System.out.println("[DEBUG NetworkManager] Received raw message: " + message);
+        
         if (message == null || message.trim().isEmpty()) {
+            System.out.println("[DEBUG NetworkManager] Message is empty, ignoring");
             return;
         }
         
         // Parse message: "MESSAGE_TYPE <JSON_PAYLOAD>"
         String[] parts = message.split(" ", 2);
         if (parts.length == 0) {
+            System.out.println("[DEBUG NetworkManager] No parts after split, ignoring");
             return;
         }
         
         String messageType = parts[0].trim();
         String payload = parts.length > 1 ? parts[1].trim() : "{}";
         
+        System.out.println("[DEBUG NetworkManager] Type: " + messageType + ", Payload: " + payload);
+        System.out.println("[DEBUG NetworkManager] Looking for handler among " + handlers.size() + " handlers");
+        
         // Find handler that can handle this message
         for (MessageHandler handler : handlers) {
+            System.out.println("[DEBUG NetworkManager] Checking handler: " + handler.getClass().getSimpleName() + " canHandle=" + handler.canHandle(messageType));
             if (handler.canHandle(messageType)) {
                 if (handler.handle(messageType, payload)) {
+                    System.out.println("[DEBUG NetworkManager] Message handled by " + handler.getClass().getSimpleName());
                     return; // Message handled
                 }
             }
         }
+        
+        System.out.println("[DEBUG NetworkManager] No handler found for: " + messageType);
     }
     
     // ========== Connection Methods ==========
