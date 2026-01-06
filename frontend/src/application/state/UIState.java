@@ -13,7 +13,7 @@ import javafx.beans.property.StringProperty;
 public class UIState {
 
     public enum BoardState { NORMAL, SMALL }
-    public enum AppState { LANDING, MAIN_MENU, SETTINGS, IN_GAME }
+    public enum AppState { LANDING, MAIN_MENU, SETTINGS, IN_GAME, PROFILE }  // Thêm PROFILE
 
     private final ObjectProperty<BoardState> boardState = new SimpleObjectProperty<>(BoardState.NORMAL);
     private final ObjectProperty<AppState> appState = new SimpleObjectProperty<>(AppState.LANDING);
@@ -24,6 +24,8 @@ public class UIState {
     private final BooleanProperty settingsVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty friendsVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty inventoryVisible = new SimpleBooleanProperty(false);
+    private final BooleanProperty historyVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
+    private final BooleanProperty profileVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty gameModeVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty classicModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty blitzModeVisible = new SimpleBooleanProperty(false);
@@ -41,6 +43,11 @@ public class UIState {
     
     // Elo score
     private final javafx.beans.property.IntegerProperty elo = new javafx.beans.property.SimpleIntegerProperty(100);
+
+    // Profile statistics
+    private final javafx.beans.property.IntegerProperty totalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.IntegerProperty winMatches = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.DoubleProperty winRate = new javafx.beans.property.SimpleDoubleProperty(0.0);
 
     public ObjectProperty<BoardState> boardStateProperty() {
         return boardState;
@@ -128,6 +135,48 @@ public class UIState {
     }
     public void closeInventory() {
         setInventoryVisible(false);
+    }
+
+    public BooleanProperty historyVisibleProperty() {
+        return historyVisible;
+    }
+    
+    public boolean isHistoryVisible() {
+        return historyVisible.get();
+    }
+    
+    public void setHistoryVisible(boolean value) {
+        historyVisible.set(value);
+    }
+    
+    public void openHistory() {
+        setHistoryVisible(true);
+    }
+    
+    public void closeHistory() {
+        setHistoryVisible(false);
+    }
+
+    public BooleanProperty profileVisibleProperty() {
+        return profileVisible;
+    }
+    
+    public boolean isProfileVisible() {
+        return profileVisible.get();
+    }
+    
+    public void setProfileVisible(boolean value) {
+        profileVisible.set(value);
+    }
+    
+    public void openProfile() {
+        setProfileVisible(true);
+        setAppState(AppState.PROFILE);
+    }
+    
+    public void closeProfile() {
+        setProfileVisible(false);
+        setAppState(AppState.MAIN_MENU);
     }
 
     public BooleanProperty gameModeVisibleProperty() {
@@ -384,6 +433,43 @@ public class UIState {
     
     public void addElo(int delta) {
         elo.set(elo.get() + delta);
+    }
+
+    // Profile statistics getters/setters
+    public javafx.beans.property.IntegerProperty totalMatchesProperty() {
+        return totalMatches;
+    }
+    
+    public int getTotalMatches() {
+        return totalMatches.get();
+    }
+    
+    public void setTotalMatches(int value) {
+        totalMatches.set(value);
+    }
+    
+    public javafx.beans.property.IntegerProperty winMatchesProperty() {
+        return winMatches;
+    }
+    
+    public int getWinMatches() {
+        return winMatches.get();
+    }
+    
+    public void setWinMatches(int value) {
+        winMatches.set(value);
+    }
+    
+    public javafx.beans.property.DoubleProperty winRateProperty() {
+        return winRate;
+    }
+    
+    public double getWinRate() {
+        return winRate.get();
+    }
+    
+    public void setWinRate(double value) {
+        winRate.set(value);
     }
 }
 
