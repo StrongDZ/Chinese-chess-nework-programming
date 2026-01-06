@@ -52,8 +52,8 @@ public class LoginPanel extends StackPane {
                 // Send login request via socket
                 try {
                     if (!networkManager.isConnected()) {
-                        // Connect to server (default: localhost:8080)
-                        networkManager.connect("localhost", 8080);
+                        // Connect to server (using command-line config)
+                        networkManager.connectToServer();
                     }
                     networkManager.auth().login(usernameValue.trim(), passwordValue.trim());
                     // Username will be set after successful authentication
@@ -95,4 +95,3 @@ public class LoginPanel extends StackPane {
         fade.play();
     }
 }
-
