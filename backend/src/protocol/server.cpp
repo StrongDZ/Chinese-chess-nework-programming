@@ -1,4 +1,7 @@
+// ===================== System Headers ===================== //
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <sys/epoll.h>
@@ -10,28 +13,33 @@
 #include <iostream>
 #include <map>
 #include <mutex>
-#include <signal.h>
 #include <string>
 #include <thread>
 #include <vector>
 
-#include "auth/auth_controller.h"
-#include "auth/auth_repository.h"
-#include "auth/auth_service.h"
-#include "database/mongodb_client.h"
-#include "friend/friend_controller.h"
-#include "friend/friend_repository.h"
-#include "friend/friend_service.h"
-#include "game/game_controller.h"
-#include "game/game_repository.h"
-#include "game/game_service.h"
-#include "player_stat/player_stat_controller.h"
-#include "player_stat/player_stat_repository.h"
-#include "player_stat/player_stat_service.h"
+// ===================== Protocol Headers ===================== //
 #include "protocol/handle_socket.h"
 #include "protocol/message_types.h"
 #include "protocol/server.h"
 #include "protocol/thread_pool.h"
+
+// ===================== Database Layer ===================== //
+#include "database/mongodb_client.h"
+
+// ===================== Controller Layer ===================== //
+#include "auth/auth_controller.h"
+#include "friend/friend_controller.h"
+#include "game/game_controller.h"
+#include "player_stat/player_stat_controller.h"
+
+// ===================== Raw IO Handlers ===================== //
+// Handler implementations are in separate rawio.cpp files:
+// - auth/auth_rawio.cpp: handleLogin, handleRegister
+// - friend/friend_rawio.cpp: handleRequestAddFriend, handleResponseAddFriend
+// - game/game_rawio.cpp: handleChallenge, handleChallengeResponse, handleMove,
+// handleMessage
+// - ai/ai_rawio.cpp: handleAIMatch, handleSuggestMove, handleAIMove
+// These files include their own controller headers as needed.
 
 using namespace std;
 
@@ -123,8 +131,6 @@ int main(int argc, char **argv) {
   std::string connStr =
       mongoConnStr ? mongoConnStr : "mongodb://localhost:27017";
   std::string dbName = mongoDbName ? mongoDbName : "chinese_chess";
-  cout << "MONGODB_URI: " << connStr << endl;
-  cout << "MONGODB_DB: " << dbName << endl;
 
   if (!mongoClient.connect(connStr, dbName)) {
     cerr << "Warning: Failed to connect to MongoDB. Database features will be "
@@ -223,6 +229,14 @@ int main(int argc, char **argv) {
       if (fd == server_fd) {
         int client_fd = accept(server_fd, nullptr, nullptr);
         if (client_fd >= 0) {
+          // Set socket to non-blocking mode (REQUIRED for edge-triggered epoll)
+          int flags = fcntl(client_fd, F_GETFL, 0);
+          if (flags < 0 || fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+            perror("fcntl: set non-blocking");
+            close(client_fd);
+            continue;
+          }
+
           {
             lock_guard<mutex> lock(g_clients_mutex);
             g_clients[client_fd] = PlayerInfo{-1, string(), false, -1};
@@ -245,7 +259,8 @@ int main(int argc, char **argv) {
       }
 
       // Client message - receive in main thread, process in thread pool
-      string msg;
+      // In edge-triggered mode, we need to read ALL available data in a loop
+      // until we get EAGAIN (no more data) or connection closes
       bool shouldClose = false;
       {
         lock_guard<mutex> lock(g_clients_mutex);
@@ -254,10 +269,30 @@ int main(int argc, char **argv) {
         }
       }
 
-      if (!recvMessage(fd, msg)) {
-        cout << "Client closed: fd=" << fd << endl;
-        shouldClose = true;
-      } else {
+      // Read all available messages in edge-triggered mode
+      // Keep reading until we get EAGAIN (no more data) or connection closes
+      while (true) {
+        string msg;
+        if (!recvMessage(fd, msg)) {
+          int saved_errno = errno;
+          if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
+            // No more data available - normal in edge-triggered mode
+            break; // Keep connection open
+          }
+          // Connection closed or error
+          {
+            lock_guard<mutex> lock(g_clients_mutex);
+            auto it = g_clients.find(fd);
+            if (it != g_clients.end() && !it->second.username.empty()) {
+              cout << "Client disconnected: fd=" << fd
+                   << " user=" << it->second.username << endl;
+            }
+          }
+          shouldClose = true;
+          break;
+        }
+
+        // Successfully received a message
         cout << "[RECV fd=" << fd << "] " << msg << endl;
 
         auto pm = parseMessage(msg);
@@ -302,23 +337,23 @@ int main(int argc, char **argv) {
 // ===================== Message Processing ===================== //
 
 void processMessage(const ParsedMessage &pm, int fd) {
-  lock_guard<mutex> lock(g_clients_mutex);
-
-  if (g_clients.count(fd) == 0) {
-    return; // Client disconnected
+  // Note: Handler functions will lock g_clients_mutex themselves
+  {
+    lock_guard<mutex> lock(g_clients_mutex);
+    if (g_clients.count(fd) == 0) {
+      return; // Client disconnected
+    }
   }
-
-  auto &sender = g_clients[fd];
 
   switch (pm.type) {
   case MessageType::LOGIN:
     handleLogin(pm, fd);
     break;
   case MessageType::REGISTER:
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"REGISTER not implemented"});
+    handleRegister(pm, fd);
     break;
   case MessageType::PLAYER_LIST: {
+    lock_guard<mutex> lock(g_clients_mutex);
     nlohmann::json arr = nlohmann::json::array();
     for (auto &p : g_clients) {
       if (!p.second.username.empty()) {
@@ -346,44 +381,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
     // This should be handled in thread pool, but if called directly:
     handleAIMatch(pm, fd);
     break;
-  case MessageType::USER_STATS: {
-    if (!pm.payload.has_value() ||
-        !holds_alternative<UserStatsPayload>(*pm.payload)) {
-      sendMessage(fd, MessageType::ERROR,
-                  ErrorPayload{"USER_STATS requires target_username"});
-      break;
-    }
-    const auto &p = get<UserStatsPayload>(*pm.payload);
-    const string &target = p.target_username;
-    auto it = g_username_to_fd.find(target);
-    if (it == g_username_to_fd.end()) {
-      sendMessage(fd, MessageType::ERROR,
-                  ErrorPayload{"Target user not found"});
-      break;
-    }
-    int target_fd = it->second;
-    if (!g_clients.count(target_fd)) {
-      sendMessage(fd, MessageType::ERROR,
-                  ErrorPayload{"Target user socket missing"});
-      break;
-    }
-    auto &target_player = g_clients[target_fd];
-    nlohmann::json info = {
-        {"username", target_player.username},
-        {"in_game", target_player.in_game},
-    };
-    if (target_player.in_game && target_player.opponent_fd >= 0 &&
-        g_clients.count(target_player.opponent_fd)) {
-      info["opponent"] = g_clients[target_player.opponent_fd].username;
-    } else {
-      info["opponent"] = nullptr;
-    }
-    sendMessage(fd, MessageType::INFO, InfoPayload{info});
+  case MessageType::USER_STATS:
+    handleUserStats(pm, fd);
     break;
-  }
   case MessageType::LEADER_BOARD:
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"LEADER_BOARD not implemented"});
+    handleLeaderBoard(pm, fd);
     break;
   case MessageType::MOVE:
     handleMove(pm, fd);
@@ -403,6 +405,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
                   ErrorPayload{"GAME_END requires payload win_side"});
       break;
     }
+    lock_guard<mutex> lock(g_clients_mutex);
+    if (g_clients.count(fd) == 0) {
+      return;
+    }
+    auto &sender = g_clients[fd];
     if (!sender.in_game) {
       sendMessage(fd, MessageType::ERROR,
                   ErrorPayload{"You are not in a game"});
@@ -429,6 +436,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
     break;
   }
   case MessageType::RESIGN: {
+    lock_guard<mutex> lock(g_clients_mutex);
+    if (g_clients.count(fd) == 0) {
+      return;
+    }
+    auto &sender = g_clients[fd];
     if (!sender.in_game) {
       sendMessage(fd, MessageType::ERROR,
                   ErrorPayload{"You are not in a game"});
@@ -478,6 +490,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
     handleResponseAddFriend(pm, fd);
     break;
   case MessageType::UNFRIEND: {
+    lock_guard<mutex> lock(g_clients_mutex);
+    if (g_clients.count(fd) == 0) {
+      return;
+    }
+    auto &sender = g_clients[fd];
     if (sender.username.empty()) {
       sendMessage(fd, MessageType::ERROR,
                   ErrorPayload{"Please LOGIN before unfriending"});
@@ -497,6 +514,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
     break;
   }
   case MessageType::LOGOUT: {
+    lock_guard<mutex> lock(g_clients_mutex);
+    if (g_clients.count(fd) == 0) {
+      return;
+    }
+    auto &sender = g_clients[fd];
     if (!sender.username.empty() && g_username_to_fd.count(sender.username)) {
       g_username_to_fd.erase(sender.username);
     }
@@ -511,6 +533,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
     break;
   }
   case MessageType::CHALLENGE_CANCEL: {
+    lock_guard<mutex> lock(g_clients_mutex);
+    if (g_clients.count(fd) == 0) {
+      return;
+    }
+    auto &sender = g_clients[fd];
     if (sender.username.empty()) {
       sendMessage(fd, MessageType::ERROR,
                   ErrorPayload{"Please LOGIN before canceling challenge"});
@@ -554,7 +581,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
 
 // ===================== Handler Implementations ===================== //
 // Handler implementations have been moved to module-specific rawio.cpp files:
-// - auth/auth_rawio.cpp: handleLogin
+// - auth/auth_rawio.cpp: handleLogin, handleRegister
 // - friend/friend_rawio.cpp: handleRequestAddFriend, handleResponseAddFriend
 // - game/game_rawio.cpp: handleChallenge, handleChallengeResponse, handleMove,
 // handleMessage

@@ -17,37 +17,13 @@ services:
         volumes:
             # Optional: mount source for development
             - ./backend:/app
-        healthcheck:
-            test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-            start_period: 10s
-
-    # Frontend JavaFX Application
-    # Uses Xvfb (virtual framebuffer) to run JavaFX headless in Docker
-    frontend:
-        build:
-            context: ./frontend
-            dockerfile: Dockerfile
-        container_name: chinese-chess-frontend
-        restart: unless-stopped
-        ports:
-            - "8081:8080" # Different port to avoid conflict
-        environment:
-            # Backend connection URL (accessible from host)
-            BACKEND_HOST: localhost
-            BACKEND_PORT: 8080
-            # For Docker network, use service name
-            BACKEND_HOST_INTERNAL: backend
-            BACKEND_PORT_INTERNAL: 8080
-            # Xvfb virtual display
-            DISPLAY: :99
-        depends_on:
-            backend:
-                condition: service_healthy
-        networks:
-            - chinese-chess-network
+        # Health check disabled - nc -z causes connection reset issues
+        # healthcheck:
+        #     test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+        #     interval: 10s
+        #     timeout: 5s
+        #     retries: 5
+        #     start_period: 10s
 
 networks:
     chinese-chess-network:
