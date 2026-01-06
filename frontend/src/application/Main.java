@@ -48,7 +48,10 @@ public class Main extends Application {
         UIState state = new UIState();
         
         // Initialize NetworkManager with UIState
-        NetworkManager.getInstance().initialize(state);
+        NetworkManager networkManager = NetworkManager.getInstance();
+        networkManager.initialize(state);
+        
+        // Connection will be established when user clicks login/register
 
         StackPane root = new StackPane();
         root.setStyle("-fx-background-color: black;");

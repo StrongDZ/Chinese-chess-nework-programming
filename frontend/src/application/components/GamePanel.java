@@ -7,6 +7,7 @@ import javafx.animation.ScaleTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -87,6 +88,7 @@ public class GamePanel extends StackPane {
                 // Reset tất cả các panel trước khi fade in
                 Platform.runLater(() -> {
                     resetAllGamePanels();
+                    ensurePiecesVisible();
                 });
                 fadeTo(1);
             } else {
@@ -99,6 +101,7 @@ public class GamePanel extends StackPane {
                 // Reset tất cả các panel trước khi fade in
                 Platform.runLater(() -> {
                     resetAllGamePanels();
+                    ensurePiecesVisible();
                 });
                 fadeTo(1);
             } else {
@@ -159,19 +162,13 @@ public class GamePanel extends StackPane {
         
         // Bind image với selectedBoardImagePath từ state
         state.selectedBoardImagePathProperty().addListener((obs, oldVal, newVal) -> {
-            System.out.println("Board image path changed: " + oldVal + " -> " + newVal);
             if (newVal != null && !newVal.isEmpty()) {
                 try {
-                    System.out.println("Loading board image: " + newVal);
                     boardImage.setImage(AssetHelper.image(newVal));
-                    System.out.println("Board image loaded successfully");
                 } catch (Exception e) {
-                    System.err.println("Error loading board image: " + newVal);
-                    e.printStackTrace();
                     boardImage.setImage(null);
                 }
             } else {
-                System.out.println("Board image path is null or empty, clearing image");
                 boardImage.setImage(null);
             }
         });
@@ -182,7 +179,7 @@ public class GamePanel extends StackPane {
             try {
                 boardImage.setImage(AssetHelper.image(initialBoardPath));
             } catch (Exception e) {
-                System.err.println("Error loading initial board image: " + initialBoardPath);
+                // Ignore error
             }
         }
         
@@ -281,11 +278,13 @@ public class GamePanel extends StackPane {
         
         // Elo/Level
         Label eloLabel = new Label();
-        // Bind với elo từ state và format thành "do [elo]"
+        // Bind với elo từ state theo currentGameMode và format thành "do [elo]"
         eloLabel.textProperty().bind(
             javafx.beans.binding.Bindings.createStringBinding(
-                () -> "do " + state.getElo(),
-                state.eloProperty()
+                () -> "do " + state.getElo(),  // getElo() tự động lấy theo currentGameMode
+                state.currentGameModeProperty(),
+                state.classicalEloProperty(),
+                state.blitzEloProperty()
             )
         );
         eloLabel.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 50px; -fx-text-fill: white; -fx-background-color: transparent;");
@@ -721,6 +720,10 @@ public class GamePanel extends StackPane {
     private Pane createChessPieces() {
         Pane container = new Pane();
         container.setPrefSize(923, 923);
+        container.setVisible(true);
+        container.setManaged(true);
+        container.setMouseTransparent(false);
+        container.setPickOnBounds(true);
         
         // Kích thước bàn cờ: 9 cột x 10 hàng (giao điểm)
         // Bàn cờ có 9 giao điểm theo chiều ngang và 10 giao điểm theo chiều dọc
@@ -773,6 +776,10 @@ public class GamePanel extends StackPane {
             piece.setFitHeight(pieceHeight);
             piece.setPreserveRatio(true);
             piece.setSmooth(true);
+            piece.setVisible(true);
+            piece.setManaged(true);
+            piece.setMouseTransparent(false);
+            piece.setPickOnBounds(true);
             
             // Lưu thông tin quân cờ vào userData
             piece.setUserData(new PieceInfo(color, pieceType, imagePath));
@@ -971,49 +978,49 @@ public class GamePanel extends StackPane {
         
         // Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
         // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-        placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 0});
-        placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 1});
-        placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 2});
-        placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 3});
-        placePiece.accept(createPiece.apply("Red", "King"), new int[]{0, 4});
-        placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 5});
-        placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 6});
-        placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 7});
-        placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 8});
+        placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 0});
+        placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 1});
+        placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 2});
+        placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 3});
+        placePiece.accept(createPiece.apply("red", "King"), new int[]{0, 4});
+        placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 5});
+        placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 6});
+        placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 7});
+        placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 8});
         
         // Hàng 2: Pháo ở cột 1 và 7
-        placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 1});
-        placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 7});
+        placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 1});
+        placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 7});
         
         // Hàng 3: Tốt ở cột 0, 2, 4, 6, 8
-        placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 0});
-        placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 2});
-        placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 4});
-        placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 6});
-        placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 8});
+        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 0});
+        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 2});
+        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 4});
+        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 6});
+        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 8});
         
         // Sắp xếp quân cờ ĐEN (hàng 5-9, trên cùng)
         // Hàng 9: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-        placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 0});
-        placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 1});
-        placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 2});
-        placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 3});
-        placePiece.accept(createPiece.apply("Black", "King"), new int[]{9, 4});
-        placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 5});
-        placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 6});
-        placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 7});
-        placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 8});
+        placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 0});
+        placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 1});
+        placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 2});
+        placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 3});
+        placePiece.accept(createPiece.apply("black", "King"), new int[]{9, 4});
+        placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 5});
+        placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 6});
+        placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 7});
+        placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 8});
         
         // Hàng 7: Pháo ở cột 1 và 7
-        placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 1});
-        placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 7});
+        placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 1});
+        placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 7});
         
         // Hàng 6: Tốt ở cột 0, 2, 4, 6, 8
-        placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 0});
-        placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 2});
-        placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 4});
-        placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 6});
-        placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
+        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 0});
+        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 2});
+        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 4});
+        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 6});
+        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 8});
         
         return container;
     }
@@ -1739,9 +1746,9 @@ public class GamePanel extends StackPane {
             rootPane.getChildren().remove(gameResultOverlay);
         }
         
-        // Cập nhật elo nếu có thay đổi
+        // Cập nhật elo nếu có thay đổi (theo currentGameMode)
         if (eloDelta != 0) {
-            state.addElo(eloDelta);
+            state.addElo(eloDelta);  // addElo tự động dùng currentGameMode
         }
         
         // Tạo overlay để khóa mọi action
@@ -1960,5 +1967,22 @@ public class GamePanel extends StackPane {
         
         // Reset các biến state
         eloChange = 10; // Reset về giá trị mặc định
+    }
+    
+    // Method để đảm bảo pieces luôn hiển thị
+    private void ensurePiecesVisible() {
+        if (boardContainer != null && piecesContainer != null) {
+            // Đảm bảo piecesContainer có trong boardContainer
+            if (!boardContainer.getChildren().contains(piecesContainer)) {
+                boardContainer.getChildren().add(piecesContainer);
+            }
+            // Đảm bảo piecesContainer ở trên cùng
+            piecesContainer.toFront();
+            // Đảm bảo piecesContainer visible
+            piecesContainer.setVisible(true);
+            piecesContainer.setManaged(true);
+            piecesContainer.setMouseTransparent(false);
+            piecesContainer.setPickOnBounds(true);
+        }
     }
 }

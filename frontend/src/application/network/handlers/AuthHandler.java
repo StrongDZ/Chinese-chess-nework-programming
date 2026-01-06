@@ -1,8 +1,10 @@
 package application.network.handlers;
 
+import application.network.NetworkManager;
 import application.state.UIState;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.io.IOException;
 import java.util.function.Consumer;
 
 /**
@@ -54,6 +56,18 @@ public class AuthHandler implements MessageHandler {
             if (username != null && !username.isEmpty() && onUsernameSet != null) {
                 onUsernameSet.accept(username);
             }
+            
+            // Fetch user stats (elo) from backend after successful authentication
+            try {
+                NetworkManager networkManager = NetworkManager.getInstance();
+                if (networkManager.isConnected() && username != null && !username.isEmpty()) {
+                    // Fetch stats for both modes
+                    networkManager.info().requestUserStats(username, "all");  // Fetch all modes at once
+                }
+            } catch (IOException e) {
+                System.err.println("[AuthHandler] Failed to fetch user stats: " + e.getMessage());
+            }
+            
             // Navigate to main menu on successful authentication
             System.out.println("[DEBUG AuthHandler] Navigating to main menu...");
             uiState.navigateToMainMenu();

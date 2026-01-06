@@ -412,7 +412,7 @@ public class BlitzModePanel extends StackPane {
             state.setTimer4Value(selectedTime);
             
             state.closeBlitzMode();
-            state.openGame();
+            state.openGame("blitz");
         });
         
         return button;

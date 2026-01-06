@@ -3,6 +3,7 @@ package application.components;
 import application.network.NetworkManager;
 import application.state.UIState;
 import javafx.animation.FadeTransition;
+import javafx.animation.PauseTransition;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -43,7 +44,14 @@ public class RegisterPanel extends StackPane {
         InputField confirm = new InputField("Confirm Password", true);
 
         NextButton nextButton = new NextButton();
+        // Prevent multiple clicks
+        final boolean[] isProcessing = {false};
         nextButton.setOnMouseClicked(e -> {
+            // Prevent duplicate clicks
+            if (isProcessing[0]) {
+                return;
+            }
+            
             // Validate input
             String usernameValue = username.getValue();
             String passwordValue = password.getValue();
@@ -53,19 +61,26 @@ public class RegisterPanel extends StackPane {
                 passwordValue != null && !passwordValue.trim().isEmpty() &&
                 confirmValue != null && !confirmValue.trim().isEmpty() &&
                 passwordValue.equals(confirmValue)) {
-                // Send register request via socket
+                isProcessing[0] = true;
+                // Connect to server if not connected, then send register request
                 try {
                     if (!networkManager.isConnected()) {
-                        // Connect to server (using command-line config)
                         networkManager.connectToServer();
                     }
                     networkManager.auth().register(usernameValue.trim(), passwordValue.trim());
                     // Username will be set after successful authentication
                     state.setUsername(usernameValue.trim());
                 } catch (IOException ex) {
-                    System.err.println("Failed to send register request: " + ex.getMessage());
+                    System.err.println("Failed to connect or send register request: " + ex.getMessage());
                     ex.printStackTrace();
                     // TODO: Show error message to user
+                } finally {
+                    // Reset after a delay to allow response
+                    javafx.application.Platform.runLater(() -> {
+                        PauseTransition delay = new PauseTransition(Duration.seconds(1));
+                        delay.setOnFinished(event -> isProcessing[0] = false);
+                        delay.play();
+                    });
                 }
             }
         });

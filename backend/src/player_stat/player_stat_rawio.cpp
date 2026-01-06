@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <variant>
+#include <iostream>
 
 using namespace std;
 
@@ -17,17 +18,21 @@ extern mutex g_clients_mutex;
 extern PlayerStatController *g_player_stat_controller;
 
 void handleUserStats(const ParsedMessage &pm, int fd) {
+  cout << "[handleUserStats] Processing USER_STATS request for fd=" << fd << endl;
+  
   lock_guard<mutex> lock(g_clients_mutex);
   auto &sender = g_clients[fd];
 
   if (!pm.payload.has_value() ||
       !holds_alternative<UserStatsPayload>(*pm.payload)) {
+    cout << "[handleUserStats] ERROR: Invalid payload or not UserStatsPayload" << endl;
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"USER_STATS requires target_username"});
     return;
   }
 
   if (g_player_stat_controller == nullptr) {
+    cout << "[handleUserStats] ERROR: PlayerStat controller not initialized" << endl;
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"PlayerStat controller not initialized"});
     return;
@@ -35,6 +40,8 @@ void handleUserStats(const ParsedMessage &pm, int fd) {
 
   try {
     const auto &p = get<UserStatsPayload>(*pm.payload);
+    cout << "[handleUserStats] Parsed payload - target_username=" << p.target_username 
+         << ", time_control=" << p.time_control << endl;
 
     // Build request JSON for controller
     nlohmann::json request;
@@ -52,14 +59,30 @@ void handleUserStats(const ParsedMessage &pm, int fd) {
     }
 
     request["username"] = target;
-    // Default: get stats for all time controls
-    request["time_control"] = "all";
+    // Use time_control from payload, or default to "all"
+    if (!p.time_control.empty()) {
+      request["time_control"] = p.time_control;
+    } else {
+      request["time_control"] = "all";
+    }
+
+    cout << "[handleUserStats] Requesting stats - username=" << target 
+         << ", time_control=" << request["time_control"] << endl;
 
     nlohmann::json response = g_player_stat_controller->handleGetStats(request);
 
+    cout << "[handleUserStats] Got response, status=" 
+         << (response.contains("status") ? response["status"].get<string>() : "unknown") << endl;
+
     // Wrap controller response into INFO payload
     sendMessage(fd, MessageType::INFO, InfoPayload{response});
+    cout << "[handleUserStats] Sent INFO response to fd=" << fd << endl;
+  } catch (const exception &e) {
+    cout << "[handleUserStats] EXCEPTION: " << e.what() << endl;
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Failed to handle USER_STATS"});
   } catch (...) {
+    cout << "[handleUserStats] UNKNOWN EXCEPTION" << endl;
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"Failed to handle USER_STATS"});
   }

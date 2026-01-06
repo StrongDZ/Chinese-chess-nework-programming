@@ -1,8 +1,11 @@
 package application.state;
 
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -41,13 +44,21 @@ public class UIState {
     // Selected board image path
     private final StringProperty selectedBoardImagePath = new SimpleStringProperty("");
     
-    // Elo score
-    private final javafx.beans.property.IntegerProperty elo = new javafx.beans.property.SimpleIntegerProperty(100);
+    // Elo scores by mode (default to 0, will be loaded from backend)
+    private final javafx.beans.property.IntegerProperty classicalElo = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.IntegerProperty blitzElo = new javafx.beans.property.SimpleIntegerProperty(0);
+    
+    // Current game mode ("classical", "blitz", or null)
+    private final StringProperty currentGameMode = new SimpleStringProperty("classical");  // Default to classical
 
     // Profile statistics
     private final javafx.beans.property.IntegerProperty totalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
     private final javafx.beans.property.IntegerProperty winMatches = new javafx.beans.property.SimpleIntegerProperty(0);
     private final javafx.beans.property.DoubleProperty winRate = new javafx.beans.property.SimpleDoubleProperty(0.0);
+    
+    // Opponent profile (for game panel)
+    private final StringProperty opponentUsername = new SimpleStringProperty("");
+    private final javafx.beans.property.IntegerProperty opponentElo = new javafx.beans.property.SimpleIntegerProperty(100);
 
     public ObjectProperty<BoardState> boardStateProperty() {
         return boardState;
@@ -272,6 +283,11 @@ public class UIState {
     }
 
     public void openGame() {
+        openGame("classical");  // Default to classical
+    }
+    
+    public void openGame(String mode) {
+        setCurrentGameMode(mode);  // Set game mode before opening game
         setGameVisible(true);
         setAppState(AppState.IN_GAME);
         // Đóng tất cả các mode panel
@@ -418,21 +434,100 @@ public class UIState {
         selectedBoardImagePath.set(value);
     }
     
-    // Thêm getter/setter cho elo
-    public javafx.beans.property.IntegerProperty eloProperty() {
-        return elo;
+    // Elo getters/setters by mode
+    public javafx.beans.property.IntegerProperty classicalEloProperty() {
+        return classicalElo;
     }
     
+    public int getClassicalElo() {
+        return classicalElo.get();
+    }
+    
+    public void setClassicalElo(int value) {
+        classicalElo.set(value);
+    }
+    
+    public javafx.beans.property.IntegerProperty blitzEloProperty() {
+        return blitzElo;
+    }
+    
+    public int getBlitzElo() {
+        return blitzElo.get();
+    }
+    
+    public void setBlitzElo(int value) {
+        blitzElo.set(value);
+    }
+    
+    // Current game mode getters/setters
+    public StringProperty currentGameModeProperty() {
+        return currentGameMode;
+    }
+    
+    public String getCurrentGameMode() {
+        return currentGameMode.get();
+    }
+    
+    public void setCurrentGameMode(String value) {
+        currentGameMode.set(value);
+    }
+    
+    // Get elo based on current game mode
     public int getElo() {
-        return elo.get();
+        String mode = currentGameMode.get();
+        if (mode == null || mode.isEmpty()) {
+            mode = "classical";  // Default
+        }
+        return getElo(mode);
     }
     
-    public void setElo(int value) {
-        elo.set(value);
+    // Get elo for specific mode
+    public int getElo(String mode) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            return getBlitzElo();
+        } else {
+            return getClassicalElo();  // Default to classical
+        }
     }
     
+    // Set elo for specific mode
+    public void setElo(String mode, int value) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            setBlitzElo(value);
+        } else {
+            setClassicalElo(value);  // Default to classical
+        }
+    }
+    
+    // Add elo for current game mode
     public void addElo(int delta) {
-        elo.set(elo.get() + delta);
+        String mode = currentGameMode.get();
+        if (mode == null || mode.isEmpty()) {
+            mode = "classical";  // Default
+        }
+        addElo(mode, delta);
+    }
+    
+    // Add elo for specific mode
+    public void addElo(String mode, int delta) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            setBlitzElo(getBlitzElo() + delta);
+        } else {
+            setClassicalElo(getClassicalElo() + delta);  // Default to classical
+        }
+    }
+    
+    // Property binding for current elo (changes based on currentGameMode)
+    // Note: This returns a read-only binding. Use getElo() or getElo(mode) to get values.
+    // For binding in UI, bind directly to classicalEloProperty() or blitzEloProperty() based on mode.
+    public javafx.beans.binding.IntegerBinding eloProperty() {
+        // Return a computed binding that changes based on currentGameMode
+        return javafx.beans.binding.Bindings.createIntegerBinding(
+            () -> getElo(),
+            currentGameMode,
+            classicalElo,
+            blitzElo
+        );
     }
 
     // Profile statistics getters/setters
@@ -470,6 +565,31 @@ public class UIState {
     
     public void setWinRate(double value) {
         winRate.set(value);
+    }
+    
+    // Opponent profile getters/setters
+    public StringProperty opponentUsernameProperty() {
+        return opponentUsername;
+    }
+    
+    public String getOpponentUsername() {
+        return opponentUsername.get();
+    }
+    
+    public void setOpponentUsername(String value) {
+        opponentUsername.set(value);
+    }
+    
+    public javafx.beans.property.IntegerProperty opponentEloProperty() {
+        return opponentElo;
+    }
+    
+    public int getOpponentElo() {
+        return opponentElo.get();
+    }
+    
+    public void setOpponentElo(int value) {
+        opponentElo.set(value);
     }
 }
 

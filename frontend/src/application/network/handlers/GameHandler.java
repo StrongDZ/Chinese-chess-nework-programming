@@ -58,12 +58,32 @@ public class GameHandler implements MessageHandler {
     private void handleGameStart(String payload) {
         try {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-            // TODO: Extract game info and start game in UIState
-            // String opponent = json.get("opponent").getAsString();
-            // String myColor = json.get("my_color").getAsString();
-            // uiState.startGame(opponent, myColor);
+            
+            // Extract opponent username
+            if (json.has("opponent")) {
+                String opponent = json.get("opponent").getAsString();
+                if (opponent != null && !opponent.isEmpty()) {
+                    uiState.setOpponentUsername(opponent);
+                    
+                    // Fetch opponent profile
+                    try {
+                        application.network.NetworkManager.getInstance().info().requestUserStats(opponent);
+                    } catch (Exception e) {
+                        System.err.println("[GameHandler] Error fetching opponent profile: " + e.getMessage());
+                    }
+                } else {
+                    // AI game - no opponent
+                    uiState.setOpponentUsername("AI");
+                }
+            }
+            
+            // Extract game mode if available
+            if (json.has("game_mode")) {
+                String gameMode = json.get("game_mode").getAsString();
+                // Could store game mode in UIState if needed
+            }
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[GameHandler] Error parsing GAME_START: " + e.getMessage());
         }
     }
     

@@ -162,22 +162,9 @@ public class MainMenuPanel extends StackPane {
         username.textProperty().bind(state.usernameProperty());  // Bây giờ có thể truy cập state
         username.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 60px; -fx-text-fill: white; -fx-background-color: transparent;");
         username.setLayoutX(-310);
-        username.setLayoutY(-10);
+        username.setLayoutY(0);
         
-        // Elo
-        Label elo = new Label();
-        // Bind với elo từ state và format thành "elo [elo]"
-        elo.textProperty().bind(
-            javafx.beans.binding.Bindings.createStringBinding(
-                () -> "elo " + state.getElo(),
-                state.eloProperty()
-            )
-        );
-        elo.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 50px; -fx-text-fill: white; -fx-background-color: transparent;");
-        elo.setLayoutX(-310);
-        elo.setLayoutY(35);
-        
-        textSection.getChildren().addAll(brushStroke, username, elo);
+        textSection.getChildren().addAll(brushStroke, username);
 
         profile.getChildren().addAll(avatarContainer, textSection);
         return profile;
@@ -253,7 +240,7 @@ public class MainMenuPanel extends StackPane {
             state.setTimer4Value("Unlimited time");
             
             // Vào game trực tiếp với classic mode và random opponent
-            state.openGame();
+            state.openGame("classical");
         });
 
         // History button - 300x215, trên và bên phải Play now

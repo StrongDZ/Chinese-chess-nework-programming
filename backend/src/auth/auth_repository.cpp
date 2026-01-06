@@ -116,7 +116,7 @@ void AuthRepository::createDefaultStats(const string &username) {
   auto stats = db["player_stats"];
   auto now = chrono::system_clock::now();
 
-  vector<string> timeControls = {"bullet", "blitz", "classical"};
+  vector<string> timeControls = {"blitz", "classical"};
   int initialRating = 1500;
 
   for (const auto &timeControl : timeControls) {

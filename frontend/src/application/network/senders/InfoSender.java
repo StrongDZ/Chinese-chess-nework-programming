@@ -27,13 +27,25 @@ public class InfoSender {
     
     /**
      * Request user stats.
+     * @param targetUsername Username to get stats for
+     * @param timeControl Time control (classical, blitz, or "all" for all time controls)
      */
-    public void requestUserStats(String targetUsername) throws IOException {
+    public void requestUserStats(String targetUsername, String timeControl) throws IOException {
         JsonObject payload = new JsonObject();
         if (targetUsername != null && !targetUsername.isEmpty()) {
             payload.addProperty("target_username", targetUsername);
         }
+        if (timeControl != null && !timeControl.isEmpty()) {
+            payload.addProperty("time_control", timeControl);
+        }
         socketClient.send(MessageType.USER_STATS, gson.toJson(payload));
+    }
+    
+    /**
+     * Request user stats (defaults to "all" time controls).
+     */
+    public void requestUserStats(String targetUsername) throws IOException {
+        requestUserStats(targetUsername, "all");
     }
     
     /**

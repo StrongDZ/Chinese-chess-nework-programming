@@ -1,9 +1,9 @@
 package application.components;
 
+import application.network.NetworkManager;
 import application.state.UIState;
 import application.util.AssetHelper;
 import javafx.animation.FadeTransition;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.image.ImageView;
@@ -16,7 +16,7 @@ import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
 import javafx.scene.Cursor;
 import java.util.Random;
-import javafx.scene.layout.Region;
+import java.io.IOException;
 
 /**
  * Profile panel that displays user profile information.
@@ -25,6 +25,8 @@ public class ProfilePanel extends StackPane {
     
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
+    private final NetworkManager networkManager = NetworkManager.getInstance();
+    private final javafx.beans.property.SimpleStringProperty selectedTimeControl = new javafx.beans.property.SimpleStringProperty("classical");  // Default to classical
 
     public ProfilePanel(UIState state) {
         this.state = state;
@@ -57,6 +59,8 @@ public class ProfilePanel extends StackPane {
         // Fade animation when profileVisible changes
         state.profileVisibleProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal && state.appStateProperty().get() == UIState.AppState.PROFILE) {
+                // Fetch all modes when opening profile
+                fetchAllModes();
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -66,6 +70,8 @@ public class ProfilePanel extends StackPane {
         // Also listen to appState changes
         state.appStateProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal == UIState.AppState.PROFILE && state.isProfileVisible()) {
+                // Fetch all modes when opening profile
+                fetchAllModes();
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -169,8 +175,16 @@ public class ProfilePanel extends StackPane {
         Label eloLabel = new Label();
         eloLabel.textProperty().bind(
             javafx.beans.binding.Bindings.createStringBinding(
-                () -> "elo " + state.getElo(),
-                state.eloProperty()
+                () -> {
+                    // Lấy elo theo selectedTimeControl
+                    String mode = selectedTimeControl.get();
+                    int eloValue = state.getElo(mode);
+                    System.out.println("[ProfilePanel] Elo display - mode=" + mode + ", eloValue=" + eloValue + ", classical=" + state.getClassicalElo() + ", blitz=" + state.getBlitzElo());
+                    return "elo " + eloValue;
+                },
+                selectedTimeControl,
+                state.classicalEloProperty(),
+                state.blitzEloProperty()
             )
         );
         eloLabel.setStyle(
@@ -181,6 +195,11 @@ public class ProfilePanel extends StackPane {
         );
         
         userInfo.getChildren().addAll(usernameLabel, eloLabel);
+        
+        // Time control buttons (Classical, Blitz) - below user info
+        HBox timeControlButtons = createTimeControlButtons();
+        timeControlButtons.setLayoutX(300);
+        timeControlButtons.setLayoutY(280);
         
         // Statistics section (centered, below profile info)
         VBox statisticsContainer = new VBox(10);  // Container chính
@@ -258,7 +277,7 @@ public class ProfilePanel extends StackPane {
         
         statisticsContainer.getChildren().addAll(topRow, winRateLabel);
         
-        contentPane.getChildren().addAll(header, avatarContainer, userInfo, statisticsContainer);
+        contentPane.getChildren().addAll(header, avatarContainer, userInfo, timeControlButtons, statisticsContainer);
         mainPanel.getChildren().addAll(bg, contentPane);
         
         return mainPanel;
@@ -269,5 +288,139 @@ public class ProfilePanel extends StackPane {
         fade.setFromValue(getOpacity());
         fade.setToValue(target);
         fade.play();
+    }
+    
+    private StackPane classicalButton;
+    private StackPane blitzButton;
+    
+    /**
+     * Create time control buttons (Classical, Blitz).
+     */
+    private HBox createTimeControlButtons() {
+        HBox container = new HBox(15);
+        container.setAlignment(Pos.CENTER_LEFT);
+        
+        // Classical button
+        this.classicalButton = createTimeControlButton("Classical", "classical");
+        this.classicalButton.setOnMouseClicked(e -> {
+            selectedTimeControl.set("classical");
+            updateButtonStyles(this.classicalButton, true);
+            updateButtonStyles(this.blitzButton, false);
+            fetchProfile();
+        });
+        
+        // Blitz button
+        this.blitzButton = createTimeControlButton("Blitz", "blitz");
+        this.blitzButton.setOnMouseClicked(e -> {
+            selectedTimeControl.set("blitz");
+            updateButtonStyles(this.classicalButton, false);
+            updateButtonStyles(this.blitzButton, true);
+            fetchProfile();
+        });
+        
+        // Set initial style (classical selected by default)
+        updateButtonStyles(this.classicalButton, true);
+        updateButtonStyles(this.blitzButton, false);
+        
+        container.getChildren().addAll(this.classicalButton, this.blitzButton);
+        return container;
+    }
+    
+    /**
+     * Create a time control button.
+     */
+    private StackPane createTimeControlButton(String text, String timeControl) {
+        StackPane button = new StackPane();
+        button.setPrefSize(200, 60);
+        
+        Rectangle bg = new Rectangle(200, 60);
+        bg.setArcWidth(15);
+        bg.setArcHeight(15);
+        bg.setFill(Color.color(0.7, 0.7, 0.7));  // Default grey
+        bg.setStroke(Color.color(0.3, 0.3, 0.3));
+        bg.setStrokeWidth(2);
+        
+        Label label = new Label(text);
+        label.setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 40px; " +
+            "-fx-text-fill: black; " +
+            "-fx-background-color: transparent;"
+        );
+        
+        button.getChildren().addAll(bg, label);
+        button.setCursor(Cursor.HAND);
+        
+        // Store background reference for style updates
+        button.setUserData(bg);
+        
+        return button;
+    }
+    
+    /**
+     * Update button style based on selection state.
+     */
+    private void updateButtonStyles(StackPane button, boolean isSelected) {
+        Rectangle bg = (Rectangle) button.getUserData();
+        if (bg != null) {
+            if (isSelected) {
+                bg.setFill(Color.web("#A65252"));  // Red when selected
+                bg.setStroke(Color.web("#8B3A3A"));
+            } else {
+                bg.setFill(Color.color(0.7, 0.7, 0.7));  // Grey when not selected
+                bg.setStroke(Color.color(0.3, 0.3, 0.3));
+            }
+        }
+    }
+    
+    /**
+     * Fetch all modes when opening profile.
+     */
+    private void fetchAllModes() {
+        try {
+            if (networkManager.isConnected()) {
+                String username = state.getUsername();
+                System.out.println("[ProfilePanel] fetchAllModes - username=" + username);
+                if (username != null && !username.isEmpty()) {
+                    // Fetch all modes at once to get both classical and blitz elo
+                    networkManager.info().requestUserStats(username, "all");
+                    System.out.println("[ProfilePanel] Sent requestUserStats with time_control=all");
+                } else {
+                    System.err.println("[ProfilePanel] Username is null or empty");
+                }
+            } else {
+                System.err.println("[ProfilePanel] NetworkManager is not connected");
+            }
+        } catch (IOException e) {
+            System.err.println("[ProfilePanel] Failed to fetch all modes: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Fetch user profile data from backend.
+     * Called when time control changes.
+     */
+    private void fetchProfile() {
+        try {
+            if (networkManager.isConnected()) {
+                String username = state.getUsername();
+                String timeControl = selectedTimeControl.get();
+                System.out.println("[ProfilePanel] fetchProfile - username=" + username + ", timeControl=" + timeControl);
+                if (username != null && !username.isEmpty()) {
+                    // Request user stats from backend with selected time control
+                    // InfoHandler will update UIState with the response
+                    networkManager.info().requestUserStats(username, timeControl);
+                    System.out.println("[ProfilePanel] Sent requestUserStats request");
+                } else {
+                    System.err.println("[ProfilePanel] Username is null or empty");
+                }
+            } else {
+                System.err.println("[ProfilePanel] NetworkManager is not connected");
+            }
+        } catch (IOException e) {
+            System.err.println("[ProfilePanel] Failed to fetch profile: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
