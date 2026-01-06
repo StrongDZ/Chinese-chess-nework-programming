@@ -1,6 +1,7 @@
 #include "protocol/thread_pool.h"
 #include "protocol/handle_socket.h"
 #include "protocol/server.h"
+#include <iostream>
 
 using namespace std;
 
@@ -69,7 +70,13 @@ std::vector<std::thread> startClientMessageWorkers(bool &stop_flag) {
           g_client_message_queue.pop();
         }
         // Process message in worker thread
-        processMessage(client_msg.parsed_msg, client_msg.fd);
+        try {
+          processMessage(client_msg.parsed_msg, client_msg.fd);
+        } catch (const std::exception &e) {
+          cerr << "Worker exception: " << e.what() << endl;
+        } catch (...) {
+          cerr << "Worker unknown exception" << endl;
+        }
       }
     });
   }

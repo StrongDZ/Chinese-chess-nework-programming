@@ -1,10 +1,8 @@
 package application.components;
 
+import application.network.NetworkManager;
 import application.state.UIState;
 import javafx.animation.FadeTransition;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.scene.control.Label;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;    
@@ -12,12 +10,15 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
+import java.io.IOException;
+
 /**
  * Login inputs mirrored from the web implementation.
  */
 public class LoginPanel extends StackPane {
 
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
+    private final NetworkManager networkManager = NetworkManager.getInstance();
 
     public LoginPanel(UIState state) {
         setPrefSize(700, 500);
@@ -48,11 +49,20 @@ public class LoginPanel extends StackPane {
             
             if (usernameValue != null && !usernameValue.trim().isEmpty() &&
                 passwordValue != null && !passwordValue.trim().isEmpty()) {
-                // Lưu username vào state
-                state.setUsername(usernameValue.trim());
-                // TODO: Gọi API để validate
-                // Nếu hợp lệ, chuyển sang main menu
-                state.navigateToMainMenu();
+                // Send login request via socket
+                try {
+                    if (!networkManager.isConnected()) {
+                        // Connect to server (default: localhost:8080)
+                        networkManager.connect("localhost", 8080);
+                    }
+                    networkManager.auth().login(usernameValue.trim(), passwordValue.trim());
+                    // Username will be set after successful authentication
+                    state.setUsername(usernameValue.trim());
+                } catch (IOException ex) {
+                    System.err.println("Failed to send login request: " + ex.getMessage());
+                    ex.printStackTrace();
+                    // TODO: Show error message to user
+                }
             }
         });
 

@@ -17,6 +17,9 @@ struct PlayerInfo {
 // Note: All handlers use global variables (g_clients, g_username_to_fd,
 // g_clients_mutex) instead of passing them as parameters
 void handleLogin(const ParsedMessage &pm, int fd);
+void handleRegister(const ParsedMessage &pm, int fd);
+void handleUserStats(const ParsedMessage &pm, int fd);
+void handleLeaderBoard(const ParsedMessage &pm, int fd);
 void handleChallenge(const ParsedMessage &pm, int fd);
 void handleChallengeResponse(const ParsedMessage &pm, int fd);
 void handleMove(const ParsedMessage &pm, int fd);
