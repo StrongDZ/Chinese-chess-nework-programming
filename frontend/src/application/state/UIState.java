@@ -50,6 +50,17 @@ public class UIState {
     
     // Current game mode ("classical", "blitz", or null)
     private final StringProperty currentGameMode = new SimpleStringProperty("classical");  // Default to classical
+    
+    // Custom board setup - lưu vị trí tùy chỉnh của các quân cờ
+    // Format: Map<"row_col", "color_pieceType">, ví dụ: "0_0" -> "Red_Rook"
+    private final javafx.beans.property.ObjectProperty<java.util.Map<String, String>> customBoardSetup = 
+        new javafx.beans.property.SimpleObjectProperty<>(new java.util.HashMap<>());
+    
+    // Flag để biết có sử dụng custom board setup không
+    private final BooleanProperty useCustomBoard = new SimpleBooleanProperty(false);
+    
+    // Elo score (legacy, kept for compatibility)
+    private final javafx.beans.property.IntegerProperty elo = new javafx.beans.property.SimpleIntegerProperty(100);
 
     // Profile statistics
     private final javafx.beans.property.IntegerProperty totalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
@@ -567,6 +578,7 @@ public class UIState {
         winRate.set(value);
     }
     
+<<<<<<< Updated upstream
     // Opponent profile getters/setters
     public StringProperty opponentUsernameProperty() {
         return opponentUsername;
@@ -590,6 +602,30 @@ public class UIState {
     
     public void setOpponentElo(int value) {
         opponentElo.set(value);
+=======
+    // Custom board setup getters/setters
+    public javafx.beans.property.ObjectProperty<java.util.Map<String, String>> customBoardSetupProperty() {
+        return customBoardSetup;
+    }
+    
+    public java.util.Map<String, String> getCustomBoardSetup() {
+        return customBoardSetup.get();
+    }
+    
+    public void setCustomBoardSetup(java.util.Map<String, String> value) {
+        customBoardSetup.set(value);
+    }
+    
+    public BooleanProperty useCustomBoardProperty() {
+        return useCustomBoard;
+    }
+    
+    public boolean isUseCustomBoard() {
+        return useCustomBoard.get();
+    }
+    
+    public void setUseCustomBoard(boolean value) {
+        useCustomBoard.set(value);
     }
 }
 

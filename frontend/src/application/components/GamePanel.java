@@ -15,6 +15,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.Circle;
 import javafx.util.Duration;
 import javafx.scene.Cursor;
 import java.util.Random;
@@ -49,6 +50,15 @@ public class GamePanel extends StackPane {
     private int eloChange = 10;  // Điểm thay đổi khi win/lose (có thể thay đổi được)
     private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
     private StackPane boardContainer = null;  // Lưu reference đến board container
+    private String currentTurn = "Red";  // Lượt hiện tại: "Red" đi trước, sau đó "Black"
+    
+    // Track captured pieces for each player
+    private java.util.Map<String, Integer> redCapturedPieces = new java.util.HashMap<>();  // Quân cờ đỏ đã ăn được (của người chơi đen)
+    private java.util.Map<String, Integer> blackCapturedPieces = new java.util.HashMap<>();  // Quân cờ đen đã ăn được (của người chơi đỏ)
+    
+    // UI components for captured pieces display
+    private VBox topLeftCapturedPieces = null;  // Hiển thị quân cờ đã ăn của người chơi đỏ (top-left)
+    private VBox bottomRightCapturedPieces = null;  // Hiển thị quân cờ đã ăn của người chơi đen (bottom-right)
 
     public GamePanel(UIState state) {
         this.state = state;
@@ -129,10 +139,20 @@ public class GamePanel extends StackPane {
         topLeftProfile.setLayoutX(50);
         topLeftProfile.setLayoutY(50);
         
+        // Top left: Captured pieces display (dưới avatar)
+        topLeftCapturedPieces = createCapturedPiecesDisplay(true);
+        topLeftCapturedPieces.setLayoutX(50);
+        topLeftCapturedPieces.setLayoutY(50 + 120);  // Dưới avatar (120 là height của avatar)
+        
         // Bottom right: Opponent profile
         HBox bottomRightProfile = createUserProfile("ySern", "do 100", false);
         bottomRightProfile.setLayoutX(1920 - 450);  // Giảm từ 500 xuống 550 (sang phải 50px)
         bottomRightProfile.setLayoutY(1080 - 200);
+        
+        // Bottom right: Captured pieces display (dưới avatar)
+        bottomRightCapturedPieces = createCapturedPiecesDisplay(false);
+        bottomRightCapturedPieces.setLayoutX(1920 - 450);
+        bottomRightCapturedPieces.setLayoutY(1080 - 200 + 120);  // Dưới avatar
         
         // Left side: Timers - đặt cạnh khung đen bên trái
         VBox timersContainer = createTimersContainer();
@@ -205,10 +225,15 @@ public class GamePanel extends StackPane {
         this.boardContainer = boardContainer;
         
         // Tạo và thêm các quân cờ vào bàn cờ
+<<<<<<< Updated upstream
         piecesContainer = createChessPieces();
+=======
+        // createChessPieces() trả về container có highlight layer và các quân cờ
+        Pane piecesContainer = createChessPieces();
+>>>>>>> Stashed changes
         boardContainer.getChildren().add(piecesContainer);
         
-        root.getChildren().addAll(background, topLeftProfile, bottomRightProfile, 
+        root.getChildren().addAll(background, topLeftProfile, topLeftCapturedPieces, bottomRightProfile, bottomRightCapturedPieces, 
             timersContainer, leftIcons, topRightIcons, boardContainer);
         
         StackPane content = new StackPane();
@@ -295,6 +320,149 @@ public class GamePanel extends StackPane {
 
         profile.getChildren().addAll(avatarContainer, textSection);
         return profile;
+    }
+    
+    /**
+     * Tạo UI để hiển thị các quân cờ đã ăn được
+     * @param isTopLeft true nếu là người chơi top-left (Red), false nếu là bottom-right (Black)
+     */
+    private VBox createCapturedPiecesDisplay(boolean isTopLeft) {
+        VBox container = new VBox(5);
+        container.setAlignment(Pos.TOP_LEFT);
+        container.setPrefWidth(450);
+        container.setPrefHeight(100);
+        
+        // HBox để chứa các icon quân cờ đã bị ăn
+        HBox piecesContainer = new HBox(8);
+        piecesContainer.setAlignment(Pos.CENTER_LEFT);
+        piecesContainer.setPrefWidth(450);
+        piecesContainer.setPrefHeight(80);
+        
+        // Lưu reference để có thể cập nhật sau
+        container.setUserData(piecesContainer);
+        
+        container.getChildren().add(piecesContainer);
+        return container;
+    }
+    
+    /**
+     * Thêm quân cờ đã bị ăn vào danh sách và cập nhật UI
+     * @param capturedPieceColor Màu của quân cờ bị ăn ("Red" hoặc "Black")
+     * @param pieceType Loại quân cờ (King, Advisor, Elephant, Horse, Rook, Cannon, Pawn)
+     */
+    private void addCapturedPiece(String capturedPieceColor, String pieceType) {
+        // Xác định người chơi nào đã ăn (người chơi đối lập với màu quân cờ bị ăn)
+        boolean isRedPlayer = capturedPieceColor.equals("Black");  // Nếu ăn quân Black thì là Red player
+        
+        // Cập nhật map
+        java.util.Map<String, Integer> capturedMap = isRedPlayer ? redCapturedPieces : blackCapturedPieces;
+        capturedMap.put(pieceType, capturedMap.getOrDefault(pieceType, 0) + 1);
+        
+        // Cập nhật UI
+        VBox displayContainer = isRedPlayer ? topLeftCapturedPieces : bottomRightCapturedPieces;
+        if (displayContainer != null) {
+            HBox piecesContainer = (HBox) displayContainer.getUserData();
+            if (piecesContainer != null) {
+                Platform.runLater(() -> {
+                    updateCapturedPiecesDisplay(piecesContainer, capturedMap, capturedPieceColor);
+                });
+            }
+        }
+    }
+    
+    /**
+     * Cập nhật hiển thị các quân cờ đã bị ăn
+     */
+    private void updateCapturedPiecesDisplay(HBox container, java.util.Map<String, Integer> capturedMap, String pieceColor) {
+        container.getChildren().clear();
+        
+        // Thứ tự hiển thị các loại quân cờ (theo giá trị)
+        String[] pieceOrder = {"King", "Advisor", "Elephant", "Horse", "Rook", "Cannon", "Pawn"};
+        
+        for (String pieceType : pieceOrder) {
+            int count = capturedMap.getOrDefault(pieceType, 0);
+            if (count > 0) {
+                // Chỉ tạo 1 icon cho mỗi loại quân cờ, hiển thị số lượng nếu > 1
+                StackPane pieceIcon = createCapturedPieceIcon(pieceType, pieceColor, count);
+                container.getChildren().add(pieceIcon);
+            }
+        }
+    }
+    
+    /**
+     * Tạo icon cho quân cờ đã bị ăn
+     */
+    private StackPane createCapturedPieceIcon(String pieceType, String pieceColor, int count) {
+        StackPane iconContainer = new StackPane();
+        iconContainer.setPrefWidth(50);
+        iconContainer.setPrefHeight(50);
+        
+        // Vòng tròn với màu theo màu quân cờ bị ăn
+        Circle circle = new Circle(25);
+        if (pieceColor.equals("Red")) {
+            circle.setFill(Color.web("#DC143C"));  // Màu đỏ
+        } else {
+            circle.setFill(Color.web("#1C1C1C"));  // Màu đen
+        }
+        circle.setStroke(Color.WHITE);
+        circle.setStrokeWidth(2);
+        
+        // Text hiển thị chữ quân cờ (chữ Hán)
+        Label pieceLabel = new Label();
+        pieceLabel.setStyle("-fx-font-size: 24px; -fx-text-fill: white; -fx-background-color: transparent;");
+        
+        // Map piece type to Chinese character
+        java.util.Map<String, String> pieceChars = new java.util.HashMap<>();
+        pieceChars.put("King", pieceColor.equals("Red") ? "帥" : "將");
+        pieceChars.put("Advisor", pieceColor.equals("Red") ? "仕" : "士");
+        pieceChars.put("Elephant", pieceColor.equals("Red") ? "相" : "象");
+        pieceChars.put("Horse", pieceColor.equals("Red") ? "傌" : "馬");
+        pieceChars.put("Rook", pieceColor.equals("Red") ? "俥" : "車");
+        pieceChars.put("Cannon", pieceColor.equals("Red") ? "炮" : "砲");
+        pieceChars.put("Pawn", pieceColor.equals("Red") ? "兵" : "卒");
+        
+        pieceLabel.setText(pieceChars.getOrDefault(pieceType, "?"));
+        
+        // Label hiển thị số lượng (luôn hiển thị nếu > 1) - đặt ở góc dưới bên phải
+        Label countLabel = null;
+        if (count > 1) {
+            countLabel = new Label(String.valueOf(count));
+            // Màu chữ cùng với màu quân cờ bị ăn
+            String textColor = pieceColor.equals("Red") ? "#DC143C" : "#1C1C1C";
+            countLabel.setStyle(String.format("-fx-font-family: 'Kolker Brush'; -fx-font-size: 20px; -fx-text-fill: %s; -fx-background-color: transparent; -fx-font-weight: 900;", textColor));
+            // Đặt ở góc dưới bên phải của icon
+            StackPane.setAlignment(countLabel, Pos.BOTTOM_RIGHT);
+            StackPane.setMargin(countLabel, new Insets(0, 3, 3, 0));
+        }
+        
+        iconContainer.getChildren().addAll(circle, pieceLabel);
+        if (countLabel != null) {
+            iconContainer.getChildren().add(countLabel);
+        }
+        
+        return iconContainer;
+    }
+    
+    /**
+     * Reset danh sách quân cờ đã bị ăn (khi bắt đầu game mới)
+     */
+    private void resetCapturedPieces() {
+        redCapturedPieces.clear();
+        blackCapturedPieces.clear();
+        
+        if (topLeftCapturedPieces != null) {
+            HBox piecesContainer = (HBox) topLeftCapturedPieces.getUserData();
+            if (piecesContainer != null) {
+                piecesContainer.getChildren().clear();
+            }
+        }
+        
+        if (bottomRightCapturedPieces != null) {
+            HBox piecesContainer = (HBox) bottomRightCapturedPieces.getUserData();
+            if (piecesContainer != null) {
+                piecesContainer.getChildren().clear();
+            }
+        }
     }
     
     private VBox createTimersContainer() {
@@ -736,6 +904,7 @@ public class GamePanel extends StackPane {
         double endX = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều ngang
         double endY = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều dọc
         
+<<<<<<< Updated upstream
         // Khoảng cách giữa các giao điểm
         double intersectionSpacingX = (endX - startX) / 8.0;  // 8 khoảng cách cho 9 giao điểm
         double intersectionSpacingY = (endY - startY) / 9.0;  // 9 khoảng cách cho 10 giao điểm
@@ -766,7 +935,307 @@ public class GamePanel extends StackPane {
             double snappedX = intersectionX - pieceWidth / 2.0;
             double snappedY = intersectionY - pieceHeight / 2.0;
             return new double[]{snappedX, snappedY, row, col};
+=======
+        // Pane để chứa các highlight rectangles
+        // Đặt ở cuối để nằm trên các quân cờ
+        final Pane highlightLayer = new Pane();
+        highlightLayer.setPrefSize(923, 923);
+        highlightLayer.setMouseTransparent(true); // Không chặn mouse events
+        
+        // Pane invisible để detect click vào các ô trên bàn cờ
+        Pane clickLayer = new Pane();
+        clickLayer.setPrefSize(923, 923);
+        clickLayer.setStyle("-fx-background-color: transparent;");
+        // Tạo các ô invisible để detect click
+        for (int row = 0; row < 10; row++) {
+            for (int col = 0; col < 9; col++) {
+                Rectangle cell = new Rectangle(cellWidth, cellHeight);
+                cell.setFill(Color.TRANSPARENT);
+                cell.setLayoutX(col * cellWidth);
+                cell.setLayoutY(row * cellHeight);
+                cell.setUserData(new int[]{row, col}); // Lưu row, col vào userData
+                clickLayer.getChildren().add(cell);
+            }
+        }
+        
+        // Lưu quân cờ đang được chọn và highlight shapes (có thể là Rectangle hoặc Circle)
+        final ImageView[] selectedPiece = new ImageView[1];
+        final java.util.List<javafx.scene.Node>[] highlightRects = new java.util.List[]{new java.util.ArrayList<>()};
+        // Lưu danh sách các ô hợp lệ để validate khi thả quân cờ
+        final java.util.List<int[]>[] validMovesList = new java.util.List[]{new java.util.ArrayList<>()};
+        
+        // Method để xóa tất cả highlights
+        java.util.function.Consumer<Void> clearHighlights = (v) -> {
+            highlightLayer.getChildren().removeAll(highlightRects[0]);
+            highlightRects[0].clear();
+            validMovesList[0].clear();
+            if (selectedPiece[0] != null) {
+                // Khôi phục shadow ban đầu cho quân cờ đã chọn
+                DropShadow normalShadow = new DropShadow();
+                normalShadow.setColor(Color.color(0, 0, 0, 0.5));
+                normalShadow.setRadius(8);
+                normalShadow.setOffsetX(3);
+                normalShadow.setOffsetY(3);
+                selectedPiece[0].setEffect(normalShadow);
+                selectedPiece[0] = null;
+            }
+>>>>>>> Stashed changes
         };
+        
+        // Method để highlight các ô hợp lệ
+        java.util.function.BiConsumer<Integer, Integer> highlightValidMoves = (row, col) -> {
+            // Xóa highlights cũ
+            clearHighlights.accept(null);
+            
+            // Tạo board state từ các quân cờ hiện tại
+            char[][] board = new char[10][9];
+            for (int i = 0; i < 10; i++) {
+                for (int j = 0; j < 9; j++) {
+                    board[i][j] = ' ';
+                }
+            }
+            
+            // Lấy thông tin quân cờ từ userData để xác định loại quân
+            ImageView piece = null;
+            for (javafx.scene.Node node : container.getChildren()) {
+                if (node instanceof ImageView) {
+                    ImageView imgView = (ImageView) node;
+                    if (imgView.getUserData() instanceof PieceInfo) {
+                        int pieceRow = (int) Math.round(imgView.getLayoutY() / cellHeight);
+                        int pieceCol = (int) Math.round(imgView.getLayoutX() / cellWidth);
+                        pieceRow = Math.max(0, Math.min(9, pieceRow));
+                        pieceCol = Math.max(0, Math.min(8, pieceCol));
+                        
+                        PieceInfo info = (PieceInfo) imgView.getUserData();
+                        // Convert piece type to character
+                        char pieceChar = GamePanel.getPieceChar(info.pieceType, info.color.equals("Red"));
+                        board[pieceRow][pieceCol] = pieceChar;
+                        
+                        // Tìm quân cờ tại vị trí được click
+                        if (pieceRow == row && pieceCol == col) {
+                            piece = imgView;
+                        }
+                    }
+                }
+            }
+            
+            if (piece == null) {
+                return;
+            }
+            
+            // Kiểm tra lượt: chỉ cho phép chọn quân cờ của lượt hiện tại
+            PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
+            if (pieceInfo == null || !pieceInfo.color.equals(currentTurn)) {
+                return; // Không phải lượt của quân cờ này
+            }
+            
+            // Đánh dấu quân cờ đang được chọn
+            selectedPiece[0] = piece;
+            
+            // Highlight quân cờ đang được chọn với màu vàng
+            DropShadow selectedShadow = new DropShadow();
+            selectedShadow.setColor(Color.web("#FFD700", 0.8)); // Màu vàng với độ trong suốt
+            selectedShadow.setRadius(15);
+            selectedShadow.setOffsetX(0);
+            selectedShadow.setOffsetY(0);
+            piece.setEffect(selectedShadow);
+            
+            // Tính toán các nước đi hợp lệ
+            java.util.List<int[]> validMoves = application.game.MoveValidator.getValidMoves(board, row, col);
+            // Lưu danh sách các ô hợp lệ để validate khi thả quân cờ
+            validMovesList[0].clear();
+            validMovesList[0].addAll(validMoves);
+            
+            // Xác định màu của quân cờ để chọn màu chấm tròn (pieceInfo đã được khai báo ở trên)
+            boolean isRedPiece = pieceInfo != null && pieceInfo.color.equals("Red");
+            Color dotColor = isRedPiece ? Color.web("#DC143C") : Color.web("#1C1C1C"); // Đỏ hoặc đen
+            
+            // Vẽ dấu chấm tròn hoặc vòng tròn có viền cho mỗi ô hợp lệ
+            for (int[] move : validMoves) {
+                int toRow = move[0];
+                int toCol = move[1];
+                
+                // Kiểm tra xem có quân cờ nào ở ô đích không (sử dụng board state đã tạo)
+                boolean hasEnemyPiece = false;
+                char targetPiece = board[toRow][toCol];
+                
+                if (targetPiece != ' ' && targetPiece != '\0') {
+                    // Có quân cờ ở ô đích
+                    // Kiểm tra màu: Red pieces là uppercase (K, A, B, N, R, C, P)
+                    // Black pieces là lowercase (k, a, b, n, r, c, p)
+                    boolean targetIsRed = Character.isUpperCase(targetPiece);
+                    boolean selectedIsRed = pieceInfo != null && pieceInfo.color.equals("Red");
+                    
+                    // Nếu khác màu, đây là quân cờ địch có thể bị ăn
+                    if (targetIsRed != selectedIsRed) {
+                        hasEnemyPiece = true;
+                    }
+                }
+                
+                if (hasEnemyPiece) {
+                    // Nếu có thể ăn quân cờ địch: vẽ vòng tròn có viền lớn bao quanh quân cờ địch
+                    Circle captureCircle = new Circle();
+                    // Vòng tròn lớn hơn để bao quanh quân cờ (khoảng 45% kích thước ô)
+                    double circleRadius = Math.min(cellWidth, cellHeight) * 0.45;
+                    captureCircle.setRadius(circleRadius);
+                    captureCircle.setFill(Color.TRANSPARENT); // Trong suốt
+                    captureCircle.setStroke(dotColor); // Viền cùng màu với quân cờ đang chọn
+                    captureCircle.setStrokeWidth(4.5); // Viền dày để nổi bật
+                    
+                    // Đặt vị trí ở giữa ô (nơi quân cờ địch đang đứng)
+                    double x = toCol * cellWidth + cellWidth / 2;
+                    double y = toRow * cellHeight + cellHeight / 2;
+                    captureCircle.setLayoutX(x);
+                    captureCircle.setLayoutY(y);
+                    
+                    highlightLayer.getChildren().add(captureCircle);
+                    highlightRects[0].add(captureCircle);
+                } else {
+                    // Nếu ô trống: dấu chấm tròn đầy
+                    Circle dot = new Circle();
+                    double dotRadius = Math.min(cellWidth, cellHeight) * 0.15; // 15% kích thước ô
+                    dot.setRadius(dotRadius);
+                    dot.setFill(dotColor);
+                    dot.setStroke(Color.WHITE); // Viền trắng để nổi bật
+                    dot.setStrokeWidth(1.5);
+                    
+                    // Đặt vị trí ở giữa ô
+                    double x = toCol * cellWidth + cellWidth / 2;
+                    double y = toRow * cellHeight + cellHeight / 2;
+                    dot.setLayoutX(x);
+                    dot.setLayoutY(y);
+                    
+                    highlightLayer.getChildren().add(dot);
+                    highlightRects[0].add(dot);
+                }
+            }
+        };
+        
+        // Method để di chuyển quân cờ đến vị trí mới
+        java.util.function.BiConsumer<Integer, Integer> movePieceTo = (toRow, toCol) -> {
+            if (selectedPiece[0] == null) {
+                return;
+            }
+            
+            // Lấy vị trí ban đầu
+            int fromRow = (int) Math.round(selectedPiece[0].getLayoutY() / cellHeight);
+            int fromCol = (int) Math.round(selectedPiece[0].getLayoutX() / cellWidth);
+            fromRow = Math.max(0, Math.min(9, fromRow));
+            fromCol = Math.max(0, Math.min(8, fromCol));
+            
+            // Kiểm tra xem có hợp lệ không (theo luật cờ tướng)
+            boolean isValidMove = false;
+            for (int[] validMove : validMovesList[0]) {
+                if (validMove[0] == toRow && validMove[1] == toCol) {
+                    isValidMove = true;
+                    break;
+                }
+            }
+            
+            if (isValidMove) {
+                // Kiểm tra xem có quân cờ nào ở vị trí đích không
+                ImageView capturedPiece = null;
+                for (javafx.scene.Node node : container.getChildren()) {
+                    if (node instanceof ImageView && node != selectedPiece[0] && 
+                        node != highlightLayer && node != clickLayer) {
+                        ImageView imgView = (ImageView) node;
+                        if (imgView.getUserData() instanceof PieceInfo) {
+                            int pieceRow = (int) Math.round(imgView.getLayoutY() / cellHeight);
+                            int pieceCol = (int) Math.round(imgView.getLayoutX() / cellWidth);
+                            pieceRow = Math.max(0, Math.min(9, pieceRow));
+                            pieceCol = Math.max(0, Math.min(8, pieceCol));
+                            
+                            if (pieceRow == toRow && pieceCol == toCol) {
+                                // Tìm thấy quân cờ ở vị trí đích
+                                capturedPiece = imgView;
+                                
+                                // Kiểm tra màu của quân cờ bị ăn
+                                PieceInfo capturedInfo = (PieceInfo) capturedPiece.getUserData();
+                                PieceInfo selectedInfo = (PieceInfo) selectedPiece[0].getUserData();
+                                
+                                if (capturedInfo != null && selectedInfo != null) {
+                                    boolean capturedIsRed = capturedInfo.color.equals("Red");
+                                    boolean selectedIsRed = selectedInfo.color.equals("Red");
+                                    
+                                    // Nếu cùng màu, không cho phép ăn (đã được validate bởi MoveValidator, nhưng double check)
+                                    if (capturedIsRed == selectedIsRed) {
+                                        return; // Không cho phép ăn quân cờ cùng màu
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Nếu có quân cờ khác màu ở vị trí đích, xóa nó (ăn quân cờ)
+                if (capturedPiece != null) {
+                    PieceInfo capInfo = (PieceInfo) capturedPiece.getUserData();
+                    if (capInfo != null) {
+                        // Thêm quân cờ đã bị ăn vào danh sách
+                        addCapturedPiece(capInfo.color, capInfo.pieceType);
+                    }
+                    container.getChildren().remove(capturedPiece);
+                }
+                
+                // Tính toán vị trí mới
+                double newX = toCol * cellWidth + (cellWidth - selectedPiece[0].getFitWidth()) / 2;
+                double newY = toRow * cellHeight + (cellHeight - selectedPiece[0].getFitHeight()) / 2;
+                
+                // Di chuyển quân cờ
+                selectedPiece[0].setLayoutX(newX);
+                selectedPiece[0].setLayoutY(newY);
+                
+                // Lấy thông tin quân cờ
+                PieceInfo pieceInfo = (PieceInfo) selectedPiece[0].getUserData();
+                if (pieceInfo != null && (fromRow != toRow || fromCol != toCol)) {
+                    // Thêm nước đi vào history với thông tin quân cờ bị ăn (nếu có)
+                    String capturedInfo = "";
+                    if (capturedPiece != null) {
+                        PieceInfo capInfo = (PieceInfo) capturedPiece.getUserData();
+                        if (capInfo != null) {
+                            capturedInfo = String.format(" (captured %s %s)", 
+                                capInfo.color, capInfo.pieceType);
+                        }
+                    }
+                    addMove(pieceInfo.color, pieceInfo.pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
+                    
+                    // Đổi lượt sau khi đi xong
+                    currentTurn = currentTurn.equals("Red") ? "Black" : "Red";
+                }
+                
+                // Xóa highlights
+                clearHighlights.accept(null);
+            }
+        };
+        
+        // Thêm click handler cho clickLayer - detect click vào các ô
+        for (javafx.scene.Node node : clickLayer.getChildren()) {
+            if (node instanceof Rectangle) {
+                Rectangle cell = (Rectangle) node;
+                int[] cellPos = (int[]) cell.getUserData();
+                int cellRow = cellPos[0];
+                int cellCol = cellPos[1];
+                
+                cell.setOnMouseClicked(e -> {
+                    // Kiểm tra lượt: chỉ cho phép di chuyển nếu đang là lượt của quân cờ đã chọn
+                    if (selectedPiece[0] != null) {
+                        PieceInfo selectedPieceInfo = (PieceInfo) selectedPiece[0].getUserData();
+                        if (selectedPieceInfo == null || !selectedPieceInfo.color.equals(currentTurn)) {
+                            e.consume();
+                            return; // Không phải lượt của quân cờ đã chọn
+                        }
+                        
+                        // Nếu đã chọn quân cờ và ô này trống, thử di chuyển đến ô này
+                        movePieceTo.accept(cellRow, cellCol);
+                    } else {
+                        // Nếu chưa chọn quân cờ, xóa highlights nếu có
+                        clearHighlights.accept(null);
+                    }
+                    e.consume();
+                });
+            }
+        }
         
         // Hàm helper để tạo quân cờ với drag functionality
         java.util.function.BiFunction<String, String, ImageView> createPiece = (color, pieceType) -> {
@@ -792,17 +1261,10 @@ public class GamePanel extends StackPane {
             shadow.setOffsetY(3);  // Độ lệch theo chiều dọc
             piece.setEffect(shadow);
             
-            // Lưu vị trí ban đầu và offset khi drag
-            final double[] initialX = new double[1];
-            final double[] initialY = new double[1];
-            final double[] mouseX = new double[1];
-            final double[] mouseY = new double[1];
-            final int[] initialRow = new int[1];
-            final int[] initialCol = new int[1];
-            
-            // Cho phép kéo thả
+            // Cho phép click để chọn
             piece.setCursor(Cursor.HAND);
             
+<<<<<<< Updated upstream
             piece.setOnMousePressed(e -> {
                 // Lưu vị trí ban đầu của quân cờ và chuột
                 initialX[0] = piece.getLayoutX();
@@ -915,17 +1377,60 @@ public class GamePanel extends StackPane {
                     // Chỉ thêm nước đi nếu vị trí thay đổi
                     if (initialRow[0] != newRow || initialCol[0] != newCol) {
                         addMove(pieceInfo.color, pieceInfo.pieceType, initialRow[0], initialCol[0], newRow, newCol);
+=======
+            piece.setOnMouseClicked(e -> {
+                PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
+                
+                // Nếu đã có quân cờ được chọn, kiểm tra xem có thể di chuyển đến quân cờ này không
+                if (selectedPiece[0] != null && selectedPiece[0] != piece) {
+                    // Kiểm tra lượt: chỉ cho phép di chuyển nếu đang là lượt của quân cờ đã chọn
+                    PieceInfo selectedPieceInfo = (PieceInfo) selectedPiece[0].getUserData();
+                    if (selectedPieceInfo == null || !selectedPieceInfo.color.equals(currentTurn)) {
+                        e.consume();
+                        return; // Không phải lượt của quân cờ đã chọn
+                    }
+                    
+                    // Tính toán row và col của quân cờ được click
+                    int pieceRow = (int) Math.round(piece.getLayoutY() / cellHeight);
+                    int pieceCol = (int) Math.round(piece.getLayoutX() / cellWidth);
+                    pieceRow = Math.max(0, Math.min(9, pieceRow));
+                    pieceCol = Math.max(0, Math.min(8, pieceCol));
+                    
+                    // Kiểm tra xem quân cờ được click có phải là quân cờ địch không
+                    if (pieceInfo != null && selectedPieceInfo != null) {
+                        boolean clickedIsRed = pieceInfo.color.equals("Red");
+                        boolean selectedIsRed = selectedPieceInfo.color.equals("Red");
+                        
+                        // Nếu khác màu, thử di chuyển và ăn quân cờ này
+                        if (clickedIsRed != selectedIsRed) {
+                            movePieceTo.accept(pieceRow, pieceCol);
+                e.consume();
+                            return;
+                        }
+>>>>>>> Stashed changes
                     }
                 }
                 
-                // Khôi phục shadow ban đầu
-                DropShadow normalShadow = new DropShadow();
-                normalShadow.setColor(Color.color(0, 0, 0, 0.5));
-                normalShadow.setRadius(8);
-                normalShadow.setOffsetX(3);
-                normalShadow.setOffsetY(3);
-                piece.setEffect(normalShadow);
+                // Kiểm tra lượt: chỉ cho phép chọn quân cờ của lượt hiện tại
+                if (pieceInfo == null || !pieceInfo.color.equals(currentTurn)) {
+                    e.consume();
+                    return; // Không phải lượt của quân cờ này
+                }
                 
+                // Xóa highlights cũ nếu có (khi click vào quân cờ khác)
+                clearHighlights.accept(null);
+                
+                // Tính toán row và col của quân cờ
+                int pieceRow = (int) Math.round(piece.getLayoutY() / cellHeight);
+                int pieceCol = (int) Math.round(piece.getLayoutX() / cellWidth);
+                // Giới hạn trong phạm vi bàn cờ
+                pieceRow = Math.max(0, Math.min(9, pieceRow));
+                pieceCol = Math.max(0, Math.min(8, pieceCol));
+                
+                // Highlight các ô hợp lệ khi click vào quân cờ
+                highlightValidMoves.accept(pieceRow, pieceCol);
+                
+                // Stop propagation để không trigger click của cell layer
                 e.consume();
             });
             
@@ -976,6 +1481,7 @@ public class GamePanel extends StackPane {
             createPlacePiece.apply(piece).accept(pos, color);
         };
         
+<<<<<<< Updated upstream
         // Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
         // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
         placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 0});
@@ -1021,6 +1527,77 @@ public class GamePanel extends StackPane {
         placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 4});
         placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 6});
         placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 8});
+=======
+        // Thêm highlight layer và click layer
+        // Thứ tự: click layer (dưới cùng, invisible) -> quân cờ -> highlight layer (trên cùng)
+        // Click layer được thêm trước để không chặn click vào quân cờ
+        // Nhưng vì nó transparent và ở dưới, click vào quân cờ sẽ được xử lý bởi quân cờ trước
+        container.getChildren().add(0, clickLayer); // Thêm vào đầu để ở dưới cùng
+        container.getChildren().add(highlightLayer); // Highlight layer ở trên cùng
+        
+        // Check xem có custom board setup không
+        java.util.Map<String, String> customSetup = state.getCustomBoardSetup();
+        if (customSetup != null && !customSetup.isEmpty() && state.isUseCustomBoard()) {
+            // Áp dụng custom board setup
+            for (java.util.Map.Entry<String, String> entry : customSetup.entrySet()) {
+                String[] posParts = entry.getKey().split("_");
+                int row = Integer.parseInt(posParts[0]);
+                int col = Integer.parseInt(posParts[1]);
+                String[] pieceParts = entry.getValue().split("_");
+                String color = pieceParts[0];
+                String pieceType = pieceParts[1];
+                
+                placePiece.accept(createPiece.apply(color, pieceType), new int[]{row, col});
+            }
+        } else {
+            // Standard starting positions
+            // Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
+            // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
+            placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 0});
+            placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 1});
+            placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 2});
+            placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 3});
+            placePiece.accept(createPiece.apply("Red", "King"), new int[]{0, 4});
+            placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 5});
+            placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 6});
+            placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 7});
+            placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 8});
+            
+            // Hàng 2: Pháo ở cột 1 và 7
+            placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 1});
+            placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 7});
+            
+            // Hàng 3: Tốt ở cột 0, 2, 4, 6, 8
+            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 0});
+            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 2});
+            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 4});
+            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 6});
+            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 8});
+            
+            // Sắp xếp quân cờ ĐEN (hàng 5-9, trên cùng)
+            // Hàng 9: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
+            placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 0});
+            placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 1});
+            placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 2});
+            placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 3});
+            placePiece.accept(createPiece.apply("Black", "King"), new int[]{9, 4});
+            placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 5});
+            placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 6});
+            placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 7});
+            placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 8});
+            
+            // Hàng 7: Pháo ở cột 1 và 7
+            placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 1});
+            placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 7});
+            
+            // Hàng 6: Tốt ở cột 0, 2, 4, 6, 8
+            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 0});
+            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 2});
+            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 4});
+            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 6});
+            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
+        }
+>>>>>>> Stashed changes
         
         return container;
     }
@@ -1347,6 +1924,21 @@ public class GamePanel extends StackPane {
         }
     }
     
+    // Helper method để convert piece type và color thành character
+    private static char getPieceChar(String pieceType, boolean isRed) {
+        char baseChar = ' ';
+        switch (pieceType) {
+            case "King": baseChar = 'K'; break;
+            case "Advisor": baseChar = 'A'; break;
+            case "Elephant": baseChar = 'B'; break;
+            case "Horse": baseChar = 'N'; break;
+            case "Rook": baseChar = 'R'; break;
+            case "Cannon": baseChar = 'C'; break;
+            case "Pawn": baseChar = 'P'; break;
+        }
+        return isRed ? baseChar : Character.toLowerCase(baseChar);
+    }
+    
     // Method để tạo label cho mỗi nước đi
     private Label createMoveLabel(String moveText) {
         Label moveLabel = new Label(moveText);
@@ -1364,12 +1956,18 @@ public class GamePanel extends StackPane {
     
     // Method để thêm nước đi mới vào lịch sử
     public void addMove(String color, String pieceType, int fromRow, int fromCol, int toRow, int toCol) {
-        String moveText = String.format("%d. %s: %s (%d,%d) -> (%d,%d)", 
+        addMove(color, pieceType, fromRow, fromCol, toRow, toCol, "");
+    }
+    
+    // Method để thêm nước đi mới vào lịch sử (với thông tin quân cờ bị ăn)
+    public void addMove(String color, String pieceType, int fromRow, int fromCol, int toRow, int toCol, String capturedInfo) {
+        String moveText = String.format("%d. %s: %s (%d,%d) -> (%d,%d)%s", 
             moveHistory.size() + 1, 
             color, 
             pieceType, 
             fromRow, fromCol, 
-            toRow, toCol
+            toRow, toCol,
+            capturedInfo
         );
         moveHistory.add(moveText);
         
@@ -1958,12 +2556,17 @@ public class GamePanel extends StackPane {
             moveHistoryContainer.getChildren().clear();
         }
         
+<<<<<<< Updated upstream
         // Reset quân cờ về vị trí ban đầu
         if (boardContainer != null) {
             Platform.runLater(() -> {
                 resetChessPieces();
             });
         }
+=======
+        // Reset captured pieces
+        resetCapturedPieces();
+>>>>>>> Stashed changes
         
         // Reset các biến state
         eloChange = 10; // Reset về giá trị mặc định
