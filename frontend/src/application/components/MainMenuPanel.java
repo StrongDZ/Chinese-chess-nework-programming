@@ -139,7 +139,13 @@ public class MainMenuPanel extends StackPane {
         // Thứ tự: avaProfile (dưới) -> avatarInSquare (giữa) -> squareFrame (trên, có viền đỏ)
         avatarContainer.getChildren().addAll(avaProfile, avatarInSquare, squareFrame);
         avatarContainer.setAlignment(Pos.CENTER_LEFT);  // Căn trái để square đè lên avatar
-
+        
+        // Thêm click handler để mở profile
+        avatarContainer.setCursor(javafx.scene.Cursor.HAND);
+        avatarContainer.setOnMouseClicked(e -> {
+            state.openProfile();
+        });
+        
         // Text section với background trong suốt
         Pane textSection = new Pane();
         textSection.setPrefSize(250, 60);
@@ -239,11 +245,24 @@ public class MainMenuPanel extends StackPane {
         Label playNow = createMenuButton("Play now", 450, 450);
         playNow.setLayoutX(0);
         playNow.setLayoutY(0);
+        playNow.setOnMouseClicked(e -> {
+            // Set timer values thành "Unlimited time" (classic mode)
+            state.setTimer1Value("Unlimited time");
+            state.setTimer2Value("Unlimited time");
+            state.setTimer3Value("Unlimited time");
+            state.setTimer4Value("Unlimited time");
+            
+            // Vào game trực tiếp với classic mode và random opponent
+            state.openGame();
+        });
 
         // History button - 300x215, trên và bên phải Play now
         Label history = createMenuButton("History", 300, 215);
         history.setLayoutX(480);
         history.setLayoutY(0);
+        history.setOnMouseClicked(e -> {
+            state.openHistory();
+        });
 
         // Game mode button - 300x215, dưới History và bên phải Play now
         Label gameMode = createMenuButton("Game mode", 300, 215);

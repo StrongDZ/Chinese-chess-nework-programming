@@ -27,6 +27,8 @@ import application.components.ClassicModePanel;
 import application.components.BlitzModePanel;
 import application.components.CustomModePanel;
 import application.components.GamePanel;
+import application.components.HistoryPanel;
+import application.components.ProfilePanel;
 
 /**
  * JavaFX port of the React landing page for the Chinese Chess project.
@@ -79,6 +81,8 @@ public class Main extends Application {
         BlitzModePanel blitzModePanel = new BlitzModePanel(state);
         CustomModePanel customModePanel = new CustomModePanel(state);
         GamePanel gamePanel = new GamePanel(state);
+        HistoryPanel historyPanel = new HistoryPanel(state);
+        ProfilePanel profilePanel = new ProfilePanel(state);
 
         stageLayer.getChildren().addAll(
                 background,
@@ -98,7 +102,9 @@ public class Main extends Application {
                 gamePanel,
                 settingsPanel,
                 friendsPanel,
-                inventoryPanel
+                inventoryPanel,
+                historyPanel,
+                profilePanel
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);
