@@ -82,6 +82,10 @@ public class GamePanel extends StackPane {
         // Fade animation
         state.gameVisibleProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal && state.appStateProperty().get() == UIState.AppState.IN_GAME) {
+                // Reset tất cả các panel trước khi fade in
+                Platform.runLater(() -> {
+                    resetAllGamePanels();
+                });
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -90,6 +94,10 @@ public class GamePanel extends StackPane {
         
         state.appStateProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal == UIState.AppState.IN_GAME && state.isGameVisible()) {
+                // Reset tất cả các panel trước khi fade in
+                Platform.runLater(() -> {
+                    resetAllGamePanels();
+                });
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -1737,5 +1745,86 @@ public class GamePanel extends StackPane {
         } else if (gameResultOverlay != null && rootPane != null && rootPane.getChildren().contains(gameResultOverlay)) {
             rootPane.getChildren().remove(gameResultOverlay);
         }
+    }
+    
+    // Method để reset các panel kết quả ngay lập tức (không cần animation)
+    private void resetGameResultPanels() {
+        if (rootPane == null) {
+            return; // rootPane chưa được khởi tạo
+        }
+        
+        if (gameResultPanel != null) {
+            if (rootPane.getChildren().contains(gameResultPanel)) {
+                rootPane.getChildren().remove(gameResultPanel);
+            }
+            gameResultPanel = null;
+        }
+        if (gameResultOverlay != null) {
+            if (rootPane.getChildren().contains(gameResultOverlay)) {
+                rootPane.getChildren().remove(gameResultOverlay);
+            }
+            gameResultOverlay = null;
+        }
+    }
+    
+    // Method để reset tất cả các panel và dialog của game
+    private void resetAllGamePanels() {
+        if (rootPane == null) {
+            return; // rootPane chưa được khởi tạo
+        }
+        
+        // Reset game result panels
+        resetGameResultPanels();
+        
+        // Reset các dialog khác
+        if (surrenderDialog != null) {
+            if (rootPane.getChildren().contains(surrenderDialog)) {
+                rootPane.getChildren().remove(surrenderDialog);
+            }
+            surrenderDialog = null;
+        }
+        if (drawRequestDialog != null) {
+            if (rootPane.getChildren().contains(drawRequestDialog)) {
+                rootPane.getChildren().remove(drawRequestDialog);
+            }
+            drawRequestDialog = null;
+        }
+        if (drawReceivedDialog != null) {
+            if (rootPane.getChildren().contains(drawReceivedDialog)) {
+                rootPane.getChildren().remove(drawReceivedDialog);
+            }
+            drawReceivedDialog = null;
+        }
+        
+        // Reset chat và move panel
+        if (chatInputContainer != null) {
+            if (rootPane.getChildren().contains(chatInputContainer)) {
+                rootPane.getChildren().remove(chatInputContainer);
+            }
+            chatInputContainer = null;
+        }
+        if (chatPopup != null) {
+            if (rootPane.getChildren().contains(chatPopup)) {
+                rootPane.getChildren().remove(chatPopup);
+            }
+            chatPopup = null;
+        }
+        if (movePanel != null) {
+            if (rootPane.getChildren().contains(movePanel)) {
+                rootPane.getChildren().remove(movePanel);
+            }
+            movePanel = null;
+        }
+        
+        // Reset move history
+        if (moveHistory != null) {
+            moveHistory.clear();
+        }
+        if (moveHistoryContainer != null) {
+            moveHistoryContainer.getChildren().clear();
+        }
+        
+        // Reset các biến state
+        eloChange = 10; // Reset về giá trị mặc định
     }
 }
