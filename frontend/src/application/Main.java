@@ -29,9 +29,14 @@ import application.components.CustomModePanel;
 import application.components.GamePanel;
 import application.components.HistoryPanel;
 import application.components.ProfilePanel;
+import application.network.NetworkManager;
 
 /**
  * JavaFX port of the React landing page for the Chinese Chess project.
+ * 
+ * Usage: java Main [server_ip:port]
+ * Example: java Main 192.168.1.100:8080
+ * Default: localhost:8080
  */
 public class Main extends Application {
 
@@ -124,6 +129,25 @@ public class Main extends Application {
     }
 
     public static void main(String[] args) {
+        // Parse server config from command-line: java Main [ip:port]
+        if (args.length > 0) {
+            String serverArg = args[0];
+            String[] parts = serverArg.split(":");
+            String host = parts[0];
+            int port = 8080; // default
+            if (parts.length > 1) {
+                try {
+                    port = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid port, using default 8080");
+                }
+            }
+            NetworkManager.setServerConfig(host, port);
+        } else {
+            System.out.println("Usage: java Main [server_ip:port]");
+            System.out.println("Default: localhost:8080");
+        }
+        
         launch(args);
     }
 }

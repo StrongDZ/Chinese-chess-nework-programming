@@ -56,8 +56,8 @@ public class RegisterPanel extends StackPane {
                 // Send register request via socket
                 try {
                     if (!networkManager.isConnected()) {
-                        // Connect to server (default: localhost:8080)
-                        networkManager.connect("localhost", 8080);
+                        // Connect to server (using command-line config)
+                        networkManager.connectToServer();
                     }
                     networkManager.auth().register(usernameValue.trim(), passwordValue.trim());
                     // Username will be set after successful authentication
@@ -97,4 +97,3 @@ public class RegisterPanel extends StackPane {
         fade.play();
     }
 }
-
