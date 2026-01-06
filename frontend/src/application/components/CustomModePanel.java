@@ -666,10 +666,10 @@ public class CustomModePanel extends StackPane {
         bg.setStrokeWidth(3);
         
         // Sử dụng VBox và HBox để căn giữa tự động
-        VBox mainContent = new VBox(20);
+        VBox mainContent = new VBox(30); // Tăng spacing giữa các phần tử
         mainContent.setPrefSize(1600, 900);
         mainContent.setAlignment(Pos.TOP_CENTER);
-        mainContent.setPadding(new Insets(50, 0, 50, 0));
+        mainContent.setPadding(new Insets(30, 0, 50, 0)); // Giảm padding top từ 50 xuống 30
         
         // Title - căn giữa tự động
         Label title = new Label("Custom Board Setup");
@@ -882,7 +882,9 @@ public class CustomModePanel extends StackPane {
     
     private Pane createMiniBoardEditor() {
         Pane container = new Pane();
-        container.setPrefSize(1000, 500);
+        // Bàn cờ hình vuông: 500x500
+        double boardSize = 500;
+        container.setPrefSize(boardSize, boardSize);
         container.setUserData("boardEditor"); // Mark để có thể tìm lại
         
         // Board background (mini version) - thử load từ board_final nếu có
@@ -903,7 +905,7 @@ public class CustomModePanel extends StackPane {
         } catch (Exception e) {
             System.err.println("Error loading board image: " + e.getMessage());
             // Fallback: tạo rectangle màu nâu làm background
-            Rectangle fallbackBg = new Rectangle(1000, 500);
+            Rectangle fallbackBg = new Rectangle(boardSize, boardSize);
             fallbackBg.setFill(Color.web("#D4A574"));
             fallbackBg.setStroke(Color.web("#8B4513"));
             fallbackBg.setStrokeWidth(2);
@@ -917,20 +919,20 @@ public class CustomModePanel extends StackPane {
         final ImageView finalBoardImage = boardImage;
         
         if (boardImage != null) {
-            boardImage.setFitWidth(1000);
-            boardImage.setFitHeight(500);
+            boardImage.setFitWidth(boardSize);
+            boardImage.setFitHeight(boardSize);
             boardImage.setPreserveRatio(false);
             boardImage.setLayoutX(0);
             boardImage.setLayoutY(0);
             container.getChildren().add(0, boardImage);
         }
         
-        double cellWidth = 1000.0 / 9.0;
-        double cellHeight = 500.0 / 10.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
         
         // Tạo click layer để detect click vào board
         Pane clickLayer = new Pane();
-        clickLayer.setPrefSize(1000, 500);
+        clickLayer.setPrefSize(boardSize, boardSize);
         clickLayer.setStyle("-fx-background-color: transparent;");
         for (int row = 0; row < 10; row++) {
             for (int col = 0; col < 9; col++) {

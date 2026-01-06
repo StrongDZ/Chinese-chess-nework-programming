@@ -225,12 +225,8 @@ public class GamePanel extends StackPane {
         this.boardContainer = boardContainer;
         
         // Tạo và thêm các quân cờ vào bàn cờ
-<<<<<<< Updated upstream
-        piecesContainer = createChessPieces();
-=======
         // createChessPieces() trả về container có highlight layer và các quân cờ
-        Pane piecesContainer = createChessPieces();
->>>>>>> Stashed changes
+        piecesContainer = createChessPieces();
         boardContainer.getChildren().add(piecesContainer);
         
         root.getChildren().addAll(background, topLeftProfile, topLeftCapturedPieces, bottomRightProfile, bottomRightCapturedPieces, 
@@ -904,7 +900,6 @@ public class GamePanel extends StackPane {
         double endX = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều ngang
         double endY = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều dọc
         
-<<<<<<< Updated upstream
         // Khoảng cách giữa các giao điểm
         double intersectionSpacingX = (endX - startX) / 8.0;  // 8 khoảng cách cho 9 giao điểm
         double intersectionSpacingY = (endY - startY) / 9.0;  // 9 khoảng cách cho 10 giao điểm
@@ -913,29 +908,10 @@ public class GamePanel extends StackPane {
         double pieceWidth = intersectionSpacingX * 0.8;
         double pieceHeight = intersectionSpacingY * 0.8;
         
-        // Hàm helper để snap vào giao điểm gần nhất
-        java.util.function.BiFunction<Double, Double, double[]> snapToCell = (x, y) -> {
-            // x, y là vị trí góc trên trái của quân cờ
-            // Tính tâm quân cờ để tìm giao điểm gần nhất
-            double pieceCenterX = x + pieceWidth / 2.0;
-            double pieceCenterY = y + pieceHeight / 2.0;
-            
-            // Tính col và row dựa trên tâm quân cờ và vị trí giao điểm
-            int col = (int) Math.round((pieceCenterX - startX) / intersectionSpacingX);
-            int row = (int) Math.round((pieceCenterY - startY) / intersectionSpacingY);
-            
-            // Giới hạn trong phạm vi bàn cờ
-            col = Math.max(0, Math.min(8, col));
-            row = Math.max(0, Math.min(9, row));
-            
-            // Snap vào giao điểm gần nhất, đặt tâm quân cờ tại giao điểm
-            // Tính vị trí giao điểm từ startX, startY
-            double intersectionX = startX + col * intersectionSpacingX;
-            double intersectionY = startY + row * intersectionSpacingY;
-            double snappedX = intersectionX - pieceWidth / 2.0;
-            double snappedY = intersectionY - pieceHeight / 2.0;
-            return new double[]{snappedX, snappedY, row, col};
-=======
+        // Kích thước cell (để tính toán vị trí)
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        
         // Pane để chứa các highlight rectangles
         // Đặt ở cuối để nằm trên các quân cờ
         final Pane highlightLayer = new Pane();
@@ -979,7 +955,6 @@ public class GamePanel extends StackPane {
                 selectedPiece[0].setEffect(normalShadow);
                 selectedPiece[0] = null;
             }
->>>>>>> Stashed changes
         };
         
         // Method để highlight các ô hợp lệ
@@ -1264,120 +1239,6 @@ public class GamePanel extends StackPane {
             // Cho phép click để chọn
             piece.setCursor(Cursor.HAND);
             
-<<<<<<< Updated upstream
-            piece.setOnMousePressed(e -> {
-                // Lưu vị trí ban đầu của quân cờ và chuột
-                initialX[0] = piece.getLayoutX();
-                initialY[0] = piece.getLayoutY();
-                mouseX[0] = e.getSceneX();
-                mouseY[0] = e.getSceneY();
-                
-                // Tính toán row và col ban đầu dựa trên giao điểm
-                // Tính tâm quân cờ: layoutX + pieceWidth/2
-                double pieceCenterX = initialX[0] + pieceWidth / 2.0;
-                double pieceCenterY = initialY[0] + pieceHeight / 2.0;
-                // Trừ startX, startY để tính vị trí trong vùng giao điểm
-                initialCol[0] = (int) Math.round((pieceCenterX - startX) / intersectionSpacingX);
-                initialRow[0] = (int) Math.round((pieceCenterY - startY) / intersectionSpacingY);
-                // Giới hạn trong phạm vi bàn cờ
-                initialRow[0] = Math.max(0, Math.min(9, initialRow[0]));
-                initialCol[0] = Math.max(0, Math.min(8, initialCol[0]));
-                
-                // Đưa quân cờ lên trên cùng khi bắt đầu kéo
-                piece.toFront();
-                
-                // Tăng shadow khi đang kéo
-                DropShadow dragShadow = new DropShadow();
-                dragShadow.setColor(Color.color(0, 0, 0, 0.7));
-                dragShadow.setRadius(12);
-                dragShadow.setOffsetX(5);
-                dragShadow.setOffsetY(5);
-                piece.setEffect(dragShadow);
-                
-                e.consume();
-            });
-            
-            piece.setOnMouseDragged(e -> {
-                // Tính toán offset từ vị trí chuột ban đầu
-                double offsetX = e.getSceneX() - mouseX[0];
-                double offsetY = e.getSceneY() - mouseY[0];
-                
-                // Cập nhật vị trí quân cờ
-                double newX = initialX[0] + offsetX;
-                double newY = initialY[0] + offsetY;
-                
-                // Giới hạn trong phạm vi bàn cờ
-                newX = Math.max(0, Math.min(923 - piece.getFitWidth(), newX));
-                newY = Math.max(0, Math.min(923 - piece.getFitHeight(), newY));
-                
-                piece.setLayoutX(newX);
-                piece.setLayoutY(newY);
-                
-                e.consume();
-            });
-            
-            piece.setOnMouseReleased(e -> {
-                // Kiểm tra xem quân cờ có di chuyển thực sự không
-                double currentX = piece.getLayoutX();
-                double currentY = piece.getLayoutY();
-                double moveDistance = Math.sqrt(Math.pow(currentX - initialX[0], 2) + Math.pow(currentY - initialY[0], 2));
-                
-                // Nếu quân cờ không di chuyển (chỉ bấm và thả), giữ nguyên vị trí
-                if (moveDistance < 5.0) {
-                    // Khôi phục shadow ban đầu
-                    DropShadow normalShadow = new DropShadow();
-                    normalShadow.setColor(Color.color(0, 0, 0, 0.5));
-                    normalShadow.setRadius(8);
-                    normalShadow.setOffsetX(3);
-                    normalShadow.setOffsetY(3);
-                    piece.setEffect(normalShadow);
-                    e.consume();
-                    return;
-                }
-                
-                // Snap vào ô gần nhất
-                double[] snapped = snapToCell.apply(piece.getLayoutX(), piece.getLayoutY());
-                
-                // Lấy thông tin quân cờ để áp dụng offset
-                PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
-                String pieceColor = pieceInfo != null ? pieceInfo.color : "";
-                
-                // Áp dụng offset điều chỉnh giống như placePiece
-                double offsetX = 0;
-                double offsetY = 0;
-                int col = (int) snapped[3];  // Lấy cột để điều chỉnh
-                if ("Red".equals(pieceColor)) {
-                    offsetY = -10;  // Dịch lên trên 10px
-                    // Điều chỉnh thêm cho các cột bên phải
-                    if (col >= 5) {  // Cột 5, 6, 7, 8
-                        offsetX = 5;  // Dịch sang phải thêm 5px
-                    }
-                } else if ("Black".equals(pieceColor)) {
-                    offsetX = 4;   // Dịch sang phải 4px
-                    // Điều chỉnh thêm cho các cột bên phải
-                    if (col >= 5) {  // Cột 5, 6, 7, 8
-                        offsetX += 5;  // Dịch sang phải thêm 5px
-                    }
-                }
-                
-                // Tính vị trí giao điểm và áp dụng offset
-                double intersectionX = startX + snapped[3] * intersectionSpacingX;
-                double intersectionY = startY + snapped[2] * intersectionSpacingY;
-                double finalX = intersectionX - pieceWidth / 2.0 + offsetX;
-                double finalY = intersectionY - pieceHeight / 2.0 + offsetY;
-                
-                piece.setLayoutX(finalX);
-                piece.setLayoutY(finalY);
-                
-                // Tính toán vị trí mới (row, col)
-                int newRow = (int) snapped[2];
-                int newCol = (int) snapped[3];
-                
-                if (pieceInfo != null) {
-                    // Chỉ thêm nước đi nếu vị trí thay đổi
-                    if (initialRow[0] != newRow || initialCol[0] != newCol) {
-                        addMove(pieceInfo.color, pieceInfo.pieceType, initialRow[0], initialCol[0], newRow, newCol);
-=======
             piece.setOnMouseClicked(e -> {
                 PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
                 
@@ -1407,7 +1268,6 @@ public class GamePanel extends StackPane {
                 e.consume();
                             return;
                         }
->>>>>>> Stashed changes
                     }
                 }
                 
@@ -1481,53 +1341,6 @@ public class GamePanel extends StackPane {
             createPlacePiece.apply(piece).accept(pos, color);
         };
         
-<<<<<<< Updated upstream
-        // Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
-        // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-        placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 0});
-        placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 1});
-        placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 2});
-        placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 3});
-        placePiece.accept(createPiece.apply("red", "King"), new int[]{0, 4});
-        placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 5});
-        placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 6});
-        placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 7});
-        placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 8});
-        
-        // Hàng 2: Pháo ở cột 1 và 7
-        placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 1});
-        placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 7});
-        
-        // Hàng 3: Tốt ở cột 0, 2, 4, 6, 8
-        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 0});
-        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 2});
-        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 4});
-        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 6});
-        placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 8});
-        
-        // Sắp xếp quân cờ ĐEN (hàng 5-9, trên cùng)
-        // Hàng 9: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-        placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 0});
-        placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 1});
-        placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 2});
-        placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 3});
-        placePiece.accept(createPiece.apply("black", "King"), new int[]{9, 4});
-        placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 5});
-        placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 6});
-        placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 7});
-        placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 8});
-        
-        // Hàng 7: Pháo ở cột 1 và 7
-        placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 1});
-        placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 7});
-        
-        // Hàng 6: Tốt ở cột 0, 2, 4, 6, 8
-        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 0});
-        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 2});
-        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 4});
-        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 6});
-        placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 8});
-=======
         // Thêm highlight layer và click layer
         // Thứ tự: click layer (dưới cùng, invisible) -> quân cờ -> highlight layer (trên cùng)
         // Click layer được thêm trước để không chặn click vào quân cờ
@@ -1597,7 +1410,6 @@ public class GamePanel extends StackPane {
             placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 6});
             placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
         }
->>>>>>> Stashed changes
         
         return container;
     }
@@ -2556,17 +2368,15 @@ public class GamePanel extends StackPane {
             moveHistoryContainer.getChildren().clear();
         }
         
-<<<<<<< Updated upstream
         // Reset quân cờ về vị trí ban đầu
         if (boardContainer != null) {
             Platform.runLater(() -> {
                 resetChessPieces();
             });
         }
-=======
+        
         // Reset captured pieces
         resetCapturedPieces();
->>>>>>> Stashed changes
         
         // Reset các biến state
         eloChange = 10; // Reset về giá trị mặc định

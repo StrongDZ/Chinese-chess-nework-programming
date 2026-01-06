@@ -578,7 +578,6 @@ public class UIState {
         winRate.set(value);
     }
     
-<<<<<<< Updated upstream
     // Opponent profile getters/setters
     public StringProperty opponentUsernameProperty() {
         return opponentUsername;
@@ -602,7 +601,8 @@ public class UIState {
     
     public void setOpponentElo(int value) {
         opponentElo.set(value);
-=======
+    }
+    
     // Custom board setup getters/setters
     public javafx.beans.property.ObjectProperty<java.util.Map<String, String>> customBoardSetupProperty() {
         return customBoardSetup;
