@@ -46,6 +46,8 @@ public class GamePanel extends StackPane {
     private StackPane drawRequestDialog = null;  // Dialog xác nhận request draw
     private StackPane drawReceivedDialog = null;  // Dialog nhận draw request từ đối phương
     private int eloChange = 10;  // Điểm thay đổi khi win/lose (có thể thay đổi được)
+    private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
+    private StackPane boardContainer = null;  // Lưu reference đến board container
 
     public GamePanel(UIState state) {
         this.state = state;
@@ -202,8 +204,11 @@ public class GamePanel extends StackPane {
         boardContainer.setAlignment(Pos.CENTER);
         boardContainer.getChildren().addAll(boardPlaceholder, boardImage);
         
+        // Lưu reference để có thể reset quân cờ
+        this.boardContainer = boardContainer;
+        
         // Tạo và thêm các quân cờ vào bàn cờ
-        Pane piecesContainer = createChessPieces();
+        piecesContainer = createChessPieces();
         boardContainer.getChildren().add(piecesContainer);
         
         root.getChildren().addAll(background, topLeftProfile, bottomRightProfile, 
@@ -717,20 +722,46 @@ public class GamePanel extends StackPane {
         Pane container = new Pane();
         container.setPrefSize(923, 923);
         
-        // Kích thước bàn cờ: 9 cột x 10 hàng
-        // Kích thước mỗi ô: 923 / 9 ≈ 102.56
-        double cellWidth = 923.0 / 9.0;
-        double cellHeight = 923.0 / 10.0;
+        // Kích thước bàn cờ: 9 cột x 10 hàng (giao điểm)
+        // Bàn cờ có 9 giao điểm theo chiều ngang và 10 giao điểm theo chiều dọc
+        // Quân cờ được đặt tại các giao điểm, tâm quân cờ trùng với giao điểm
+        // Nghiên cứu kỹ: các giao điểm thường được phân bố đều từ một điểm bắt đầu
+        double boardSize = 923.0;
+        // Vị trí giao điểm đầu tiên và cuối cùng (có thể điều chỉnh để khớp với ảnh thực tế)
+        double startX = 45.0;  // Vị trí giao điểm đầu tiên theo chiều ngang
+        double startY = 45.0;  // Vị trí giao điểm đầu tiên theo chiều dọc
+        double endX = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều ngang
+        double endY = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều dọc
         
-        // Hàm helper để snap vào ô gần nhất
+        // Khoảng cách giữa các giao điểm
+        double intersectionSpacingX = (endX - startX) / 8.0;  // 8 khoảng cách cho 9 giao điểm
+        double intersectionSpacingY = (endY - startY) / 9.0;  // 9 khoảng cách cho 10 giao điểm
+        
+        // Kích thước quân cờ
+        double pieceWidth = intersectionSpacingX * 0.8;
+        double pieceHeight = intersectionSpacingY * 0.8;
+        
+        // Hàm helper để snap vào giao điểm gần nhất
         java.util.function.BiFunction<Double, Double, double[]> snapToCell = (x, y) -> {
-            int col = (int) Math.round(x / cellWidth);
-            int row = (int) Math.round(y / cellHeight);
+            // x, y là vị trí góc trên trái của quân cờ
+            // Tính tâm quân cờ để tìm giao điểm gần nhất
+            double pieceCenterX = x + pieceWidth / 2.0;
+            double pieceCenterY = y + pieceHeight / 2.0;
+            
+            // Tính col và row dựa trên tâm quân cờ và vị trí giao điểm
+            int col = (int) Math.round((pieceCenterX - startX) / intersectionSpacingX);
+            int row = (int) Math.round((pieceCenterY - startY) / intersectionSpacingY);
+            
             // Giới hạn trong phạm vi bàn cờ
             col = Math.max(0, Math.min(8, col));
             row = Math.max(0, Math.min(9, row));
-            double snappedX = col * cellWidth + (cellWidth - cellWidth * 0.8) / 2;
-            double snappedY = row * cellHeight + (cellHeight - cellHeight * 0.8) / 2;
+            
+            // Snap vào giao điểm gần nhất, đặt tâm quân cờ tại giao điểm
+            // Tính vị trí giao điểm từ startX, startY
+            double intersectionX = startX + col * intersectionSpacingX;
+            double intersectionY = startY + row * intersectionSpacingY;
+            double snappedX = intersectionX - pieceWidth / 2.0;
+            double snappedY = intersectionY - pieceHeight / 2.0;
             return new double[]{snappedX, snappedY, row, col};
         };
         
@@ -738,8 +769,8 @@ public class GamePanel extends StackPane {
         java.util.function.BiFunction<String, String, ImageView> createPiece = (color, pieceType) -> {
             String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + color + ".png";
             ImageView piece = new ImageView(AssetHelper.image(imagePath));
-            piece.setFitWidth(cellWidth * 0.8);  // Nhỏ hơn ô một chút
-            piece.setFitHeight(cellHeight * 0.8);
+            piece.setFitWidth(pieceWidth);  // Kích thước quân cờ
+            piece.setFitHeight(pieceHeight);
             piece.setPreserveRatio(true);
             piece.setSmooth(true);
             
@@ -772,9 +803,13 @@ public class GamePanel extends StackPane {
                 mouseX[0] = e.getSceneX();
                 mouseY[0] = e.getSceneY();
                 
-                // Tính toán row và col ban đầu
-                initialRow[0] = (int) Math.round(initialY[0] / cellHeight);
-                initialCol[0] = (int) Math.round(initialX[0] / cellWidth);
+                // Tính toán row và col ban đầu dựa trên giao điểm
+                // Tính tâm quân cờ: layoutX + pieceWidth/2
+                double pieceCenterX = initialX[0] + pieceWidth / 2.0;
+                double pieceCenterY = initialY[0] + pieceHeight / 2.0;
+                // Trừ startX, startY để tính vị trí trong vùng giao điểm
+                initialCol[0] = (int) Math.round((pieceCenterX - startX) / intersectionSpacingX);
+                initialRow[0] = (int) Math.round((pieceCenterY - startY) / intersectionSpacingY);
                 // Giới hạn trong phạm vi bàn cờ
                 initialRow[0] = Math.max(0, Math.min(9, initialRow[0]));
                 initialCol[0] = Math.max(0, Math.min(8, initialCol[0]));
@@ -813,19 +848,62 @@ public class GamePanel extends StackPane {
             });
             
             piece.setOnMouseReleased(e -> {
+                // Kiểm tra xem quân cờ có di chuyển thực sự không
+                double currentX = piece.getLayoutX();
+                double currentY = piece.getLayoutY();
+                double moveDistance = Math.sqrt(Math.pow(currentX - initialX[0], 2) + Math.pow(currentY - initialY[0], 2));
+                
+                // Nếu quân cờ không di chuyển (chỉ bấm và thả), giữ nguyên vị trí
+                if (moveDistance < 5.0) {
+                    // Khôi phục shadow ban đầu
+                    DropShadow normalShadow = new DropShadow();
+                    normalShadow.setColor(Color.color(0, 0, 0, 0.5));
+                    normalShadow.setRadius(8);
+                    normalShadow.setOffsetX(3);
+                    normalShadow.setOffsetY(3);
+                    piece.setEffect(normalShadow);
+                    e.consume();
+                    return;
+                }
+                
                 // Snap vào ô gần nhất
                 double[] snapped = snapToCell.apply(piece.getLayoutX(), piece.getLayoutY());
-                double oldX = piece.getLayoutX();
-                double oldY = piece.getLayoutY();
-                piece.setLayoutX(snapped[0]);
-                piece.setLayoutY(snapped[1]);
+                
+                // Lấy thông tin quân cờ để áp dụng offset
+                PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
+                String pieceColor = pieceInfo != null ? pieceInfo.color : "";
+                
+                // Áp dụng offset điều chỉnh giống như placePiece
+                double offsetX = 0;
+                double offsetY = 0;
+                int col = (int) snapped[3];  // Lấy cột để điều chỉnh
+                if ("Red".equals(pieceColor)) {
+                    offsetY = -10;  // Dịch lên trên 10px
+                    // Điều chỉnh thêm cho các cột bên phải
+                    if (col >= 5) {  // Cột 5, 6, 7, 8
+                        offsetX = 5;  // Dịch sang phải thêm 5px
+                    }
+                } else if ("Black".equals(pieceColor)) {
+                    offsetX = 4;   // Dịch sang phải 4px
+                    // Điều chỉnh thêm cho các cột bên phải
+                    if (col >= 5) {  // Cột 5, 6, 7, 8
+                        offsetX += 5;  // Dịch sang phải thêm 5px
+                    }
+                }
+                
+                // Tính vị trí giao điểm và áp dụng offset
+                double intersectionX = startX + snapped[3] * intersectionSpacingX;
+                double intersectionY = startY + snapped[2] * intersectionSpacingY;
+                double finalX = intersectionX - pieceWidth / 2.0 + offsetX;
+                double finalY = intersectionY - pieceHeight / 2.0 + offsetY;
+                
+                piece.setLayoutX(finalX);
+                piece.setLayoutY(finalY);
                 
                 // Tính toán vị trí mới (row, col)
                 int newRow = (int) snapped[2];
                 int newCol = (int) snapped[3];
                 
-                // Lấy thông tin quân cờ từ userData
-                PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
                 if (pieceInfo != null) {
                     // Chỉ thêm nước đi nếu vị trí thay đổi
                     if (initialRow[0] != newRow || initialCol[0] != newCol) {
@@ -848,13 +926,47 @@ public class GamePanel extends StackPane {
         };
         
         // Hàm helper để đặt quân cờ vào vị trí
+        // Sử dụng BiFunction để có thể truyền thêm thông tin màu
+        java.util.function.Function<ImageView, java.util.function.BiConsumer<int[], String>> createPlacePiece = (piece) -> {
+            return (pos, color) -> {
+                // pos[0] = row (0-9), pos[1] = col (0-8)
+                // Quân cờ được đặt tại giao điểm, tâm quân cờ trùng với giao điểm
+                // Vị trí giao điểm từ startX, startY
+                double intersectionX = startX + pos[1] * intersectionSpacingX;
+                double intersectionY = startY + pos[0] * intersectionSpacingY;
+                
+                // Offset điều chỉnh: quân đỏ dịch lên trên, quân đen dịch sang phải
+                double offsetX = 0;
+                double offsetY = 0;
+                if ("Red".equals(color)) {
+                    offsetY = -10;  // Dịch lên trên 10px
+                    // Điều chỉnh thêm cho các cột bên phải
+                    if (pos[1] >= 5) {  // Cột 5, 6, 7, 8
+                        offsetX = 5;  // Dịch sang phải thêm 5px
+                    }
+                } else if ("Black".equals(color)) {
+                    offsetX = 4;   // Dịch sang phải 4px
+                    // Điều chỉnh thêm cho các cột bên phải
+                    if (pos[1] >= 5) {  // Cột 5, 6, 7, 8
+                        offsetX += 5;  // Dịch sang phải thêm 5px
+                    }
+                }
+                
+                // Đặt tâm quân cờ tại giao điểm (trừ đi một nửa kích thước)
+                double x = intersectionX - pieceWidth / 2.0 + offsetX;
+                double y = intersectionY - pieceHeight / 2.0 + offsetY;
+                piece.setLayoutX(x);
+                piece.setLayoutY(y);
+                container.getChildren().add(piece);
+            };
+        };
+        
+        // Wrapper để tương thích với code cũ
         java.util.function.BiConsumer<ImageView, int[]> placePiece = (piece, pos) -> {
-            // pos[0] = row (0-9), pos[1] = col (0-8)
-            double x = pos[1] * cellWidth + (cellWidth - piece.getFitWidth()) / 2;
-            double y = pos[0] * cellHeight + (cellHeight - piece.getFitHeight()) / 2;
-            piece.setLayoutX(x);
-            piece.setLayoutY(y);
-            container.getChildren().add(piece);
+            // Lấy màu từ userData (đã được set trong createPiece)
+            PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
+            String color = pieceInfo != null ? pieceInfo.color : "";
+            createPlacePiece.apply(piece).accept(pos, color);
         };
         
         // Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
@@ -904,6 +1016,21 @@ public class GamePanel extends StackPane {
         placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
         
         return container;
+    }
+    
+    private void resetChessPieces() {
+        // Xóa quân cờ cũ nếu có
+        if (piecesContainer != null && boardContainer != null) {
+            boardContainer.getChildren().remove(piecesContainer);
+        }
+        
+        // Tạo lại quân cờ mới
+        piecesContainer = createChessPieces();
+        
+        // Thêm vào board container
+        if (boardContainer != null) {
+            boardContainer.getChildren().add(piecesContainer);
+        }
     }
 
     private void showChatInput() {
@@ -1822,6 +1949,13 @@ public class GamePanel extends StackPane {
         }
         if (moveHistoryContainer != null) {
             moveHistoryContainer.getChildren().clear();
+        }
+        
+        // Reset quân cờ về vị trí ban đầu
+        if (boardContainer != null) {
+            Platform.runLater(() -> {
+                resetChessPieces();
+            });
         }
         
         // Reset các biến state
