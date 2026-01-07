@@ -29,6 +29,7 @@ import application.components.CustomModePanel;
 import application.components.GamePanel;
 import application.components.HistoryPanel;
 import application.components.ProfilePanel;
+import application.components.WaitingPanel;
 import application.network.NetworkManager;
 
 /**
@@ -101,6 +102,7 @@ public class Main extends Application {
         GamePanel gamePanel = new GamePanel(state);
         HistoryPanel historyPanel = new HistoryPanel(state);
         ProfilePanel profilePanel = new ProfilePanel(state);
+        WaitingPanel waitingPanel = new WaitingPanel(state);
 
         stageLayer.getChildren().addAll(
                 background,
@@ -122,7 +124,8 @@ public class Main extends Application {
                 friendsPanel,
                 inventoryPanel,
                 historyPanel,
-                profilePanel
+                profilePanel,
+                waitingPanel
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);

@@ -239,8 +239,8 @@ public class MainMenuPanel extends StackPane {
             state.setTimer3Value("Unlimited time");
             state.setTimer4Value("Unlimited time");
             
-            // Vào game trực tiếp với classic mode và random opponent
-            state.openGame("classical");
+            // Mở waiting panel vì Play Now luôn là random opponent
+            state.openWaiting();
         });
 
         // History button - 300x215, trên và bên phải Play now

@@ -29,6 +29,7 @@ public class UIState {
     private final BooleanProperty inventoryVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty historyVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty profileVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
+    private final BooleanProperty waitingVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty gameModeVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty classicModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty blitzModeVisible = new SimpleBooleanProperty(false);
@@ -196,6 +197,27 @@ public class UIState {
     public void closeProfile() {
         setProfileVisible(false);
         setAppState(AppState.MAIN_MENU);
+    }
+
+    public BooleanProperty waitingVisibleProperty() {
+        return waitingVisible;
+    }
+
+    public boolean isWaitingVisible() {
+        return waitingVisible.get();
+    }
+
+    public void setWaitingVisible(boolean value) {
+        waitingVisible.set(value);
+    }
+    
+    public void openWaiting() {
+        setWaitingVisible(true);
+        setAppState(AppState.MAIN_MENU);
+    }
+    
+    public void closeWaiting() {
+        setWaitingVisible(false);
     }
 
     public BooleanProperty gameModeVisibleProperty() {

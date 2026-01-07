@@ -411,8 +411,30 @@ public class BlitzModePanel extends StackPane {
             state.setTimer3Value("10:00");
             state.setTimer4Value(selectedTime);
             
+            // Kiểm tra xem có chọn "Random" không
+            boolean isRandomSelected = false;
+            if (selectedPlayWithOption != null) {
+                // Lấy text từ label trong selectedPlayWithOption
+                for (javafx.scene.Node node : selectedPlayWithOption.getChildren()) {
+                    if (node instanceof Label) {
+                        Label label = (Label) node;
+                        if ("Random".equals(label.getText())) {
+                            isRandomSelected = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
             state.closeBlitzMode();
-            state.openGame("blitz");
+            
+            if (isRandomSelected) {
+                // Mở waiting panel khi chọn Random
+                state.openWaiting();
+            } else {
+                // Vào game trực tiếp khi chọn Friend hoặc AI
+                state.openGame("blitz");
+            }
         });
         
         return button;
