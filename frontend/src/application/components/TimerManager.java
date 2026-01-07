@@ -159,8 +159,8 @@ public class TimerManager {
         boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
         
         // Xác định timer thuộc bên nào
-        // Timer 1, 2 (index 0, 1): Red player
-        // Timer 3, 4 (index 2, 3): Black player
+        // Timer 1, 2 (index 0, 1): red player
+        // Timer 3, 4 (index 2, 3): black player
         boolean isRedTimer = (timerIndex == 0 || timerIndex == 1);
         boolean isBlackTimer = (timerIndex == 2 || timerIndex == 3);
         
@@ -179,13 +179,13 @@ public class TimerManager {
                 
                 // Trong blitz/custom mode, chỉ đếm nếu đến lượt của bên đó
                 if (isTurnBased) {
-                    if (isRedTimer && !currentTurnNow.equals("Red")) {
-                        // Không phải lượt Red, dừng timer
+                    if (isRedTimer && !currentTurnNow.equals("red")) {
+                        // Không phải lượt red, dừng timer
                         countdownTimers[timerIndex].stop();
                         return;
                     }
-                    if (isBlackTimer && !currentTurnNow.equals("Black")) {
-                        // Không phải lượt Black, dừng timer
+                    if (isBlackTimer && !currentTurnNow.equals("black")) {
+                        // Không phải lượt black, dừng timer
                         countdownTimers[timerIndex].stop();
                         return;
                     }
@@ -250,8 +250,8 @@ public class TimerManager {
             String currentTurn = gamePanel.getCurrentTurn();
             
             // Bắt đầu timer của bên đang đến lượt
-            if (currentTurn.equals("Red")) {
-                // Bắt đầu timer 1 và 2 (Red) - dừng timer 3 và 4 (Black) để chắc chắn
+            if (currentTurn.equals("red")) {
+                // Bắt đầu timer 1 và 2 (red) - dừng timer 3 và 4 (black) để chắc chắn
                 if (countdownTimers[2] != null) {
                     countdownTimers[2].stop();
                 }
@@ -264,8 +264,8 @@ public class TimerManager {
                 if (countdownTimers[1] != null && remainingSeconds[1] >= 0) {
                     countdownTimers[1].play();
                 }
-            } else if (currentTurn.equals("Black")) {
-                // Bắt đầu timer 3 và 4 (Black) - dừng timer 1 và 2 (Red) để chắc chắn
+            } else if (currentTurn.equals("black")) {
+                // Bắt đầu timer 3 và 4 (black) - dừng timer 1 và 2 (red) để chắc chắn
                 if (countdownTimers[0] != null) {
                     countdownTimers[0].stop();
                 }

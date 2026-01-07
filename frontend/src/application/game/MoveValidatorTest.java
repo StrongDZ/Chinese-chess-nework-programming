@@ -51,7 +51,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing King Moves ---");
         
         char[][] board = createEmptyBoard();
-        // Red king at (0, 4) - center of red palace
+        // red king at (0, 4) - center of red palace
         board[0][4] = 'K';
         
         // Valid: Move 1 square horizontally
@@ -82,16 +82,16 @@ public class MoveValidatorTest {
         assertTest(!MoveValidator.isValidMove(board, 0, 4, 3, 4), "King: Cannot move outside palace (down)");
         assertTest(!MoveValidator.isValidMove(board, 2, 4, 3, 4), "King: Cannot move outside palace");
         
-        // Black king (create new board to avoid conflicts)
+        // black king (create new board to avoid conflicts)
         char[][] board2 = createEmptyBoard();
         board2[9][4] = 'k';
-        assertTest(MoveValidator.isValidMove(board2, 9, 4, 9, 3), "Black King: Move left 1 square");
-        assertTest(MoveValidator.isValidMove(board2, 9, 4, 8, 4), "Black King: Move up 1 square");
+        assertTest(MoveValidator.isValidMove(board2, 9, 4, 9, 3), "black King: Move left 1 square");
+        assertTest(MoveValidator.isValidMove(board2, 9, 4, 8, 4), "black King: Move up 1 square");
         
         // Test reverse move
         board2[8][4] = 'k';
         board2[9][4] = ' ';
-        assertTest(MoveValidator.isValidMove(board2, 8, 4, 9, 4), "Black King: Move down 1 square");
+        assertTest(MoveValidator.isValidMove(board2, 8, 4, 9, 4), "black King: Move down 1 square");
     }
     
     // ==================== ADVISOR (Sĩ) Tests ====================
@@ -99,7 +99,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Advisor Moves ---");
         
         char[][] board = createEmptyBoard();
-        board[0][4] = 'A'; // Red advisor
+        board[0][4] = 'A'; // red advisor
         
         // Valid: Move 1 square diagonally
         assertTest(MoveValidator.isValidMove(board, 0, 4, 1, 3), "Advisor: Move diagonal down-left");
@@ -124,7 +124,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Elephant Moves ---");
         
         char[][] board = createEmptyBoard();
-        board[0][2] = 'B'; // Red elephant
+        board[0][2] = 'B'; // red elephant
         
         // Valid: Move 2 squares diagonally (no blocking)
         assertTest(MoveValidator.isValidMove(board, 0, 2, 2, 0), "Elephant: Move 2 squares diagonal (down-left)");
@@ -137,14 +137,14 @@ public class MoveValidatorTest {
         // Clear blocking piece
         board[1][1] = ' ';
         
-        // Invalid: Cross river (Red elephant cannot go to row > 4)
+        // Invalid: Cross river (red elephant cannot go to row > 4)
         assertTest(!MoveValidator.isValidMove(board, 0, 2, 5, 7), "Elephant: Cannot cross river");
         assertTest(!MoveValidator.isValidMove(board, 2, 0, 4, 2), "Elephant: Cannot cross river");
         
-        // Black elephant
+        // black elephant
         board[9][2] = 'b';
-        assertTest(MoveValidator.isValidMove(board, 9, 2, 7, 0), "Black Elephant: Move 2 squares diagonal");
-        assertTest(!MoveValidator.isValidMove(board, 9, 2, 4, 7), "Black Elephant: Cannot cross river");
+        assertTest(MoveValidator.isValidMove(board, 9, 2, 7, 0), "black Elephant: Move 2 squares diagonal");
+        assertTest(!MoveValidator.isValidMove(board, 9, 2, 4, 7), "black Elephant: Cannot cross river");
     }
     
     // ==================== KNIGHT (Mã) Tests ====================
@@ -152,7 +152,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Knight Moves ---");
         
         char[][] board = createEmptyBoard();
-        board[0][1] = 'N'; // Red knight
+        board[0][1] = 'N'; // red knight
         
         // Valid: L-shape moves
         assertTest(MoveValidator.isValidMove(board, 0, 1, 2, 0), "Knight: L-shape (2 down, 1 left)");
@@ -178,7 +178,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Rook Moves ---");
         
         char[][] board = createEmptyBoard();
-        board[0][0] = 'R'; // Red rook
+        board[0][0] = 'R'; // red rook
         
         // Valid: Move horizontally (clear path)
         assertTest(MoveValidator.isValidMove(board, 0, 0, 0, 8), "Rook: Move horizontally (clear path)");
@@ -201,7 +201,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Cannon Moves ---");
         
         char[][] board = createEmptyBoard();
-        board[2][1] = 'C'; // Red cannon
+        board[2][1] = 'C'; // red cannon
         
         // Valid: Move to empty square (clear path)
         assertTest(MoveValidator.isValidMove(board, 2, 1, 2, 8), "Cannon: Move to empty (clear path)");
@@ -212,8 +212,8 @@ public class MoveValidatorTest {
         assertTest(!MoveValidator.isValidMove(board, 2, 1, 2, 8), "Cannon: Cannot move to empty if path blocked");
         
         // Valid: Capture with exactly 1 piece between (screen)
-        board[2][4] = 'p'; // Black piece as screen
-        board[2][8] = 'p'; // Black piece to capture
+        board[2][4] = 'p'; // black piece as screen
+        board[2][8] = 'p'; // black piece to capture
         assertTest(MoveValidator.isValidMove(board, 2, 1, 2, 8), "Cannon: Can capture with 1 screen");
         
         // Invalid: Capture with 0 screens
@@ -231,7 +231,7 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Pawn Moves ---");
         
         char[][] board = createEmptyBoard();
-        board[3][0] = 'P'; // Red pawn (before river)
+        board[3][0] = 'P'; // red pawn (before river)
         
         // Valid: Move forward 1 square (before river)
         assertTest(MoveValidator.isValidMove(board, 3, 0, 4, 0), "Pawn: Move forward (before river)");
@@ -240,7 +240,7 @@ public class MoveValidatorTest {
         assertTest(!MoveValidator.isValidMove(board, 3, 0, 3, 1), "Pawn: Cannot move sideways before river");
         
         // After crossing river
-        board[5][0] = 'P'; // Red pawn (after river, row > 4)
+        board[5][0] = 'P'; // red pawn (after river, row > 4)
         
         // Valid: Move forward or sideways (after river)
         assertTest(MoveValidator.isValidMove(board, 5, 0, 6, 0), "Pawn: Move forward (after river)");
@@ -249,18 +249,18 @@ public class MoveValidatorTest {
         // Invalid: Move backward
         assertTest(!MoveValidator.isValidMove(board, 5, 0, 4, 0), "Pawn: Cannot move backward");
         
-        // Black pawn
-        board[6][0] = 'p'; // Black pawn (before river, row < 5)
+        // black pawn
+        board[6][0] = 'p'; // black pawn (before river, row < 5)
         
         // Valid: Move forward (up, row decreases)
-        assertTest(MoveValidator.isValidMove(board, 6, 0, 5, 0), "Black Pawn: Move forward (before river)");
+        assertTest(MoveValidator.isValidMove(board, 6, 0, 5, 0), "black Pawn: Move forward (before river)");
         
         // After crossing river
-        board[4][0] = 'p'; // Black pawn (after river, row < 5)
+        board[4][0] = 'p'; // black pawn (after river, row < 5)
         
         // Valid: Move forward or sideways
-        assertTest(MoveValidator.isValidMove(board, 4, 0, 3, 0), "Black Pawn: Move forward (after river)");
-        assertTest(MoveValidator.isValidMove(board, 4, 0, 4, 1), "Black Pawn: Move sideways (after river)");
+        assertTest(MoveValidator.isValidMove(board, 4, 0, 3, 0), "black Pawn: Move forward (after river)");
+        assertTest(MoveValidator.isValidMove(board, 4, 0, 4, 1), "black Pawn: Move sideways (after river)");
     }
     
     // ==================== KINGS FACING EACH OTHER Tests ====================
@@ -268,12 +268,12 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Kings Facing Each Other ---");
         
         char[][] board = createEmptyBoard();
-        board[0][4] = 'K'; // Red king
-        board[9][4] = 'k'; // Black king (same column)
+        board[0][4] = 'K'; // red king
+        board[9][4] = 'k'; // black king (same column)
         
         // Invalid: Move that causes kings to face each other
         // Move red advisor to block the line (removing blocker)
-        board[1][4] = 'A'; // Red advisor (currently blocking)
+        board[1][4] = 'A'; // red advisor (currently blocking)
         // Moving advisor away vertically would cause kings to face
         assertTest(!MoveValidator.isValidMove(board, 1, 4, 2, 4), "Kings: Cannot move if results in facing each other");
         // Moving advisor away horizontally would also cause kings to face
@@ -312,20 +312,20 @@ public class MoveValidatorTest {
         System.out.println("\n--- Testing Capture Own Piece ---");
         
         char[][] board = createEmptyBoard();
-        board[0][0] = 'R'; // Red rook
-        board[0][4] = 'P'; // Red pawn (own piece)
+        board[0][0] = 'R'; // red rook
+        board[0][4] = 'P'; // red pawn (own piece)
         
         // Invalid: Cannot capture own piece
-        assertTest(!MoveValidator.isValidMove(board, 0, 0, 0, 4), "Cannot capture own piece (Red)");
+        assertTest(!MoveValidator.isValidMove(board, 0, 0, 0, 4), "Cannot capture own piece (red)");
         
         // Valid: Can capture opponent piece
-        board[0][4] = 'p'; // Black pawn
+        board[0][4] = 'p'; // black pawn
         assertTest(MoveValidator.isValidMove(board, 0, 0, 0, 4), "Can capture opponent piece");
         
-        // Black pieces
-        board[9][0] = 'r'; // Black rook
-        board[9][4] = 'p'; // Black pawn (own piece)
-        assertTest(!MoveValidator.isValidMove(board, 9, 0, 9, 4), "Cannot capture own piece (Black)");
+        // black pieces
+        board[9][0] = 'r'; // black rook
+        board[9][4] = 'p'; // black pawn (own piece)
+        assertTest(!MoveValidator.isValidMove(board, 9, 0, 9, 4), "Cannot capture own piece (black)");
     }
     
     // ==================== INVALID COORDINATES Tests ====================

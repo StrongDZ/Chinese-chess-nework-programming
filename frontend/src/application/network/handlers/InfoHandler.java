@@ -47,12 +47,25 @@ public class InfoHandler implements MessageHandler {
     private void handleInfo(String payload) {
         try {
             // INFO message can contain various types of data
-            // Check if it's a user stats response
             JsonObject response = JsonParser.parseString(payload).getAsJsonObject();
             
             // Check if this is a user stats response (has "stat" or "stats" field)
             if (response.has("stat") || response.has("stats")) {
                 handleUserStats(payload);
+                return;
+            }
+            
+            // Check if this is a quick matching response
+            if (response.has("quick_matching")) {
+                boolean quickMatching = response.get("quick_matching").getAsBoolean();
+                if (quickMatching && response.has("status")) {
+                    String status = response.get("status").getAsString();
+                    if ("waiting".equals(status)) {
+                        // Show waiting panel
+                        uiState.openWaiting();
+                        System.out.println("[InfoHandler] Quick matching - waiting for opponent");
+                    }
+                }
                 return;
             }
             

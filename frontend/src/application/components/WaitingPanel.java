@@ -156,6 +156,15 @@ public class WaitingPanel extends StackPane {
         });
         
         container.setOnMouseClicked(e -> {
+            // Gửi CANCEL_QM đến server trước khi đóng waiting panel
+            try {
+                application.network.NetworkManager.getInstance().game().cancelQuickMatching();
+            } catch (java.io.IOException ex) {
+                System.err.println("[WaitingPanel] Error sending CANCEL_QM: " + ex.getMessage());
+                ex.printStackTrace();
+            }
+            
+            // Đóng waiting panel
             state.closeWaiting();
             e.consume();
         });

@@ -34,7 +34,7 @@ public class CapturedPiecesManager {
     
     /**
      * Tạo UI để hiển thị các quân cờ đã ăn được
-     * @param isTopLeft true nếu là người chơi top-left (Red), false nếu là bottom-right (Black)
+     * @param isTopLeft true nếu là người chơi top-left (red), false nếu là bottom-right (black)
      */
     public VBox createCapturedPiecesDisplay(boolean isTopLeft) {
         VBox container = new VBox(5);
@@ -65,12 +65,12 @@ public class CapturedPiecesManager {
     
     /**
      * Thêm quân cờ đã bị ăn vào danh sách và cập nhật UI
-     * @param capturedPieceColor Màu của quân cờ bị ăn ("Red" hoặc "Black")
+     * @param capturedPieceColor Màu của quân cờ bị ăn ("red" hoặc "black")
      * @param pieceType Loại quân cờ (King, Advisor, Elephant, Horse, Rook, Cannon, Pawn)
      */
     public void addCapturedPiece(String capturedPieceColor, String pieceType) {
         // Xác định người chơi nào đã ăn (người chơi đối lập với màu quân cờ bị ăn)
-        boolean isRedPlayer = capturedPieceColor.equals("Black");  // Nếu ăn quân Black thì là Red player
+        boolean isRedPlayer = capturedPieceColor.equals("black");  // Nếu ăn quân black thì là red player
         
         // Cập nhật map
         java.util.Map<String, Integer> capturedMap = isRedPlayer ? redCapturedPieces : blackCapturedPieces;
@@ -117,7 +117,7 @@ public class CapturedPiecesManager {
         
         // Vòng tròn với màu theo màu quân cờ bị ăn
         Circle circle = new Circle(25);
-        if (pieceColor.equals("Red")) {
+        if (pieceColor.equals("red")) {
             circle.setFill(Color.web("#DC143C"));  // Màu đỏ
         } else {
             circle.setFill(Color.web("#1C1C1C"));  // Màu đen
@@ -131,13 +131,13 @@ public class CapturedPiecesManager {
         
         // Map piece type to Chinese character
         java.util.Map<String, String> pieceChars = new java.util.HashMap<>();
-        pieceChars.put("King", pieceColor.equals("Red") ? "帥" : "將");
-        pieceChars.put("Advisor", pieceColor.equals("Red") ? "仕" : "士");
-        pieceChars.put("Elephant", pieceColor.equals("Red") ? "相" : "象");
-        pieceChars.put("Horse", pieceColor.equals("Red") ? "傌" : "馬");
-        pieceChars.put("Rook", pieceColor.equals("Red") ? "俥" : "車");
-        pieceChars.put("Cannon", pieceColor.equals("Red") ? "炮" : "砲");
-        pieceChars.put("Pawn", pieceColor.equals("Red") ? "兵" : "卒");
+        pieceChars.put("King", pieceColor.equals("red") ? "帥" : "將");
+        pieceChars.put("Advisor", pieceColor.equals("red") ? "仕" : "士");
+        pieceChars.put("Elephant", pieceColor.equals("red") ? "相" : "象");
+        pieceChars.put("Horse", pieceColor.equals("red") ? "傌" : "馬");
+        pieceChars.put("Rook", pieceColor.equals("red") ? "俥" : "車");
+        pieceChars.put("Cannon", pieceColor.equals("red") ? "炮" : "砲");
+        pieceChars.put("Pawn", pieceColor.equals("red") ? "兵" : "卒");
         
         pieceLabel.setText(pieceChars.getOrDefault(pieceType, "?"));
         
@@ -146,7 +146,7 @@ public class CapturedPiecesManager {
         if (count > 1) {
             countLabel = new Label(String.valueOf(count));
             // Màu chữ cùng với màu quân cờ bị ăn
-            String textColor = pieceColor.equals("Red") ? "#DC143C" : "#1C1C1C";
+            String textColor = pieceColor.equals("red") ? "#DC143C" : "#1C1C1C";
             countLabel.setStyle(String.format("-fx-font-family: 'Kolker Brush'; -fx-font-size: 20px; -fx-text-fill: %s; -fx-background-color: transparent; -fx-font-weight: 900;", textColor));
             // Đặt ở góc dưới bên phải của icon
             StackPane.setAlignment(countLabel, Pos.BOTTOM_RIGHT);

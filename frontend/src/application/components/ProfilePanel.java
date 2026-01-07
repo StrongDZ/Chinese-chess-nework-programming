@@ -133,7 +133,7 @@ public class ProfilePanel extends StackPane {
         // Avatar placeholder (square with red border)
         Rectangle avatarPlaceholder = new Rectangle(250, 250);  // Tăng từ 200 lên 250
         avatarPlaceholder.setFill(Color.TRANSPARENT);
-        avatarPlaceholder.setStroke(Color.web("#A65252"));  // Red border
+        avatarPlaceholder.setStroke(Color.web("#A65252"));  // red border
         avatarPlaceholder.setStrokeWidth(4);
         avatarPlaceholder.setArcWidth(10);
         avatarPlaceholder.setArcHeight(10);
@@ -386,7 +386,7 @@ public class ProfilePanel extends StackPane {
         Rectangle bg = (Rectangle) button.getUserData();
         if (bg != null) {
             if (isSelected) {
-                bg.setFill(Color.web("#A65252"));  // Red when selected
+                bg.setFill(Color.web("#A65252"));  // red when selected
                 bg.setStroke(Color.web("#8B3A3A"));
             } else {
                 bg.setFill(Color.color(0.7, 0.7, 0.7));  // Grey when not selected

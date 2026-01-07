@@ -30,7 +30,7 @@ public class CustomModePanel extends StackPane {
     
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
-    private StackPane selectedSideOption = null; // Track side được chọn (White/Red)
+    private StackPane selectedSideOption = null; // Track side được chọn (White/red)
     private int gameTimerValue = 5; // Default 5
     private int moveTimerValue = 2; // Default 2
 
@@ -246,7 +246,7 @@ public class CustomModePanel extends StackPane {
         sideContainer.setAlignment(Pos.CENTER_LEFT);
         
         StackPane whiteButton = createSideButton("White");
-        StackPane redButton = createSideButton("Red");
+        StackPane redButton = createSideButton("red");
         selectSideOption(whiteButton); // Set White làm mặc định
         
         sideContainer.getChildren().addAll(whiteButton, redButton);
@@ -703,8 +703,8 @@ public class CustomModePanel extends StackPane {
         boardContainer.setAlignment(Pos.CENTER);
         boardContainer.setPrefHeight(600); // Khớp với chiều cao panel (600px)
         
-        // Panel quân cờ bên trái (Black pieces)
-        VBox leftPiecePanel = createPiecePanel("Black");
+        // Panel quân cờ bên trái (black pieces)
+        VBox leftPiecePanel = createPiecePanel("black");
         
         // Board editor ở giữa - wrap trong VBox để căn giữa theo chiều dọc
         Pane boardEditor = createMiniBoardEditor();
@@ -713,8 +713,8 @@ public class CustomModePanel extends StackPane {
         boardEditorWrapper.setPrefHeight(600);
         boardEditorWrapper.getChildren().add(boardEditor);
         
-        // Panel quân cờ bên phải (Red pieces)
-        VBox rightPiecePanel = createPiecePanel("Red");
+        // Panel quân cờ bên phải (red pieces)
+        VBox rightPiecePanel = createPiecePanel("red");
         
         boardContainer.getChildren().addAll(leftPiecePanel, boardEditorWrapper, rightPiecePanel);
         
@@ -781,7 +781,7 @@ public class CustomModePanel extends StackPane {
         
         // Background với màu rõ ràng hơn
         Rectangle bg = new Rectangle(200, 600);
-        if (color.equals("Red")) {
+        if (color.equals("red")) {
             // Màu đỏ nhạt cho bên ĐỎ
             bg.setFill(Color.color(1.0, 0.85, 0.85)); // Đỏ nhạt
             bg.setStroke(Color.web("#DC143C")); // Đỏ đậm cho border
@@ -796,7 +796,7 @@ public class CustomModePanel extends StackPane {
         
         // Title với màu rõ ràng, căn giữa và to hơn
         String titleText = color + " Pieces";
-        String titleColor = color.equals("Red") ? "#DC143C" : "#1C1C1C";
+        String titleColor = color.equals("red") ? "#DC143C" : "#1C1C1C";
         Label title = new Label(titleText);
         title.setAlignment(Pos.CENTER);
         title.setMaxWidth(Double.MAX_VALUE);
@@ -868,7 +868,7 @@ public class CustomModePanel extends StackPane {
             "-fx-font-family: 'Kolker Brush'; " +
             "-fx-font-size: 24px; " +
             "-fx-font-weight: bold; " +
-            "-fx-text-fill: " + (color.equals("Red") ? "#DC143C" : "#1C1C1C") + "; " +
+            "-fx-text-fill: " + (color.equals("red") ? "#DC143C" : "#1C1C1C") + "; " +
             "-fx-background-color: transparent;"
         );
         
@@ -1135,7 +1135,7 @@ public class CustomModePanel extends StackPane {
             // boardEditor.getParent() là VBox (boardEditorWrapper), getParent() của nó là HBox (boardContainer)
             VBox boardEditorWrapper = (VBox) boardEditor.getParent();
             HBox boardContainer = (HBox) boardEditorWrapper.getParent();
-            VBox targetPanel = pieceInfo.color.equals("Red") ? 
+            VBox targetPanel = pieceInfo.color.equals("red") ? 
                 (VBox) boardContainer.getChildren().get(2) : // rightPiecePanel
                 (VBox) boardContainer.getChildren().get(0);  // leftPiecePanel
             
@@ -1399,7 +1399,7 @@ public class CustomModePanel extends StackPane {
                 
                 // Đếm số lượng King
                 if (info.pieceType.equals("King")) {
-                    if (info.color.equals("Red")) {
+                    if (info.color.equals("red")) {
                         redKingCount++;
                     } else {
                         blackKingCount++;
@@ -1408,16 +1408,16 @@ public class CustomModePanel extends StackPane {
             }
         }
         
-        // Kiểm tra 1: Phải có cả 2 quân Vua trên bàn cờ (ít nhất 1 Red King và 1 Black King)
+        // Kiểm tra 1: Phải có cả 2 quân Vua trên bàn cờ (ít nhất 1 red King và 1 black King)
         if (redKingCount == 0) {
-            return "Must have at least 1 Red King on the board!";
+            return "Must have at least 1 red King on the board!";
         }
         if (blackKingCount == 0) {
-            return "Must have at least 1 Black King on the board!";
+            return "Must have at least 1 black King on the board!";
         }
         
         // Kiểm tra 2: Hai quân Vua không được đối mặt trực tiếp (cùng cột, không có quân cờ chặn giữa)
-        // Thu thập tất cả các vị trí của Red Kings và Black Kings
+        // Thu thập tất cả các vị trí của red Kings và black Kings
         java.util.List<int[]> redKingPositions = new java.util.ArrayList<>();
         java.util.List<int[]> blackKingPositions = new java.util.ArrayList<>();
         
@@ -1428,7 +1428,7 @@ public class CustomModePanel extends StackPane {
             PieceInfo info = entry.getValue();
             
             if (info.pieceType.equals("King")) {
-                if (info.color.equals("Red")) {
+                if (info.color.equals("red")) {
                     redKingPositions.add(new int[]{row, col});
                 } else {
                     blackKingPositions.add(new int[]{row, col});
@@ -1436,7 +1436,7 @@ public class CustomModePanel extends StackPane {
             }
         }
         
-        // Kiểm tra tất cả các cặp Red King và Black King xem có đối mặt trực tiếp không
+        // Kiểm tra tất cả các cặp red King và black King xem có đối mặt trực tiếp không
         for (int[] redKingPos : redKingPositions) {
             for (int[] blackKingPos : blackKingPositions) {
                 int redKingRow = redKingPos[0];
@@ -1512,7 +1512,7 @@ public class CustomModePanel extends StackPane {
         double cellHeight = boardSize / 10.0;
         double dotSize = Math.min(cellWidth, cellHeight) * 0.3;
         
-        String dotColor = color.equals("Red") ? "#DC143C" : "#1C1C1C";
+        String dotColor = color.equals("red") ? "#DC143C" : "#1C1C1C";
         
         for (int[] pos : validPositions) {
             int row = pos[0];
@@ -1615,7 +1615,7 @@ public class CustomModePanel extends StackPane {
         
         // King: chỉ được trong palace
         if (pieceType.equals("King")) {
-            if (color.equals("Red")) {
+            if (color.equals("red")) {
                 return (row >= 0 && row <= 2 && col >= 3 && col <= 5);
             } else {
                 return (row >= 7 && row <= 9 && col >= 3 && col <= 5);
@@ -1624,7 +1624,7 @@ public class CustomModePanel extends StackPane {
         
         // Advisor: chỉ được trong palace
         if (pieceType.equals("Advisor")) {
-            if (color.equals("Red")) {
+            if (color.equals("red")) {
                 return (row >= 0 && row <= 2 && col >= 3 && col <= 5);
             } else {
                 return (row >= 7 && row <= 9 && col >= 3 && col <= 5);
@@ -1633,9 +1633,9 @@ public class CustomModePanel extends StackPane {
         
         // Elephant: không được vượt sông và chỉ ở các vị trí hợp lệ
         if (pieceType.equals("Elephant")) {
-            if (color.equals("Red")) {
+            if (color.equals("red")) {
                 if (row > 4) return false; // Không được vượt sông
-                // Các vị trí hợp lệ cho Red elephant
+                // Các vị trí hợp lệ cho red elephant
                 int[][] validPositions = {
                     {0, 2}, {0, 6},
                     {2, 0}, {2, 4}, {2, 8},
@@ -1649,7 +1649,7 @@ public class CustomModePanel extends StackPane {
                 return false;
             } else {
                 if (row < 5) return false; // Không được vượt sông
-                // Các vị trí hợp lệ cho Black elephant
+                // Các vị trí hợp lệ cho black elephant
                 int[][] validPositions = {
                     {5, 2}, {5, 6},
                     {7, 0}, {7, 4}, {7, 8},

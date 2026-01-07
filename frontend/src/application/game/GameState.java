@@ -35,12 +35,12 @@ public class GameState {
         }
         
         // Standard starting position
-        // Red pieces (bottom, rows 0-4) - UPPERCASE
+        // red pieces (bottom, rows 0-4) - UPPERCASE
         board[0] = new char[]{'R', 'N', 'B', 'A', 'K', 'A', 'B', 'N', 'R'};
         board[2] = new char[]{' ', 'C', ' ', ' ', ' ', ' ', ' ', 'C', ' '};
         board[3] = new char[]{'P', ' ', 'P', ' ', 'P', ' ', 'P', ' ', 'P'};
         
-        // Black pieces (top, rows 5-9) - lowercase
+        // black pieces (top, rows 5-9) - lowercase
         board[6] = new char[]{'p', ' ', 'p', ' ', 'p', ' ', 'p', ' ', 'p'};
         board[7] = new char[]{' ', 'c', ' ', ' ', ' ', ' ', ' ', 'c', ' '};
         board[9] = new char[]{'r', 'n', 'b', 'a', 'k', 'a', 'b', 'n', 'r'};
@@ -80,10 +80,10 @@ public class GameState {
         
         boolean pieceIsRed = Character.isUpperCase(piece) && Character.isLetter(piece);
         if (playerIsRed && !pieceIsRed) {
-            return false; // Player is Red but trying to move Black piece
+            return false; // Player is red but trying to move black piece
         }
         if (!playerIsRed && pieceIsRed) {
-            return false; // Player is Black but trying to move Red piece
+            return false; // Player is black but trying to move red piece
         }
         
         // Validate move according to Chinese Chess rules
@@ -105,7 +105,7 @@ public class GameState {
     }
     
     /**
-     * Set player side (Red or Black)
+     * Set player side (red or black)
      */
     public void setPlayerIsRed(boolean isRed) {
         this.playerIsRed = isRed;

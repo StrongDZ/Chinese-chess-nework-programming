@@ -60,6 +60,15 @@ public class UIState {
     
     // Flag để biết có sử dụng custom board setup không
     private final BooleanProperty useCustomBoard = new SimpleBooleanProperty(false);
+    
+    // Game action trigger - để trigger các action từ network (game_result, draw_request, chat_message)
+    private final StringProperty gameActionTrigger = new SimpleStringProperty("");
+    
+    // Game action result - kết quả của action (win, lose, draw, received, hide, message text)
+    private final StringProperty gameActionResult = new SimpleStringProperty("");
+    
+    // Player side - true nếu player là red, false nếu là black
+    private final BooleanProperty playerIsRed = new SimpleBooleanProperty(true);
 
     // Profile statistics
     private final javafx.beans.property.IntegerProperty totalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
@@ -675,6 +684,45 @@ public class UIState {
     
     public void setUseCustomBoard(boolean value) {
         useCustomBoard.set(value);
+    }
+    
+    // Game action trigger getters/setters
+    public StringProperty gameActionTriggerProperty() {
+        return gameActionTrigger;
+    }
+    
+    public String getGameActionTrigger() {
+        return gameActionTrigger.get();
+    }
+    
+    public void setGameActionTrigger(String value) {
+        gameActionTrigger.set(value);
+    }
+    
+    // Game action result getters/setters
+    public StringProperty gameActionResultProperty() {
+        return gameActionResult;
+    }
+    
+    public String getGameActionResult() {
+        return gameActionResult.get();
+    }
+    
+    public void setGameActionResult(String value) {
+        gameActionResult.set(value);
+    }
+    
+    // Player side getters/setters
+    public BooleanProperty playerIsRedProperty() {
+        return playerIsRed;
+    }
+    
+    public boolean isPlayerRed() {
+        return playerIsRed.get();
+    }
+    
+    public void setPlayerIsRed(boolean value) {
+        playerIsRed.set(value);
     }
 }
 

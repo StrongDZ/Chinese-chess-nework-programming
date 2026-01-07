@@ -233,10 +233,10 @@ public class MoveValidator {
     private static boolean isValidElephantMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // Elephant cannot cross the river
         if (isRed && toRow > 4) {
-            return false; // Red elephant cannot cross river
+            return false; // red elephant cannot cross river
         }
         if (!isRed && toRow < 5) {
-            return false; // Black elephant cannot cross river
+            return false; // black elephant cannot cross river
         }
         
         // Elephant moves 2 squares diagonally
@@ -321,7 +321,7 @@ public class MoveValidator {
         int colDiff = Math.abs(toCol - fromCol);
         
         if (isRed) {
-            // Red pawn (P) starts at bottom (row 0-4), moves forward (toward black) = row increases
+            // red pawn (P) starts at bottom (row 0-4), moves forward (toward black) = row increases
             if (redCrossedRiver(fromRow)) {
                 // After crossing river (row > 4): can move forward or sideways
                 if (rowDiff == 1 && colDiff == 0) {
@@ -337,7 +337,7 @@ public class MoveValidator {
                 }
             }
         } else {
-            // Black pawn (p) starts at top (row 5-9), moves forward (toward red) = row decreases
+            // black pawn (p) starts at top (row 5-9), moves forward (toward red) = row decreases
             if (blackCrossedRiver(fromRow)) {
                 // After crossing river (row < 5): can move forward or sideways
                 if (rowDiff == -1 && colDiff == 0) {

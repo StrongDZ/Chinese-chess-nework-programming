@@ -44,7 +44,7 @@ public class GamePanel extends StackPane {
     private Pane rootPane = null;  // Lưu reference đến root pane để thêm UI
     private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
     private StackPane boardContainer = null;  // Lưu reference đến board container
-    private String currentTurn = "Red";  // Lượt hiện tại: "Red" đi trước, sau đó "Black"
+    private String currentTurn = "red";  // Lượt hiện tại: "red" đi trước, sau đó "black"
 
     public GamePanel(UIState state) {
         this.state = state;
@@ -61,28 +61,27 @@ public class GamePanel extends StackPane {
         container.setStyle("-fx-background-color: transparent;");
         container.setMouseTransparent(false);
         
-        // Khởi tạo rootPane trước để các Manager có thể sử dụng
-        Pane tempRoot = new Pane();
-        tempRoot.setPrefSize(1920, 1080);
-        tempRoot.setStyle("-fx-background-color: transparent;");
-        this.rootPane = tempRoot;
-        
-        // Khởi tạo các Manager
+        // Khởi tạo các Manager KHÔNG cần rootPane trước
+        // (cần cho createGameContent(): capturedPiecesManager, timerManager)
         this.capturedPiecesManager = new CapturedPiecesManager(state, this);
-        this.moveHistoryManager = new MoveHistoryManager(state, this, rootPane);
-        this.chatManager = new ChatManager(state, this, rootPane);
-        this.dialogManager = new DialogManager(state, this, rootPane);
         this.timerManager = new TimerManager(state, this);
         this.chessBoardManager = new ChessBoardManager(state, this);
         
-        // Thiết lập callbacks giữa các Manager
-        setupManagerCallbacks();
-        
+        // Tạo gameContent - rootPane được set bên trong createGameContent()
         StackPane gameContent = createGameContent();
         gameContent.setLayoutX(0);
         gameContent.setLayoutY(0);
         gameContent.setPickOnBounds(true);
         gameContent.setMouseTransparent(false);
+        
+        // Bây giờ rootPane đã được set đúng trong createGameContent()
+        // Khởi tạo các Manager CẦN rootPane
+        this.moveHistoryManager = new MoveHistoryManager(state, this, rootPane);
+        this.chatManager = new ChatManager(state, this, rootPane);
+        this.dialogManager = new DialogManager(state, this, rootPane);
+        
+        // Thiết lập callbacks giữa các Manager
+        setupManagerCallbacks();
         
         container.getChildren().add(gameContent);
         getChildren().add(container);
@@ -151,10 +150,64 @@ public class GamePanel extends StackPane {
             }
         });
         
+        // Listen to game action triggers from UIState
+        state.gameActionTriggerProperty().addListener((obs, oldVal, newVal) -> {
+            System.out.println("[GamePanel] gameActionTrigger changed: oldVal=" + oldVal + ", newVal=" + newVal);
+            
+            if (newVal == null || newVal.isEmpty()) {
+                System.out.println("[GamePanel] Ignoring empty/null trigger");
+                return;
+            }
+            
+            String result = state.getGameActionResult();
+            System.out.println("[GamePanel] Processing trigger=" + newVal + ", result=" + result);
+            
+            switch (newVal) {
+                case "game_result":
+                    System.out.println("[GamePanel] Handling game_result case");
+                    if ("win".equals(result)) {
+                        System.out.println("[GamePanel] Calling showGameResult(true) - WIN");
+                        dialogManager.showGameResult(true);
+                    } else if ("lose".equals(result)) {
+                        System.out.println("[GamePanel] Calling showGameResult(false) - LOSE");
+                        dialogManager.showGameResult(false);
+                    } else if ("draw".equals(result)) {
+                        System.out.println("[GamePanel] Calling showGameResultDraw() - DRAW");
+                        dialogManager.showGameResultDraw();
+                    } else {
+                        System.out.println("[GamePanel] Unknown result: " + result);
+                    }
+                    break;
+                case "draw_request":
+                    System.out.println("[GamePanel] Handling draw_request case");
+                    if ("received".equals(result)) {
+                        System.out.println("[GamePanel] Calling showDrawRequestReceived()");
+                        dialogManager.showDrawRequestReceived();
+                    } else if ("hide".equals(result)) {
+                        System.out.println("[GamePanel] Calling hideDrawRequestReceived()");
+                        dialogManager.hideDrawRequestReceived();
+                    }
+                    break;
+                case "chat_message":
+                    if (result != null && !result.isEmpty()) {
+                        chatManager.showChatPopup(result);
+                    }
+                    break;
+                default:
+                    System.out.println("[GamePanel] Unknown trigger: " + newVal);
+            }
+        });
+        
         chessBoardManager.setOnTurnChanged(() -> {
             timerManager.updateTimersOnTurnChange();
         });
     }
+    
+    // Lưu reference đến profile containers để có thể đổi vị trí
+    private HBox playerProfile = null;
+    private HBox opponentProfile = null;
+    private VBox playerCapturedPieces = null;
+    private VBox opponentCapturedPieces = null;
     
     private StackPane createGameContent() {
         Pane root = new Pane();
@@ -170,25 +223,21 @@ public class GamePanel extends StackPane {
         background.setFitHeight(1080);
         background.setPreserveRatio(false);
         
-        // Top left: User profile
-        HBox topLeftProfile = createUserProfile("ySern", "do 100", true);
-        topLeftProfile.setLayoutX(50);
-        topLeftProfile.setLayoutY(50);
+        // Tạo profile containers (vị trí sẽ được cập nhật dựa trên playerIsRed)
+        playerProfile = createUserProfile("ySern", "do 100", true);
+        opponentProfile = createUserProfile("ySern", "do 100", false);
         
-        // Top left: Captured pieces display (dưới avatar)
-        VBox topLeftCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(true);
-        topLeftCapturedPieces.setLayoutX(50);
-        topLeftCapturedPieces.setLayoutY(50 + 120);  // Dưới avatar (120 là height của avatar)
+        // Tạo captured pieces displays
+        playerCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(true);
+        opponentCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(false);
         
-        // Bottom right: Opponent profile
-        HBox bottomRightProfile = createUserProfile("ySern", "do 100", false);
-        bottomRightProfile.setLayoutX(1920 - 450);  // Giảm từ 500 xuống 550 (sang phải 50px)
-        bottomRightProfile.setLayoutY(1080 - 200);
+        // Cập nhật vị trí profile ban đầu
+        updateProfilePositions(state.isPlayerRed());
         
-        // Bottom right: Captured pieces display (dưới avatar)
-        VBox bottomRightCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(false);
-        bottomRightCapturedPieces.setLayoutX(1920 - 450);
-        bottomRightCapturedPieces.setLayoutY(1080 - 200 + 120);  // Dưới avatar
+        // Listener để cập nhật vị trí profile khi playerIsRed thay đổi
+        state.playerIsRedProperty().addListener((obs, oldVal, newVal) -> {
+            updateProfilePositions(newVal);
+        });
         
         // Left side: Timers - đặt cạnh khung đen bên trái
         VBox timersContainer = timerManager.createTimersContainer();
@@ -260,6 +309,14 @@ public class GamePanel extends StackPane {
         // Lưu reference để có thể reset quân cờ
         this.boardContainer = boardContainer;
         
+        // Xoay bàn cờ theo hướng người chơi: nếu player là black, xoay 180 độ
+        // để phía cờ của người chơi luôn ở dưới
+        state.playerIsRedProperty().addListener((obs, oldVal, newVal) -> {
+            updateBoardRotation(newVal);
+        });
+        // Set rotation ban đầu
+        updateBoardRotation(state.isPlayerRed());
+        
         // Tạo và thêm các quân cờ vào bàn cờ
         // createChessPieces() trả về container có highlight layer và các quân cờ
         piecesContainer = chessBoardManager.createChessPieces();
@@ -274,7 +331,7 @@ public class GamePanel extends StackPane {
             }
         });
         
-        root.getChildren().addAll(background, topLeftProfile, topLeftCapturedPieces, bottomRightProfile, bottomRightCapturedPieces, 
+        root.getChildren().addAll(background, playerProfile, playerCapturedPieces, opponentProfile, opponentCapturedPieces, 
             timersContainer, leftIcons, topRightIcons, boardContainer);
         
         StackPane content = new StackPane();
@@ -297,10 +354,8 @@ public class GamePanel extends StackPane {
         avaProfile.setFitHeight(120);
         avaProfile.setPreserveRatio(true);
         
-        // Chọn avatar ngẫu nhiên từ thư mục ava (1.jpg, 2.jpg, hoặc 3.jpg) để đặt trong ô vuông
-        Random random = new Random();
-        int avatarNumber = random.nextInt(3) + 1;  // Random từ 1 đến 3
-        ImageView avatarInSquare = new ImageView(AssetHelper.image("ava/" + avatarNumber + ".jpg"));
+        // Avatar image - sẽ được cập nhật từ state
+        ImageView avatarInSquare = new ImageView();
         avatarInSquare.setFitWidth(130);
         avatarInSquare.setFitHeight(130);
         avatarInSquare.setPreserveRatio(false);  // Đổi thành false để resize chính xác về 130x130
@@ -335,24 +390,91 @@ public class GamePanel extends StackPane {
         brushStroke.setArcHeight(10);
         brushStroke.setLayoutY(-5);
         
-        // Username - bind với state
+        // Username và Elo labels
         Label usernameLabel = new Label();
-        usernameLabel.textProperty().bind(state.usernameProperty());
+        Label eloLabel = new Label();
+        
+        if (isTopLeft) {
+            // Player profile (top-left) - bind với state
+            usernameLabel.textProperty().bind(state.usernameProperty());
+            eloLabel.textProperty().bind(
+                javafx.beans.binding.Bindings.createStringBinding(
+                    () -> "do " + state.getElo(),
+                    state.currentGameModeProperty(),
+                    state.classicalEloProperty(),
+                    state.blitzEloProperty()
+                )
+            );
+            
+            // Avatar của player: dùng hash của username để chọn avatar nhất quán
+            state.usernameProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && !newVal.isEmpty()) {
+                    int avatarNumber = (newVal.hashCode() % 10 + 10) % 10 + 1;  // 1-10
+                    avatarNumber = Math.min(avatarNumber, 10);  // Giới hạn 1-10
+                    try {
+                        avatarInSquare.setImage(AssetHelper.image("ava/" + avatarNumber + ".jpg"));
+                    } catch (Exception e) {
+                        // Fallback to default
+                        avatarInSquare.setImage(AssetHelper.image("ava/1.jpg"));
+                    }
+                }
+            });
+            // Set initial avatar
+            String currentUsername = state.getUsername();
+            if (currentUsername != null && !currentUsername.isEmpty()) {
+                int avatarNumber = (currentUsername.hashCode() % 10 + 10) % 10 + 1;
+                avatarNumber = Math.min(avatarNumber, 10);
+                try {
+                    avatarInSquare.setImage(AssetHelper.image("ava/" + avatarNumber + ".jpg"));
+                } catch (Exception e) {
+                    avatarInSquare.setImage(AssetHelper.image("ava/1.jpg"));
+                }
+            }
+        } else {
+            // Opponent profile (bottom-right) - bind với opponent state
+            usernameLabel.textProperty().bind(state.opponentUsernameProperty());
+            eloLabel.textProperty().bind(
+                javafx.beans.binding.Bindings.createStringBinding(
+                    () -> "do " + state.getOpponentElo(),
+                    state.opponentEloProperty()
+                )
+            );
+            
+            // Avatar của opponent: dùng hash của opponent username để chọn avatar nhất quán
+            state.opponentUsernameProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && !newVal.isEmpty() && !"AI".equals(newVal)) {
+                    int avatarNumber = (newVal.hashCode() % 10 + 10) % 10 + 1;  // 1-10
+                    avatarNumber = Math.min(avatarNumber, 10);  // Giới hạn 1-10
+                    try {
+                        avatarInSquare.setImage(AssetHelper.image("ava/" + avatarNumber + ".jpg"));
+                    } catch (Exception e) {
+                        // Fallback to default
+                        avatarInSquare.setImage(AssetHelper.image("ava/1.jpg"));
+                    }
+                } else {
+                    // Default avatar for AI or empty
+                    avatarInSquare.setImage(AssetHelper.image("ava/1.jpg"));
+                }
+            });
+            // Set initial avatar
+            String opponentUsername = state.getOpponentUsername();
+            if (opponentUsername != null && !opponentUsername.isEmpty() && !"AI".equals(opponentUsername)) {
+                int avatarNumber = (opponentUsername.hashCode() % 10 + 10) % 10 + 1;
+                avatarNumber = Math.min(avatarNumber, 10);
+                try {
+                    avatarInSquare.setImage(AssetHelper.image("ava/" + avatarNumber + ".jpg"));
+                } catch (Exception e) {
+                    avatarInSquare.setImage(AssetHelper.image("ava/1.jpg"));
+                }
+            } else {
+                avatarInSquare.setImage(AssetHelper.image("ava/1.jpg"));
+            }
+        }
+        
         usernameLabel.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 60px; -fx-text-fill: white; -fx-background-color: transparent;");
         usernameLabel.setLayoutX(-310);
         usernameLabel.setLayoutY(-10);
         
-        // Elo/Level
-        Label eloLabel = new Label();
-        // Bind với elo từ state theo currentGameMode và format thành "do [elo]"
-        eloLabel.textProperty().bind(
-            javafx.beans.binding.Bindings.createStringBinding(
-                () -> "do " + state.getElo(),  // getElo() tự động lấy theo currentGameMode
-                state.currentGameModeProperty(),
-                state.classicalEloProperty(),
-                state.blitzEloProperty()
-            )
-        );
         eloLabel.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 50px; -fx-text-fill: white; -fx-background-color: transparent;");
         eloLabel.setLayoutX(-310);
         eloLabel.setLayoutY(35);
@@ -365,7 +487,7 @@ public class GamePanel extends StackPane {
     
     /**
      * Tạo UI để hiển thị các quân cờ đã ăn được
-     * @param isTopLeft true nếu là người chơi top-left (Red), false nếu là bottom-right (Black)
+     * @param isTopLeft true nếu là người chơi top-left (red), false nếu là bottom-right (black)
      */
     // Methods createCapturedPiecesDisplay, addCapturedPiece, updateCapturedPiecesDisplay, 
     // createCapturedPieceIcon, resetCapturedPieces đã được chuyển sang CapturedPiecesManager
@@ -643,7 +765,7 @@ public class GamePanel extends StackPane {
                         
                         PieceInfo info = (PieceInfo) imgView.getUserData();
                         // Convert piece type to character
-                        char pieceChar = ChessBoardManager.getPieceChar(info.pieceType, info.color.equals("Red"));
+                        char pieceChar = ChessBoardManager.getPieceChar(info.pieceType, info.color.equals("red"));
                         board[pieceRow][pieceCol] = pieceChar;
                         
                         // Tìm quân cờ tại vị trí được click
@@ -682,7 +804,7 @@ public class GamePanel extends StackPane {
             validMovesList[0].addAll(validMoves);
             
             // Xác định màu của quân cờ để chọn màu chấm tròn (pieceInfo đã được khai báo ở trên)
-            boolean isRedPiece = pieceInfo != null && pieceInfo.color.equals("Red");
+            boolean isRedPiece = pieceInfo != null && pieceInfo.color.equals("red");
             Color dotColor = isRedPiece ? Color.web("#DC143C") : Color.web("#1C1C1C"); // Đỏ hoặc đen
             
             // Vẽ dấu chấm tròn hoặc vòng tròn có viền cho mỗi ô hợp lệ
@@ -696,10 +818,10 @@ public class GamePanel extends StackPane {
                 
                 if (targetPiece != ' ' && targetPiece != '\0') {
                     // Có quân cờ ở ô đích
-                    // Kiểm tra màu: Red pieces là uppercase (K, A, B, N, R, C, P)
-                    // Black pieces là lowercase (k, a, b, n, r, c, p)
+                    // Kiểm tra màu: red pieces là uppercase (K, A, B, N, R, C, P)
+                    // black pieces là lowercase (k, a, b, n, r, c, p)
                     boolean targetIsRed = Character.isUpperCase(targetPiece);
-                    boolean selectedIsRed = pieceInfo != null && pieceInfo.color.equals("Red");
+                    boolean selectedIsRed = pieceInfo != null && pieceInfo.color.equals("red");
                     
                     // Nếu khác màu, đây là quân cờ địch có thể bị ăn
                     if (targetIsRed != selectedIsRed) {
@@ -732,7 +854,7 @@ public class GamePanel extends StackPane {
                         offsetX = -4;  // Dịch sang trái 4px
                     }
                 } else {
-                    // Black pieces: điều chỉnh offsetX cho cột 0-4
+                    // black pieces: điều chỉnh offsetX cho cột 0-4
                     if (toCol < 5) {  // Cột 0, 1, 2, 3, 4
                         offsetX = -5;  // Dịch sang trái 5px để khớp với giao điểm
                     } else {  // Cột 5, 6, 7, 8
@@ -822,8 +944,8 @@ public class GamePanel extends StackPane {
                                 PieceInfo selectedInfo = (PieceInfo) selectedPiece[0].getUserData();
                                 
                                 if (capturedInfo != null && selectedInfo != null) {
-                                    boolean capturedIsRed = capturedInfo.color.equals("Red");
-                                    boolean selectedIsRed = selectedInfo.color.equals("Red");
+                                    boolean capturedIsRed = capturedInfo.color.equals("red");
+                                    boolean selectedIsRed = selectedInfo.color.equals("red");
                                     
                                     // Nếu cùng màu, không cho phép ăn (đã được validate bởi MoveValidator, nhưng double check)
                                     if (capturedIsRed == selectedIsRed) {
@@ -869,7 +991,7 @@ public class GamePanel extends StackPane {
                     addMove(pieceInfo.color, pieceInfo.pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
                     
                     // Đổi lượt sau khi đi xong
-                    currentTurn = currentTurn.equals("Red") ? "Black" : "Red";
+                    currentTurn = currentTurn.equals("red") ? "black" : "red";
                     
                     // Cập nhật timers khi đổi lượt (trong blitz/custom mode)
                     updateTimersOnTurnChange();
@@ -955,8 +1077,8 @@ public class GamePanel extends StackPane {
                     
                     // Kiểm tra xem quân cờ được click có phải là quân cờ địch không
                     if (pieceInfo != null && selectedPieceInfo != null) {
-                        boolean clickedIsRed = pieceInfo.color.equals("Red");
-                        boolean selectedIsRed = selectedPieceInfo.color.equals("Red");
+                        boolean clickedIsRed = pieceInfo.color.equals("red");
+                        boolean selectedIsRed = selectedPieceInfo.color.equals("red");
                         
                         // Nếu khác màu, thử di chuyển và ăn quân cờ này
                         if (clickedIsRed != selectedIsRed) {
@@ -1007,13 +1129,13 @@ public class GamePanel extends StackPane {
                 // Offset điều chỉnh: quân đỏ dịch lên trên, quân đen dịch sang phải
                 double offsetX = 0;
                 double offsetY = 0;
-                if ("Red".equals(color)) {
+                if ("red".equals(color)) {
                     offsetY = -10;  // Dịch lên trên 10px
                     // Điều chỉnh thêm cho các cột bên phải
                     if (pos[1] >= 5) {  // Cột 5, 6, 7, 8
                         offsetX = 5;  // Dịch sang phải thêm 5px
                     }
-                } else if ("Black".equals(color)) {
+                } else if ("black".equals(color)) {
                     offsetX = 4;   // Dịch sang phải 4px
                     // Điều chỉnh thêm cho các cột bên phải
                     if (pos[1] >= 5) {  // Cột 5, 6, 7, 8
@@ -1056,49 +1178,49 @@ public class GamePanel extends StackPane {
         } else {
             // Standard starting positions - Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
             // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-            placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 0});
-            placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 1});
-            placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 2});
-            placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 3});
-            placePiece.accept(createPiece.apply("Red", "King"), new int[]{0, 4});
-            placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 5});
-            placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 6});
-            placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 7});
-            placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 8});
+            placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 0});
+            placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 1});
+            placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 2});
+            placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 3});
+            placePiece.accept(createPiece.apply("red", "King"), new int[]{0, 4});
+            placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 5});
+            placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 6});
+            placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 7});
+            placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 8});
             
             // Hàng 2: Pháo ở cột 1 và 7
-            placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 1});
-            placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 7});
+            placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 1});
+            placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 7});
             
             // Hàng 3: Tốt ở cột 0, 2, 4, 6, 8
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 0});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 2});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 4});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 6});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 8});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 0});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 2});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 4});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 6});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 8});
             
             // Sắp xếp quân cờ ĐEN (hàng 5-9, trên cùng)
             // Hàng 9: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-            placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 0});
-            placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 1});
-            placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 2});
-            placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 3});
-            placePiece.accept(createPiece.apply("Black", "King"), new int[]{9, 4});
-            placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 5});
-            placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 6});
-            placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 7});
-            placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 8});
+            placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 0});
+            placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 1});
+            placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 2});
+            placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 3});
+            placePiece.accept(createPiece.apply("black", "King"), new int[]{9, 4});
+            placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 5});
+            placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 6});
+            placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 7});
+            placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 8});
             
             // Hàng 7: Pháo ở cột 1 và 7
-            placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 1});
-            placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 7});
+            placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 1});
+            placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 7});
             
             // Hàng 6: Tốt ở cột 0, 2, 4, 6, 8
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 0});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 2});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 4});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 6});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 0});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 2});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 4});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 6});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 8});
         }
         
         // Thêm highlight layer và click layer
@@ -1658,6 +1780,57 @@ public class GamePanel extends StackPane {
     }
     
     /**
+     * Cập nhật vị trí profile dựa trên playerIsRed
+     * Player luôn ở bottom-right, opponent luôn ở top-left
+     */
+    private void updateProfilePositions(boolean isPlayerRed) {
+        if (playerProfile == null || opponentProfile == null || 
+            playerCapturedPieces == null || opponentCapturedPieces == null) {
+            return;
+        }
+        
+        // Player luôn ở bottom-right, opponent luôn ở top-left
+        // Không phụ thuộc vào playerIsRed
+        
+        // Player profile ở bottom-right
+        playerProfile.setLayoutX(1920 - 450);
+        playerProfile.setLayoutY(1080 - 200);
+        playerCapturedPieces.setLayoutX(1920 - 450);
+        playerCapturedPieces.setLayoutY(1080 - 200 + 120);
+        
+        // Opponent profile ở top-left
+        opponentProfile.setLayoutX(50);
+        opponentProfile.setLayoutY(50);
+        opponentCapturedPieces.setLayoutX(50);
+        opponentCapturedPieces.setLayoutY(50 + 120);
+    }
+    
+    /**
+     * Xoay bàn cờ theo hướng người chơi
+     * Nếu player là black, xoay 180 độ để phía cờ của người chơi luôn ở dưới
+     */
+    private void updateBoardRotation(boolean isPlayerRed) {
+        if (boardContainer == null) {
+            return;
+        }
+        
+        // Nếu player là black, xoay 180 độ
+        // Nếu player là red, không xoay (0 độ)
+        double rotation = isPlayerRed ? 0.0 : 180.0;
+        
+        // Xoay boardContainer - điều này sẽ xoay tất cả children (boardImage, piecesContainer)
+        // Khi xoay 180 độ, pivot point là center của boardContainer
+        boardContainer.setRotate(rotation);
+        
+        // Đảm bảo piecesContainer cũng được xoay (nếu có)
+        if (piecesContainer != null) {
+            // piecesContainer sẽ tự động xoay theo boardContainer vì nó là child
+            // Nhưng để chắc chắn, set rotation riêng
+            piecesContainer.setRotate(rotation);
+        }
+    }
+    
+    /**
      * Reset tất cả các panel và dialog của game
      */
     private void resetAllGamePanels() {
@@ -1665,8 +1838,8 @@ public class GamePanel extends StackPane {
             return; // rootPane chưa được khởi tạo
         }
         
-        // Reset currentTurn về Red (mặc định Red đi trước)
-        currentTurn = "Red";
+        // Reset currentTurn về red (mặc định red đi trước)
+        currentTurn = "red";
         
         // Reset các Manager
         dialogManager.resetAllDialogs();
@@ -1695,6 +1868,9 @@ public class GamePanel extends StackPane {
             piecesContainer.setManaged(true);
             piecesContainer.setMouseTransparent(false);
             piecesContainer.setPickOnBounds(true);
+            
+            // Đảm bảo rotation được áp dụng
+            updateBoardRotation(state.isPlayerRed());
         }
     }
 }

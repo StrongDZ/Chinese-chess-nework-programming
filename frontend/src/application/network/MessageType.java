@@ -12,6 +12,7 @@ public enum MessageType {
 
     // Game Management
     QUICK_MATCHING,
+    CANCEL_QM,
     CHALLENGE_CANCEL,
     CHALLENGE_REQUEST,
     CHALLENGE_RESPONSE,

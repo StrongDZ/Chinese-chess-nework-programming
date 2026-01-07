@@ -94,7 +94,7 @@ public class GameSender {
      */
     public void respondDraw(boolean accepted) throws IOException {
         JsonObject payload = new JsonObject();
-        payload.addProperty("accepted", accepted);
+        payload.addProperty("accept_draw", accepted);  // Backend expects "accept_draw", not "accepted"
         socketClient.send(MessageType.DRAW_RESPONSE, gson.toJson(payload));
     }
     
@@ -112,5 +112,28 @@ public class GameSender {
      */
     public void requestSuggestMove() throws IOException {
         socketClient.send(MessageType.SUGGEST_MOVE, "{}");
+    }
+    
+    /**
+     * Request quick matching to find an opponent.
+     */
+    public void requestQuickMatching() throws IOException {
+        socketClient.send(MessageType.QUICK_MATCHING, "{}");
+    }
+    
+    /**
+     * Cancel quick matching request.
+     */
+    public void cancelQuickMatching() throws IOException {
+        socketClient.send(MessageType.CANCEL_QM, "{}");
+    }
+    
+    /**
+     * Send chat message to opponent.
+     */
+    public void sendMessage(String message) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("message", message);
+        socketClient.send(MessageType.MESSAGE, gson.toJson(payload));
     }
 }

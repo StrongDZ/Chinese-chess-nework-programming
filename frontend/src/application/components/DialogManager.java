@@ -43,8 +43,8 @@ public class DialogManager {
      */
     public void showSurrenderConfirmation() {
         // Nếu đã có dialog, xóa nó trước
-        if (surrenderDialog != null && rootPane != null && rootPane.getChildren().contains(surrenderDialog)) {
-            rootPane.getChildren().remove(surrenderDialog);
+        if (surrenderDialog != null && gamePanel != null && gamePanel.getChildren().contains(surrenderDialog)) {
+            gamePanel.getChildren().remove(surrenderDialog);
         }
         
         // Tạo dialog panel ở giữa màn hình
@@ -52,6 +52,8 @@ public class DialogManager {
         surrenderDialog.setLayoutX((1920 - 500) / 2);  // Căn giữa theo chiều ngang
         surrenderDialog.setLayoutY((1080 - 300) / 2);  // Căn giữa theo chiều dọc
         surrenderDialog.setPrefSize(500, 300);
+        surrenderDialog.setPickOnBounds(true);
+        surrenderDialog.setMouseTransparent(false);
         
         // Background cho dialog
         Rectangle dialogBg = new Rectangle(500, 300);
@@ -74,6 +76,8 @@ public class DialogManager {
         contentContainer.setPrefSize(500, 300);
         contentContainer.setAlignment(Pos.CENTER);
         contentContainer.setStyle("-fx-padding: 20 40 40 40;");  // Giảm padding top từ 40 xuống 20 để dịch lên
+        contentContainer.setPickOnBounds(true);
+        contentContainer.setMouseTransparent(false);
         
         // Label câu hỏi
         Label questionLabel = new Label("Are you sure you want to surrender?");
@@ -97,7 +101,16 @@ public class DialogManager {
         yesButton.setOnMouseClicked(e -> {
             // Xử lý khi bấm Yes (surrender)
             hideSurrenderConfirmation();
-            showGameResult(false);  // false = người chơi thua
+            
+            // Gửi RESIGN message đến backend
+            try {
+                application.network.NetworkManager.getInstance().game().resign();
+            } catch (Exception ex) {
+                System.err.println("[DialogManager] Error sending resign: " + ex.getMessage());
+                // Vẫn hiển thị kết quả game ngay cả khi gửi lỗi (offline mode)
+                showGameResult(false);
+            }
+            
             e.consume();
         });
         
@@ -114,8 +127,11 @@ public class DialogManager {
         
         surrenderDialog.getChildren().addAll(dialogBg, contentContainer);
         
-        // Thêm vào root pane
-        rootPane.getChildren().add(surrenderDialog);
+        // Thêm vào GamePanel (StackPane) để đảm bảo dialog ở trên cùng
+        gamePanel.getChildren().add(surrenderDialog);
+        
+        // Đưa dialog lên trên cùng để không bị che
+        surrenderDialog.toFront();
         
         // Fade in animation
         surrenderDialog.setOpacity(0);
@@ -128,13 +144,13 @@ public class DialogManager {
      * Ẩn dialog xác nhận đầu hàng
      */
     public void hideSurrenderConfirmation() {
-        if (surrenderDialog != null && rootPane != null && rootPane.getChildren().contains(surrenderDialog)) {
+        if (surrenderDialog != null && gamePanel != null && gamePanel.getChildren().contains(surrenderDialog)) {
             // Fade out animation
             FadeTransition fadeOut = new FadeTransition(Duration.millis(300), surrenderDialog);
             fadeOut.setToValue(0.0);
             fadeOut.setOnFinished(event -> {
-                if (rootPane.getChildren().contains(surrenderDialog)) {
-                    rootPane.getChildren().remove(surrenderDialog);
+                if (gamePanel.getChildren().contains(surrenderDialog)) {
+                    gamePanel.getChildren().remove(surrenderDialog);
                 }
             });
             fadeOut.play();
@@ -146,8 +162,8 @@ public class DialogManager {
      */
     public void showDrawRequestConfirmation() {
         // Nếu đã có dialog, xóa nó trước
-        if (drawRequestDialog != null && rootPane != null && rootPane.getChildren().contains(drawRequestDialog)) {
-            rootPane.getChildren().remove(drawRequestDialog);
+        if (drawRequestDialog != null && gamePanel != null && gamePanel.getChildren().contains(drawRequestDialog)) {
+            gamePanel.getChildren().remove(drawRequestDialog);
         }
         
         // Tạo dialog panel ở giữa màn hình
@@ -155,6 +171,8 @@ public class DialogManager {
         drawRequestDialog.setLayoutX((1920 - 600) / 2);  // Căn giữa theo chiều ngang
         drawRequestDialog.setLayoutY((1080 - 300) / 2);  // Căn giữa theo chiều dọc
         drawRequestDialog.setPrefSize(600, 300);
+        drawRequestDialog.setPickOnBounds(true);
+        drawRequestDialog.setMouseTransparent(false);
         
         // Background cho dialog
         Rectangle dialogBg = new Rectangle(600, 300);
@@ -177,6 +195,8 @@ public class DialogManager {
         contentContainer.setPrefSize(600, 300);
         contentContainer.setAlignment(Pos.CENTER);
         contentContainer.setStyle("-fx-padding: 20 40 40 40;");
+        contentContainer.setPickOnBounds(true);
+        contentContainer.setMouseTransparent(false);
         
         // Label câu hỏi
         Label questionLabel = new Label("Are you sure you want to request a draw?");
@@ -200,9 +220,16 @@ public class DialogManager {
         yesButton.setOnMouseClicked(e -> {
             // Gửi draw request đến đối phương
             hideDrawRequestConfirmation();
-            // TODO: Gửi draw request qua network
-            // Tạm thời hiển thị dialog cho đối phương (sẽ được thay bằng network call)
-            showDrawRequestReceived();
+            
+            // Gửi DRAW_REQUEST message đến backend
+            try {
+                application.network.NetworkManager.getInstance().game().requestDraw();
+            } catch (Exception ex) {
+                System.err.println("[DialogManager] Error sending draw request: " + ex.getMessage());
+            }
+            
+            // KHÔNG tự động hiển thị dialog cho đối phương - chỉ gửi request qua network
+            // Dialog "the opposite side wants to..." sẽ được hiển thị khi đối phương nhận được request từ backend
             e.consume();
         });
         
@@ -218,8 +245,11 @@ public class DialogManager {
         
         drawRequestDialog.getChildren().addAll(dialogBg, contentContainer);
         
-        // Thêm vào root pane
-        rootPane.getChildren().add(drawRequestDialog);
+        // Thêm vào GamePanel (StackPane) để đảm bảo dialog ở trên cùng
+        gamePanel.getChildren().add(drawRequestDialog);
+        
+        // Đưa dialog lên trên cùng để không bị che
+        drawRequestDialog.toFront();
         
         // Fade in animation
         drawRequestDialog.setOpacity(0);
@@ -232,12 +262,12 @@ public class DialogManager {
      * Ẩn dialog xác nhận đề nghị hòa
      */
     public void hideDrawRequestConfirmation() {
-        if (drawRequestDialog != null && rootPane != null && rootPane.getChildren().contains(drawRequestDialog)) {
+        if (drawRequestDialog != null && gamePanel != null && gamePanel.getChildren().contains(drawRequestDialog)) {
             FadeTransition fadeOut = new FadeTransition(Duration.millis(300), drawRequestDialog);
             fadeOut.setToValue(0.0);
             fadeOut.setOnFinished(event -> {
-                if (rootPane.getChildren().contains(drawRequestDialog)) {
-                    rootPane.getChildren().remove(drawRequestDialog);
+                if (gamePanel.getChildren().contains(drawRequestDialog)) {
+                    gamePanel.getChildren().remove(drawRequestDialog);
                 }
             });
             fadeOut.play();
@@ -249,8 +279,8 @@ public class DialogManager {
      */
     public void showDrawRequestReceived() {
         // Nếu đã có dialog, xóa nó trước
-        if (drawReceivedDialog != null && rootPane != null && rootPane.getChildren().contains(drawReceivedDialog)) {
-            rootPane.getChildren().remove(drawReceivedDialog);
+        if (drawReceivedDialog != null && gamePanel != null && gamePanel.getChildren().contains(drawReceivedDialog)) {
+            gamePanel.getChildren().remove(drawReceivedDialog);
         }
         
         // Tạo dialog panel ở giữa màn hình
@@ -258,6 +288,8 @@ public class DialogManager {
         drawReceivedDialog.setLayoutX((1920 - 600) / 2);  // Căn giữa theo chiều ngang
         drawReceivedDialog.setLayoutY((1080 - 300) / 2);  // Căn giữa theo chiều dọc
         drawReceivedDialog.setPrefSize(600, 300);
+        drawReceivedDialog.setPickOnBounds(true);
+        drawReceivedDialog.setMouseTransparent(false);
         
         // Background cho dialog
         Rectangle dialogBg = new Rectangle(600, 300);
@@ -280,6 +312,8 @@ public class DialogManager {
         contentContainer.setPrefSize(600, 300);
         contentContainer.setAlignment(Pos.CENTER);
         contentContainer.setStyle("-fx-padding: 20 40 40 40;");
+        contentContainer.setPickOnBounds(true);
+        contentContainer.setMouseTransparent(false);
         
         // Label thông báo
         Label messageLabel = new Label("The opposing side wants to sue for peace");
@@ -303,9 +337,16 @@ public class DialogManager {
         yesButton.setOnMouseClicked(e -> {
             // Chấp nhận draw - kết thúc game hòa
             hideDrawRequestReceived();
-            // TODO: Gửi accept draw qua network
-            // Tạm thời hiển thị kết quả hòa
-            showGameResultDraw();
+            
+            // Gửi DRAW_RESPONSE với accept=true đến backend
+            try {
+                application.network.NetworkManager.getInstance().game().respondDraw(true);
+            } catch (Exception ex) {
+                System.err.println("[DialogManager] Error sending draw response: " + ex.getMessage());
+                // Vẫn hiển thị kết quả hòa ngay cả khi gửi lỗi (offline mode)
+                showGameResultDraw();
+            }
+            
             e.consume();
         });
         
@@ -313,7 +354,14 @@ public class DialogManager {
         StackPane noButton = createDialogButton("No", false);
         noButton.setOnMouseClicked(e -> {
             hideDrawRequestReceived();
-            // TODO: Gửi reject draw qua network
+            
+            // Gửi DRAW_RESPONSE với accept=false đến backend
+            try {
+                application.network.NetworkManager.getInstance().game().respondDraw(false);
+            } catch (Exception ex) {
+                System.err.println("[DialogManager] Error sending draw response: " + ex.getMessage());
+            }
+            
             e.consume();
         });
         
@@ -322,8 +370,11 @@ public class DialogManager {
         
         drawReceivedDialog.getChildren().addAll(dialogBg, contentContainer);
         
-        // Thêm vào root pane
-        rootPane.getChildren().add(drawReceivedDialog);
+        // Thêm vào GamePanel (StackPane) để đảm bảo dialog ở trên cùng
+        gamePanel.getChildren().add(drawReceivedDialog);
+        
+        // Đưa dialog lên trên cùng để không bị che
+        drawReceivedDialog.toFront();
         
         // Fade in animation
         drawReceivedDialog.setOpacity(0);
@@ -336,12 +387,12 @@ public class DialogManager {
      * Ẩn dialog nhận yêu cầu hòa
      */
     public void hideDrawRequestReceived() {
-        if (drawReceivedDialog != null && rootPane != null && rootPane.getChildren().contains(drawReceivedDialog)) {
+        if (drawReceivedDialog != null && gamePanel != null && gamePanel.getChildren().contains(drawReceivedDialog)) {
             FadeTransition fadeOut = new FadeTransition(Duration.millis(300), drawReceivedDialog);
             fadeOut.setToValue(0.0);
             fadeOut.setOnFinished(event -> {
-                if (rootPane.getChildren().contains(drawReceivedDialog)) {
-                    rootPane.getChildren().remove(drawReceivedDialog);
+                if (gamePanel.getChildren().contains(drawReceivedDialog)) {
+                    gamePanel.getChildren().remove(drawReceivedDialog);
                 }
             });
             fadeOut.play();
@@ -352,6 +403,9 @@ public class DialogManager {
      * Hiển thị kết quả game
      */
     public void showGameResult(boolean isWinner) {
+        System.out.println("[DialogManager] showGameResult() called - isWinner=" + isWinner);
+        System.out.println("[DialogManager] rootPane=" + (rootPane != null ? "not null" : "NULL"));
+        System.out.println("[DialogManager] gamePanel=" + (gamePanel != null ? "not null" : "NULL"));
         int eloDelta = isWinner ? eloChange : -eloChange;
         String resultText = isWinner ? "You win" : "You lose";
         showGameResultWithCustomText(resultText, eloDelta);
@@ -361,6 +415,14 @@ public class DialogManager {
      * Hiển thị kết quả game với text và elo delta tùy chỉnh
      */
     public void showGameResultWithCustomText(String resultText, int eloDelta) {
+        System.out.println("[DialogManager] showGameResultWithCustomText() called - resultText=" + resultText + ", eloDelta=" + eloDelta);
+        System.out.println("[DialogManager] rootPane=" + (rootPane != null ? "not null, children count: " + rootPane.getChildren().size() : "NULL!"));
+        
+        if (rootPane == null) {
+            System.err.println("[DialogManager] ERROR: rootPane is NULL, cannot show game result!");
+            return;
+        }
+        
         // Nếu eloDelta = 0, không hiển thị elo change
         if (gameResultPanel != null && rootPane != null && rootPane.getChildren().contains(gameResultPanel)) {
             rootPane.getChildren().remove(gameResultPanel);
@@ -458,8 +520,10 @@ public class DialogManager {
         
         gameResultPanel.getChildren().addAll(panelBg, contentContainer);
         
+        System.out.println("[DialogManager] Adding gameResultOverlay and gameResultPanel to rootPane");
         rootPane.getChildren().add(gameResultOverlay);
         rootPane.getChildren().add(gameResultPanel);
+        System.out.println("[DialogManager] Added! rootPane children count: " + rootPane.getChildren().size());
         
         gameResultOverlay.setOpacity(0);
         gameResultPanel.setOpacity(0);
@@ -469,12 +533,16 @@ public class DialogManager {
         panelFadeIn.setToValue(1.0);
         overlayFadeIn.play();
         panelFadeIn.play();
+        System.out.println("[DialogManager] Game result dialog displayed successfully");
     }
     
     /**
      * Hiển thị kết quả hòa
      */
     public void showGameResultDraw() {
+        System.out.println("[DialogManager] showGameResultDraw() called");
+        System.out.println("[DialogManager] rootPane=" + (rootPane != null ? "not null" : "NULL"));
+        System.out.println("[DialogManager] gamePanel=" + (gamePanel != null ? "not null" : "NULL"));
         // Hiển thị kết quả hòa (không thay đổi elo)
         showGameResultWithCustomText("Draw", 0);  // 0 = không thay đổi elo
     }
@@ -536,20 +604,20 @@ public class DialogManager {
         
         // Reset các dialog khác
         if (surrenderDialog != null) {
-            if (rootPane.getChildren().contains(surrenderDialog)) {
-                rootPane.getChildren().remove(surrenderDialog);
+            if (gamePanel != null && gamePanel.getChildren().contains(surrenderDialog)) {
+                gamePanel.getChildren().remove(surrenderDialog);
             }
             surrenderDialog = null;
         }
         if (drawRequestDialog != null) {
-            if (rootPane.getChildren().contains(drawRequestDialog)) {
-                rootPane.getChildren().remove(drawRequestDialog);
+            if (gamePanel != null && gamePanel.getChildren().contains(drawRequestDialog)) {
+                gamePanel.getChildren().remove(drawRequestDialog);
             }
             drawRequestDialog = null;
         }
         if (drawReceivedDialog != null) {
-            if (rootPane.getChildren().contains(drawReceivedDialog)) {
-                rootPane.getChildren().remove(drawReceivedDialog);
+            if (gamePanel != null && gamePanel.getChildren().contains(drawReceivedDialog)) {
+                gamePanel.getChildren().remove(drawReceivedDialog);
             }
             drawReceivedDialog = null;
         }

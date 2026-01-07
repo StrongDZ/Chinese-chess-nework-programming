@@ -233,14 +233,18 @@ public class MainMenuPanel extends StackPane {
         playNow.setLayoutX(0);
         playNow.setLayoutY(0);
         playNow.setOnMouseClicked(e -> {
-            // Set timer values thành "Unlimited time" (classic mode)
-            state.setTimer1Value("Unlimited time");
-            state.setTimer2Value("Unlimited time");
-            state.setTimer3Value("Unlimited time");
-            state.setTimer4Value("Unlimited time");
-            
-            // Mở waiting panel vì Play Now luôn là random opponent
+            // Mở waiting panel ngay lập tức
             state.openWaiting();
+            
+            // Gửi QUICK_MATCHING request đến server
+            try {
+                application.network.NetworkManager.getInstance().game().requestQuickMatching();
+            } catch (java.io.IOException ex) {
+                System.err.println("[MainMenuPanel] Error sending QUICK_MATCHING: " + ex.getMessage());
+                ex.printStackTrace();
+                // Đóng waiting panel nếu có lỗi
+                state.closeWaiting();
+            }
         });
 
         // History button - 300x215, trên và bên phải Play now

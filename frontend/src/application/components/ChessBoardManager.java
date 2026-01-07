@@ -179,7 +179,7 @@ public class ChessBoardManager {
                         
                         PieceInfo info = (PieceInfo) imgView.getUserData();
                         // Convert piece type to character
-                        char pieceChar = getPieceChar(info.pieceType, info.color.equals("Red"));
+                        char pieceChar = getPieceChar(info.pieceType, info.color.equals("red"));
                         board[pieceRow][pieceCol] = pieceChar;
                         
                         // Tìm quân cờ tại vị trí được click
@@ -219,7 +219,7 @@ public class ChessBoardManager {
             validMovesList[0].addAll(validMoves);
             
             // Xác định màu của quân cờ để chọn màu chấm tròn (pieceInfo đã được khai báo ở trên)
-            boolean isRedPiece = pieceInfo != null && pieceInfo.color.equals("Red");
+            boolean isRedPiece = pieceInfo != null && pieceInfo.color.equals("red");
             Color dotColor = isRedPiece ? Color.web("#DC143C") : Color.web("#1C1C1C"); // Đỏ hoặc đen
             
             // Vẽ dấu chấm tròn hoặc vòng tròn có viền cho mỗi ô hợp lệ
@@ -233,10 +233,10 @@ public class ChessBoardManager {
                 
                 if (targetPiece != ' ' && targetPiece != '\0') {
                     // Có quân cờ ở ô đích
-                    // Kiểm tra màu: Red pieces là uppercase (K, A, B, N, R, C, P)
-                    // Black pieces là lowercase (k, a, b, n, r, c, p)
+                    // Kiểm tra màu: red pieces là uppercase (K, A, B, N, R, C, P)
+                    // black pieces là lowercase (k, a, b, n, r, c, p)
                     boolean targetIsRed = Character.isUpperCase(targetPiece);
-                    boolean selectedIsRed = pieceInfo != null && pieceInfo.color.equals("Red");
+                    boolean selectedIsRed = pieceInfo != null && pieceInfo.color.equals("red");
                     
                     // Nếu khác màu, đây là quân cờ địch có thể bị ăn
                     if (targetIsRed != selectedIsRed) {
@@ -269,7 +269,7 @@ public class ChessBoardManager {
                         offsetX = -4;  // Dịch sang trái 4px
                     }
                 } else {
-                    // Black pieces: điều chỉnh offsetX cho cột 0-4
+                    // black pieces: điều chỉnh offsetX cho cột 0-4
                     if (toCol < 5) {  // Cột 0, 1, 2, 3, 4
                         offsetX = -5;  // Dịch sang trái 5px để khớp với giao điểm
                     } else {  // Cột 5, 6, 7, 8
@@ -359,8 +359,8 @@ public class ChessBoardManager {
                                 PieceInfo selectedInfo = (PieceInfo) selectedPiece[0].getUserData();
                                 
                                 if (capturedInfo != null && selectedInfo != null) {
-                                    boolean capturedIsRed = capturedInfo.color.equals("Red");
-                                    boolean selectedIsRed = selectedInfo.color.equals("Red");
+                                    boolean capturedIsRed = capturedInfo.color.equals("red");
+                                    boolean selectedIsRed = selectedInfo.color.equals("red");
                                     
                                     // Nếu cùng màu, không cho phép ăn (đã được validate bởi MoveValidator, nhưng double check)
                                     if (capturedIsRed == selectedIsRed) {
@@ -414,7 +414,7 @@ public class ChessBoardManager {
                     }
                     
                     // Đổi lượt sau khi đi xong
-                    gamePanel.setCurrentTurn(gamePanel.getCurrentTurn().equals("Red") ? "Black" : "Red");
+                    gamePanel.setCurrentTurn(gamePanel.getCurrentTurn().equals("red") ? "black" : "red");
                     
                     // Thông báo đã đổi lượt
                     if (onTurnChanged != null) {
@@ -458,7 +458,9 @@ public class ChessBoardManager {
         
         // Hàm helper để tạo quân cờ với drag functionality
         java.util.function.BiFunction<String, String, ImageView> createPiece = (color, pieceType) -> {
-            String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + color + ".png";
+            // Capitalize first letter of color for filename (Red/Black)
+            String colorCapitalized = color.substring(0, 1).toUpperCase() + color.substring(1);
+            String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + colorCapitalized + ".png";
             ImageView piece = new ImageView(AssetHelper.image(imagePath));
             piece.setFitWidth(pieceWidth);  // Kích thước quân cờ
             piece.setFitHeight(pieceHeight);
@@ -504,8 +506,8 @@ public class ChessBoardManager {
                     
                     // Kiểm tra xem quân cờ được click có phải là quân cờ địch không
                     if (pieceInfo != null && selectedPieceInfo != null) {
-                        boolean clickedIsRed = pieceInfo.color.equals("Red");
-                        boolean selectedIsRed = selectedPieceInfo.color.equals("Red");
+                        boolean clickedIsRed = pieceInfo.color.equals("red");
+                        boolean selectedIsRed = selectedPieceInfo.color.equals("red");
                         
                         // Nếu khác màu, thử di chuyển và ăn quân cờ này
                         if (clickedIsRed != selectedIsRed) {
@@ -555,13 +557,13 @@ public class ChessBoardManager {
                 // Offset điều chỉnh: quân đỏ dịch lên trên, quân đen dịch sang phải
                 double offsetX = 0;
                 double offsetY = 0;
-                if ("Red".equals(color)) {
+                if ("red".equals(color)) {
                     offsetY = -10;  // Dịch lên trên 10px
                     // Điều chỉnh thêm cho các cột bên phải
                     if (pos[1] >= 5) {  // Cột 5, 6, 7, 8
                         offsetX = 5;  // Dịch sang phải thêm 5px
                     }
-                } else if ("Black".equals(color)) {
+                } else if ("black".equals(color)) {
                     offsetX = 4;   // Dịch sang phải 4px
                     // Điều chỉnh thêm cho các cột bên phải
                     if (pos[1] >= 5) {  // Cột 5, 6, 7, 8
@@ -604,49 +606,49 @@ public class ChessBoardManager {
         } else {
             // Standard starting positions - Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
             // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-            placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 0});
-            placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 1});
-            placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 2});
-            placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 3});
-            placePiece.accept(createPiece.apply("Red", "King"), new int[]{0, 4});
-            placePiece.accept(createPiece.apply("Red", "Advisor"), new int[]{0, 5});
-            placePiece.accept(createPiece.apply("Red", "Elephant"), new int[]{0, 6});
-            placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 7});
-            placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 8});
+            placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 0});
+            placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 1});
+            placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 2});
+            placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 3});
+            placePiece.accept(createPiece.apply("red", "King"), new int[]{0, 4});
+            placePiece.accept(createPiece.apply("red", "Advisor"), new int[]{0, 5});
+            placePiece.accept(createPiece.apply("red", "Elephant"), new int[]{0, 6});
+            placePiece.accept(createPiece.apply("red", "Horse"), new int[]{0, 7});
+            placePiece.accept(createPiece.apply("red", "Rook"), new int[]{0, 8});
             
             // Hàng 2: Pháo ở cột 1 và 7
-            placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 1});
-            placePiece.accept(createPiece.apply("Red", "Cannon"), new int[]{2, 7});
+            placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 1});
+            placePiece.accept(createPiece.apply("red", "Cannon"), new int[]{2, 7});
             
             // Hàng 3: Tốt ở cột 0, 2, 4, 6, 8
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 0});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 2});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 4});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 6});
-            placePiece.accept(createPiece.apply("Red", "Pawn"), new int[]{3, 8});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 0});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 2});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 4});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 6});
+            placePiece.accept(createPiece.apply("red", "Pawn"), new int[]{3, 8});
             
             // Sắp xếp quân cờ ĐEN (hàng 5-9, trên cùng)
             // Hàng 9: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
-            placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 0});
-            placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 1});
-            placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 2});
-            placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 3});
-            placePiece.accept(createPiece.apply("Black", "King"), new int[]{9, 4});
-            placePiece.accept(createPiece.apply("Black", "Advisor"), new int[]{9, 5});
-            placePiece.accept(createPiece.apply("Black", "Elephant"), new int[]{9, 6});
-            placePiece.accept(createPiece.apply("Black", "Horse"), new int[]{9, 7});
-            placePiece.accept(createPiece.apply("Black", "Rook"), new int[]{9, 8});
+            placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 0});
+            placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 1});
+            placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 2});
+            placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 3});
+            placePiece.accept(createPiece.apply("black", "King"), new int[]{9, 4});
+            placePiece.accept(createPiece.apply("black", "Advisor"), new int[]{9, 5});
+            placePiece.accept(createPiece.apply("black", "Elephant"), new int[]{9, 6});
+            placePiece.accept(createPiece.apply("black", "Horse"), new int[]{9, 7});
+            placePiece.accept(createPiece.apply("black", "Rook"), new int[]{9, 8});
             
             // Hàng 7: Pháo ở cột 1 và 7
-            placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 1});
-            placePiece.accept(createPiece.apply("Black", "Cannon"), new int[]{7, 7});
+            placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 1});
+            placePiece.accept(createPiece.apply("black", "Cannon"), new int[]{7, 7});
             
             // Hàng 6: Tốt ở cột 0, 2, 4, 6, 8
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 0});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 2});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 4});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 6});
-            placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 0});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 2});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 4});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 6});
+            placePiece.accept(createPiece.apply("black", "Pawn"), new int[]{6, 8});
         }
         
         // Thêm highlight layer và click layer

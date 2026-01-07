@@ -18,17 +18,13 @@ import javafx.util.Duration;
  */
 public class ChatManager {
     
-    private final UIState state;
     private final GamePanel gamePanel;
-    private final Pane rootPane;
     
     private StackPane chatInputContainer = null;
     private StackPane chatPopup = null;
     
     public ChatManager(UIState state, GamePanel gamePanel, Pane rootPane) {
-        this.state = state;
         this.gamePanel = gamePanel;
-        this.rootPane = rootPane;
     }
     
     /**
@@ -36,8 +32,8 @@ public class ChatManager {
      */
     public void showChatInput() {
         // Nếu đã có input field, ẩn nó trước
-        if (chatInputContainer != null && rootPane != null && rootPane.getChildren().contains(chatInputContainer)) {
-            rootPane.getChildren().remove(chatInputContainer);
+        if (chatInputContainer != null && gamePanel != null && gamePanel.getChildren().contains(chatInputContainer)) {
+            gamePanel.getChildren().remove(chatInputContainer);
         }
         
         // Tạo chat input field
@@ -70,17 +66,25 @@ public class ChatManager {
             if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
                 String message = chatInput.getText().trim();
                 if (!message.isEmpty()) {
+                    // Gửi message qua network
+                    try {
+                        application.network.NetworkManager.getInstance().game().sendMessage(message);
+                    } catch (Exception ex) {
+                        System.err.println("[ChatManager] Error sending message: " + ex.getMessage());
+                    }
+                    
+                    // Hiển thị popup cho chính mình
                     showChatPopup(message);
                     chatInput.clear();
                     // Ẩn input field
-                    if (rootPane.getChildren().contains(chatInputContainer)) {
-                        rootPane.getChildren().remove(chatInputContainer);
+                    if (gamePanel.getChildren().contains(chatInputContainer)) {
+                        gamePanel.getChildren().remove(chatInputContainer);
                     }
                 }
             } else if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
                 // Ẩn input field khi nhấn ESC
-                if (rootPane.getChildren().contains(chatInputContainer)) {
-                    rootPane.getChildren().remove(chatInputContainer);
+                if (gamePanel.getChildren().contains(chatInputContainer)) {
+                    gamePanel.getChildren().remove(chatInputContainer);
                 }
             }
         });
@@ -88,8 +92,15 @@ public class ChatManager {
         chatInputContainer.getChildren().addAll(inputBg, chatInput);
         chatInputContainer.setAlignment(Pos.CENTER);
         
-        // Thêm vào root pane
-        rootPane.getChildren().add(chatInputContainer);
+        // Đảm bảo container có thể nhận mouse events
+        chatInputContainer.setPickOnBounds(true);
+        chatInputContainer.setMouseTransparent(false);
+        
+        // Thêm vào GamePanel (StackPane) để đảm bảo input ở trên cùng
+        gamePanel.getChildren().add(chatInputContainer);
+        
+        // Đưa input lên trên cùng để không bị che
+        chatInputContainer.toFront();
         
         // Focus vào input field
         Platform.runLater(() -> chatInput.requestFocus());
@@ -100,15 +111,14 @@ public class ChatManager {
      */
     public void showChatPopup(String message) {
         // Nếu đã có popup, xóa nó trước
-        if (chatPopup != null && rootPane != null && rootPane.getChildren().contains(chatPopup)) {
-            rootPane.getChildren().remove(chatPopup);
+        if (chatPopup != null && gamePanel != null && gamePanel.getChildren().contains(chatPopup)) {
+            gamePanel.getChildren().remove(chatPopup);
         }
         
         // Vị trí avatar của đối thủ (bottom-right)
         double avatarX = 1920 - 525;  // 1470
         double avatarY = 1080 - 200;  // 880
         double avatarWidth = 450;  // Width của profile container
-        double avatarHeight = 120;  // Height của profile container
         
         // Tính toán vị trí popup - đặt phía trên avatar, căn chỉnh để không tràn ra ngoài
         double popupWidth = 300;
@@ -182,8 +192,15 @@ public class ChatManager {
         chatPopup.setLayoutY(popupY);
         chatPopup.getChildren().add(popupContainer);
         
-        // Thêm vào root pane
-        rootPane.getChildren().add(chatPopup);
+        // Đảm bảo popup có thể nhận mouse events (mặc dù không cần thiết vì chỉ hiển thị)
+        chatPopup.setPickOnBounds(true);
+        chatPopup.setMouseTransparent(true);  // Cho phép click xuyên qua popup
+        
+        // Thêm vào GamePanel (StackPane) để đảm bảo popup ở trên cùng
+        gamePanel.getChildren().add(chatPopup);
+        
+        // Đưa popup lên trên cùng để không bị che
+        chatPopup.toFront();
         
         // Fade in animation
         chatPopup.setOpacity(0);
@@ -198,8 +215,8 @@ public class ChatManager {
                 FadeTransition fadeOut = new FadeTransition(Duration.millis(300), chatPopup);
                 fadeOut.setToValue(0.0);
                 fadeOut.setOnFinished(event -> {
-                    if (rootPane.getChildren().contains(chatPopup)) {
-                        rootPane.getChildren().remove(chatPopup);
+                    if (gamePanel.getChildren().contains(chatPopup)) {
+                        gamePanel.getChildren().remove(chatPopup);
                     }
                 });
                 fadeOut.play();
@@ -209,7 +226,7 @@ public class ChatManager {
     }
     
     public boolean isChatInputVisible() {
-        return chatInputContainer != null && rootPane != null && rootPane.getChildren().contains(chatInputContainer);
+        return chatInputContainer != null && gamePanel != null && gamePanel.getChildren().contains(chatInputContainer);
     }
 }
 

@@ -20,9 +20,7 @@ import javafx.scene.effect.DropShadow;
  */
 public class MoveHistoryManager {
     
-    private final UIState state;
     private final GamePanel gamePanel;
-    private final Pane rootPane;
     
     private StackPane movePanel = null;
     private ScrollPane moveHistoryScrollPane = null;
@@ -30,9 +28,7 @@ public class MoveHistoryManager {
     private final java.util.List<String> moveHistory = new java.util.ArrayList<>();
     
     public MoveHistoryManager(UIState state, GamePanel gamePanel, Pane rootPane) {
-        this.state = state;
         this.gamePanel = gamePanel;
-        this.rootPane = rootPane;
     }
     
     /**
@@ -40,8 +36,8 @@ public class MoveHistoryManager {
      */
     public void showMovePanel() {
         // Nếu đã có panel, xóa nó trước
-        if (movePanel != null && rootPane != null && rootPane.getChildren().contains(movePanel)) {
-            rootPane.getChildren().remove(movePanel);
+        if (movePanel != null && gamePanel != null && gamePanel.getChildren().contains(movePanel)) {
+            gamePanel.getChildren().remove(movePanel);
         }
         
         // Tạo panel "Move" bên phải - kích thước 450x755
@@ -137,8 +133,15 @@ public class MoveHistoryManager {
         
         movePanel.getChildren().addAll(panelBg, panelContainer);
         
-        // Thêm vào root pane
-        rootPane.getChildren().add(movePanel);
+        // Đảm bảo panel có thể nhận mouse events
+        movePanel.setPickOnBounds(true);
+        movePanel.setMouseTransparent(false);
+        
+        // Thêm vào GamePanel (StackPane) để đảm bảo panel ở trên cùng
+        gamePanel.getChildren().add(movePanel);
+        
+        // Đưa panel lên trên cùng để không bị che
+        movePanel.toFront();
         
         // Fade in animation
         movePanel.setOpacity(0);
@@ -151,13 +154,13 @@ public class MoveHistoryManager {
      * Ẩn panel lịch sử nước đi
      */
     public void hideMovePanel() {
-        if (movePanel != null && rootPane != null && rootPane.getChildren().contains(movePanel)) {
+        if (movePanel != null && gamePanel != null && gamePanel.getChildren().contains(movePanel)) {
             // Fade out animation
             FadeTransition fadeOut = new FadeTransition(Duration.millis(300), movePanel);
             fadeOut.setToValue(0.0);
             fadeOut.setOnFinished(event -> {
-                if (rootPane.getChildren().contains(movePanel)) {
-                    rootPane.getChildren().remove(movePanel);
+                if (gamePanel.getChildren().contains(movePanel)) {
+                    gamePanel.getChildren().remove(movePanel);
                 }
             });
             fadeOut.play();
@@ -170,11 +173,11 @@ public class MoveHistoryManager {
     private Label createMoveLabel(String moveText) {
         Label moveLabel = new Label(moveText);
         
-        // Xác định màu chữ dựa trên moveText (Red hoặc Black)
+        // Xác định màu chữ dựa trên moveText (red hoặc black)
         String textColor = "black"; // Mặc định
-        if (moveText.contains("Red:")) {
+        if (moveText.contains("red:")) {
             textColor = "#DC143C"; // Màu đỏ (Crimson)
-        } else if (moveText.contains("Black:")) {
+        } else if (moveText.contains("black:")) {
             textColor = "#000000"; // Màu đen
         }
         
@@ -236,7 +239,7 @@ public class MoveHistoryManager {
     }
     
     public boolean isMovePanelVisible() {
-        return movePanel != null && rootPane != null && rootPane.getChildren().contains(movePanel);
+        return movePanel != null && gamePanel != null && gamePanel.getChildren().contains(movePanel);
     }
 }
 
