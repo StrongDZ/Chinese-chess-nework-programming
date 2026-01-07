@@ -18,14 +18,12 @@ bool GameService::isGameOver(const string& status) {
 }
 
 int GameService::getTimeLimitSeconds(const string& timeControl) {
-    if (timeControl == "bullet") return 180;      // 3 minutes
     if (timeControl == "blitz") return 300;       // 5 minutes
     if (timeControl == "classical") return 900;   // 15 minutes
     return 300; // Default blitz
 }
 
 int GameService::getIncrementSeconds(const string& timeControl) {
-    if (timeControl == "bullet") return 2;
     if (timeControl == "blitz") return 3;
     if (timeControl == "classical") return 5;
     return 3; // Default

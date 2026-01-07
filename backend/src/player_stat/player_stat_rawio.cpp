@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <variant>
+#include <iostream>
 
 using namespace std;
 
@@ -52,13 +53,20 @@ void handleUserStats(const ParsedMessage &pm, int fd) {
     }
 
     request["username"] = target;
-    // Default: get stats for all time controls
-    request["time_control"] = "all";
+    // Use time_control from payload, or default to "all"
+    if (!p.time_control.empty()) {
+      request["time_control"] = p.time_control;
+    } else {
+      request["time_control"] = "all";
+    }
 
     nlohmann::json response = g_player_stat_controller->handleGetStats(request);
 
     // Wrap controller response into INFO payload
     sendMessage(fd, MessageType::INFO, InfoPayload{response});
+  } catch (const exception &e) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Failed to handle USER_STATS"});
   } catch (...) {
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"Failed to handle USER_STATS"});

@@ -181,6 +181,12 @@ public class SocketClient {
         output.write(buffer.array());
         output.write(messageBytes);
         output.flush();
+        
+        // Global logging: log all sent messages
+        String logPrefix = username != null && !username.isEmpty() 
+            ? "[SEND user=" + username + "]" 
+            : "[SEND]";
+        System.out.println(logPrefix + " " + message);
     }
 
     /**
@@ -298,10 +304,18 @@ public class SocketClient {
             }
 
             String message = new String(messageBytes, "UTF-8");
+            
+            // Global logging: log all received messages
+            String logPrefix = username != null && !username.isEmpty() 
+                ? "[RECV user=" + username + "]" 
+                : "[RECV]";
+            System.out.println(logPrefix + " " + message);
 
             // Notify listener
             if (messageListener != null) {
                 messageListener.accept(message);
+            } else {
+                System.err.println("[SocketClient] WARNING: messageListener is null!");
             }
             
             return true;

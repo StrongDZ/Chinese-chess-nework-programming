@@ -345,7 +345,7 @@ public class ClassicModePanel extends StackPane {
             state.setTimer4Value("Unlimited time");
             
             state.closeClassicMode();
-            state.openGame();
+            state.openGame("classical");
         });
         
         return button;

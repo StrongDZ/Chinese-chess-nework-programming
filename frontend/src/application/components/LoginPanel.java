@@ -3,6 +3,7 @@ package application.components;
 import application.network.NetworkManager;
 import application.state.UIState;
 import javafx.animation.FadeTransition;
+import javafx.animation.PauseTransition;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;    
@@ -42,19 +43,23 @@ public class LoginPanel extends StackPane {
         InputField password = new InputField("Password", true);
 
         NextButton nextButton = new NextButton();
+        // Prevent multiple clicks
+        final boolean[] isProcessing = {false};
         nextButton.setOnMouseClicked(e -> {
+            // Prevent duplicate clicks
+            if (isProcessing[0]) {
+                return;
+            }
+            
             // Validate input
             String usernameValue = username.getValue();
             String passwordValue = password.getValue();
             
             if (usernameValue != null && !usernameValue.trim().isEmpty() &&
                 passwordValue != null && !passwordValue.trim().isEmpty()) {
-                // Send login request via socket
+                isProcessing[0] = true;
+                // Send login request (connection already established)
                 try {
-                    if (!networkManager.isConnected()) {
-                        // Connect to server (default: localhost:8080)
-                        networkManager.connect("localhost", 8080);
-                    }
                     networkManager.auth().login(usernameValue.trim(), passwordValue.trim());
                     // Username will be set after successful authentication
                     state.setUsername(usernameValue.trim());
@@ -62,6 +67,13 @@ public class LoginPanel extends StackPane {
                     System.err.println("Failed to send login request: " + ex.getMessage());
                     ex.printStackTrace();
                     // TODO: Show error message to user
+                } finally {
+                    // Reset after a delay to allow response
+                    javafx.application.Platform.runLater(() -> {
+                        PauseTransition delay = new PauseTransition(Duration.seconds(1));
+                        delay.setOnFinished(event -> isProcessing[0] = false);
+                        delay.play();
+                    });
                 }
             }
         });
@@ -95,4 +107,3 @@ public class LoginPanel extends StackPane {
         fade.play();
     }
 }
-

@@ -5,6 +5,10 @@
 using namespace std;
 using bsoncxx::builder::stream::document;
 using bsoncxx::builder::stream::finalize;
+using bsoncxx::builder::stream::open_array;
+using bsoncxx::builder::stream::close_array;
+using bsoncxx::builder::stream::open_document;
+using bsoncxx::builder::stream::close_document;
 
 PlayerStatRepository::PlayerStatRepository(MongoDBClient& mongo)
     : mongoClient(mongo) {}
@@ -47,7 +51,14 @@ vector<PlayerStat> PlayerStatRepository::getAllStats(const string& username) {
     try {
         auto db = mongoClient.getDatabase();
         auto stats = db["player_stats"];
-        auto cursor = stats.find(document{} << "username" << username << finalize);
+        // Only return valid time controls: blitz and classical
+        auto cursor = stats.find(document{} 
+            << "username" << username 
+            << "$or" << open_array
+                << open_document << "time_control" << "blitz" << close_document
+                << open_document << "time_control" << "classical" << close_document
+            << close_array
+            << finalize);
         for (auto&& doc : cursor) {
             PlayerStat s{};
             s.username = string(doc["username"].get_string().value);

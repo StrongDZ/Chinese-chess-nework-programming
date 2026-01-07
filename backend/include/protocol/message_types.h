@@ -5,6 +5,7 @@
 #include "rapidjson/writer.h"
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <sstream>
@@ -133,6 +134,7 @@ struct MessagePayload {
 
 struct UserStatsPayload {
   string target_username;
+  string time_control; // Optional: classical, blitz, or "all"
 };
 
 struct GameHistoryPayload {
@@ -261,6 +263,9 @@ inline void to_json(json &j, const MessagePayload &p) {
 }
 inline void to_json(json &j, const UserStatsPayload &p) {
   j = json{{"target_username", p.target_username}};
+  if (!p.time_control.empty()) {
+    j["time_control"] = p.time_control;
+  }
 }
 inline void to_json(json &j, const GameHistoryPayload &p) {
   j = json{{"target_username", p.target_username}};
@@ -492,6 +497,12 @@ inline optional<Payload> parsePayload(MessageType type,
       }
       UserStatsPayload p;
       p.target_username = doc["target_username"].GetString();
+      // Optional time_control field
+      if (doc.HasMember("time_control") && doc["time_control"].IsString()) {
+        p.time_control = doc["time_control"].GetString();
+      } else {
+        p.time_control = "all"; // Default to all
+      }
       return p;
     }
 
@@ -710,6 +721,7 @@ inline ParsedMessage parseMessage(const string &msg) {
   getline(iss, rest);
   if (!rest.empty() && rest[0] == ' ')
     rest.erase(0, 1);
+
   pm.payload = parsePayload(pm.type, rest);
 
   // Parse typed payload
@@ -749,6 +761,11 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::RESPONSE_ADD_FRIEND, "RESPONSE_ADD_FRIEND"},
     {MessageType::UNFRIEND, "UNFRIEND"},
     {MessageType::ERROR, "ERROR"}};
+
+inline const char *messageTypeToString(MessageType type) {
+  auto it = typeStrings.find(type);
+  return (it != typeStrings.end()) ? it->second : "UNKNOWN";
+}
 
 inline string makeMessage(MessageType type,
                           const Payload &payload = EmptyPayload{}) {

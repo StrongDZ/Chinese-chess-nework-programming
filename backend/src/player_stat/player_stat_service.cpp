@@ -5,7 +5,7 @@ using namespace std;
 
 namespace {
 bool isValidTimeControl(const string& tc, bool allowAll) {
-    return tc == "bullet" || tc == "blitz" || tc == "classical" || (allowAll && tc == "all");
+    return tc == "blitz" || tc == "classical" || (allowAll && tc == "all");
 }
 }
 
@@ -21,7 +21,7 @@ PlayerStatResult PlayerStatService::getStats(const string& username, const strin
     }
 
     if (!isValidTimeControl(timeControl, true)) {
-        result.message = "Invalid time_control (use bullet|blitz|classical|all)";
+        result.message = "Invalid time_control (use blitz|classical|all)";
         return result;
     }
 
@@ -51,7 +51,7 @@ PlayerStatResult PlayerStatService::getLeaderboard(const string& timeControl, in
     PlayerStatResult result{false, "", nullopt, {}, {}};
 
     if (!isValidTimeControl(timeControl, false)) {
-        result.message = "Invalid time_control (use bullet|blitz|classical)";
+        result.message = "Invalid time_control (use blitz|classical)";
         return result;
     }
 

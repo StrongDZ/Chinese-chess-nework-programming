@@ -44,7 +44,7 @@ struct Game {
     std::string xfen;             // Current board state
     std::string current_turn;     // red, black
     int move_count;
-    std::string time_control;     // bullet, blitz, classical
+    std::string time_control;     // blitz, classical
     int time_limit;
     int red_time_remaining;
     int black_time_remaining;

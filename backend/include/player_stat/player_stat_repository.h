@@ -8,7 +8,7 @@
 
 struct PlayerStat {
     std::string username;
-    std::string time_control; // bullet, blitz, classical
+    std::string time_control; // blitz, classical
     int rating;
     double rd;
     double volatility;

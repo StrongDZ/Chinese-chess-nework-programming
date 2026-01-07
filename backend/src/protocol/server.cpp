@@ -253,7 +253,9 @@ int main(int argc, char **argv) {
               lock_guard<mutex> lock(g_clients_mutex);
               g_clients.erase(client_fd);
             }
+            continue;
           }
+          // Epoll will trigger when data arrives
         }
         continue;
       }
@@ -293,9 +295,9 @@ int main(int argc, char **argv) {
         }
 
         // Successfully received a message
-        cout << "[RECV fd=" << fd << "] " << msg << endl;
-
         auto pm = parseMessage(msg);
+        cout << "[RECV fd=" << fd << "] " << messageTypeToString(pm.type) << " "
+             << msg << endl;
 
         // Push message to queue for processing by worker threads
         pushClientMessage(pm, fd);
@@ -337,12 +339,22 @@ int main(int argc, char **argv) {
 // ===================== Message Processing ===================== //
 
 void processMessage(const ParsedMessage &pm, int fd) {
-  // Note: Handler functions will lock g_clients_mutex themselves
+  string username;
   {
     lock_guard<mutex> lock(g_clients_mutex);
     if (g_clients.count(fd) == 0) {
+      cout << "[PROCESS fd=" << fd << "] Client not found, ignoring" << endl;
       return; // Client disconnected
     }
+    username = g_clients[fd].username;
+  }
+
+  if (!username.empty()) {
+    cout << "[PROCESS fd=" << fd << " user=" << username << "] "
+         << messageTypeToString(pm.type) << endl;
+  } else {
+    cout << "[PROCESS fd=" << fd << "] " << messageTypeToString(pm.type)
+         << endl;
   }
 
   switch (pm.type) {

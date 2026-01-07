@@ -42,14 +42,12 @@ string GameRepository::createGame(const Game &game) {
     auto result = games.insert_one(gameDoc.view());
 
     if (!result) {
-      std::cerr << "[DEBUG] insert_one returned empty optional" << std::endl;
       return "";
     }
 
     return result->inserted_id().get_oid().value.to_string();
 
   } catch (const exception &e) {
-    std::cerr << "[DEBUG] createGame exception: " << e.what() << std::endl;
     return "";
   }
 }

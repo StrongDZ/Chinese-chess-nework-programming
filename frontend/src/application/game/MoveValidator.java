@@ -356,5 +356,43 @@ public class MoveValidator {
         
         return false;
     }
+    
+    /**
+     * Get all valid moves for a piece at the given position
+     * @param board The current board state
+     * @param fromRow Source row (0-9)
+     * @param fromCol Source column (0-8)
+     * @return List of valid destination coordinates [row, col]
+     */
+    public static java.util.List<int[]> getValidMoves(char[][] board, int fromRow, int fromCol) {
+        java.util.List<int[]> validMoves = new java.util.ArrayList<>();
+        
+        // Validate source position
+        if (fromRow < 0 || fromRow >= BOARD_ROWS || fromCol < 0 || fromCol >= BOARD_COLS) {
+            return validMoves;
+        }
+        
+        // Check if source has a piece
+        if (board == null || board[fromRow][fromCol] == ' ' || board[fromRow][fromCol] == '\0') {
+            return validMoves;
+        }
+        
+        // Check all possible destinations
+        for (int toRow = 0; toRow < BOARD_ROWS; toRow++) {
+            for (int toCol = 0; toCol < BOARD_COLS; toCol++) {
+                // Skip if same position
+                if (fromRow == toRow && fromCol == toCol) {
+                    continue;
+                }
+                
+                // Check if move is valid
+                if (isValidMove(board, fromRow, fromCol, toRow, toCol)) {
+                    validMoves.add(new int[]{toRow, toCol});
+                }
+            }
+        }
+        
+        return validMoves;
+    }
 }
 
