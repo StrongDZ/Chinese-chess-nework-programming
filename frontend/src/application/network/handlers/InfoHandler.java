@@ -126,11 +126,23 @@ public class InfoHandler implements MessageHandler {
                         String timeControl = stat.get("time_control").getAsString();
                         String currentUsername = uiState.getUsername();
                         String opponentUsername = uiState.getOpponentUsername();
-                        boolean isCurrentUser = username != null && username.equals(currentUsername);
-                        boolean isOpponent = username != null && username.equals(opponentUsername);
+                        
+                        // Lấy username từ stat object (có thể khác với username ở đầu loop)
+                        String statUsername = stat.has("username") ? stat.get("username").getAsString() : username;
+                        
+                        boolean isCurrentUser = statUsername != null && statUsername.equals(currentUsername);
+                        boolean isOpponent = statUsername != null && statUsername.equals(opponentUsername);
+                        
+                        System.out.println("[InfoHandler] Processing stat - statUsername=" + statUsername + 
+                            ", currentUsername=" + currentUsername + 
+                            ", timeControl=" + timeControl + 
+                            ", rating=" + rating + 
+                            ", isCurrentUser=" + isCurrentUser);
                         
                         if (isCurrentUser) {
+                            System.out.println("[InfoHandler] Setting elo for mode=" + timeControl + ", rating=" + rating);
                             uiState.setElo(timeControl, rating);
+                            System.out.println("[InfoHandler] Elo set - classical=" + uiState.getClassicalElo() + ", blitz=" + uiState.getBlitzElo());
                         } else if (isOpponent) {
                             // Opponent elo is still single value (not mode-specific for now)
                             uiState.setOpponentElo(rating);
@@ -186,10 +198,13 @@ public class InfoHandler implements MessageHandler {
         // Update elo/rating based on time_control
         if (stat.has("rating")) {
             int rating = stat.get("rating").getAsInt();
+            System.out.println("[InfoHandler] processStatObject - username=" + username + 
+                ", currentUsername=" + currentUsername + 
+                ", timeControl=" + timeControl + 
+                ", rating=" + rating + 
+                ", isCurrentUser=" + isCurrentUser);
             if (isCurrentUser) {
-                System.out.println("[InfoHandler] Setting elo for mode=" + timeControl + ", rating=" + rating);
                 uiState.setElo(timeControl, rating);
-                System.out.println("[InfoHandler] Elo set - classical=" + uiState.getClassicalElo() + ", blitz=" + uiState.getBlitzElo());
             } else if (isOpponent) {
                 // Opponent elo is still single value (not mode-specific for now)
                 uiState.setOpponentElo(rating);

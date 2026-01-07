@@ -253,29 +253,9 @@ int main(int argc, char **argv) {
               lock_guard<mutex> lock(g_clients_mutex);
               g_clients.erase(client_fd);
             }
-          } else {
-            // IMPORTANT: With edge-triggered epoll, data may arrive immediately
-            // after accept but before epoll triggers. Read once to check for
-            // any data already in the buffer.
-            while (true) {
-              string msg;
-              if (!recvMessage(client_fd, msg)) {
-                int saved_errno = errno;
-                if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
-                  // No data available yet - normal, epoll will trigger later
-                  break;
-                }
-                // Connection closed or error - will be handled by epoll
-                break;
-              }
-
-              // Successfully received a message
-              cout << "[RECV fd=" << client_fd << "] " << msg << endl;
-
-              auto pm = parseMessage(msg);
-              pushClientMessage(pm, client_fd);
-            }
+            continue;
           }
+          // Epoll will trigger when data arrives
         }
         continue;
       }
@@ -315,9 +295,9 @@ int main(int argc, char **argv) {
         }
 
         // Successfully received a message
-        cout << "[RECV fd=" << fd << "] " << msg << endl;
-
         auto pm = parseMessage(msg);
+        cout << "[RECV fd=" << fd << "] " << messageTypeToString(pm.type) << " "
+             << msg << endl;
 
         // Push message to queue for processing by worker threads
         pushClientMessage(pm, fd);
@@ -359,17 +339,22 @@ int main(int argc, char **argv) {
 // ===================== Message Processing ===================== //
 
 void processMessage(const ParsedMessage &pm, int fd) {
-  cout << "[processMessage] Processing message type="
-       << static_cast<int>(pm.type) << " for fd=" << fd << endl;
-
-  // Note: Handler functions will lock g_clients_mutex themselves
+  string username;
   {
     lock_guard<mutex> lock(g_clients_mutex);
     if (g_clients.count(fd) == 0) {
-      cout << "[processMessage] Client fd=" << fd << " not found, ignoring"
-           << endl;
+      cout << "[PROCESS fd=" << fd << "] Client not found, ignoring" << endl;
       return; // Client disconnected
     }
+    username = g_clients[fd].username;
+  }
+
+  if (!username.empty()) {
+    cout << "[PROCESS fd=" << fd << " user=" << username << "] "
+         << messageTypeToString(pm.type) << endl;
+  } else {
+    cout << "[PROCESS fd=" << fd << "] " << messageTypeToString(pm.type)
+         << endl;
   }
 
   switch (pm.type) {
@@ -409,7 +394,6 @@ void processMessage(const ParsedMessage &pm, int fd) {
     handleAIMatch(pm, fd);
     break;
   case MessageType::USER_STATS:
-    cout << "[processMessage] Routing to handleUserStats" << endl;
     handleUserStats(pm, fd);
     break;
   case MessageType::LEADER_BOARD:

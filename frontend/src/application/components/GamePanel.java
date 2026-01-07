@@ -533,6 +533,12 @@ public class GamePanel extends StackPane {
                         startCountdown(3, timer4);
                         isUpdatingFromCountdown = false;
                     }
+                    
+                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
+                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
+                    javafx.application.Platform.runLater(() -> {
+                        updateTimersOnTurnChange();
+                    });
                 });
             } else {
                 // Dừng tất cả timers khi game đóng
@@ -573,6 +579,12 @@ public class GamePanel extends StackPane {
                         startCountdown(3, timer4);
                         isUpdatingFromCountdown = false;
                     }
+                    
+                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
+                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
+                    javafx.application.Platform.runLater(() -> {
+                        updateTimersOnTurnChange();
+                    });
                 });
             }
         });
@@ -601,9 +613,37 @@ public class GamePanel extends StackPane {
         updateTimerLabel(timerIndex, seconds);
         isUpdatingFromCountdown = false;
         
+        // Kiểm tra xem có phải blitz hoặc custom mode không (chế độ timer theo lượt)
+        String gameMode = state.getCurrentGameMode();
+        boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
+        
+        // Xác định timer thuộc bên nào
+        // Timer 1, 2 (index 0, 1): Red player
+        // Timer 3, 4 (index 2, 3): Black player
+        boolean isRedTimer = (timerIndex == 0 || timerIndex == 1);
+        boolean isBlackTimer = (timerIndex == 2 || timerIndex == 3);
+        
         // Tạo Timeline đếm ngược mỗi giây
         countdownTimers[timerIndex] = new Timeline(
             new KeyFrame(Duration.seconds(1), e -> {
+                // Kiểm tra lại game mode mỗi lần để đảm bảo logic đúng
+                String currentGameMode = state.getCurrentGameMode();
+                boolean isTurnBased = "blitz".equalsIgnoreCase(currentGameMode) || "custom".equalsIgnoreCase(currentGameMode);
+                
+                // Trong blitz/custom mode, chỉ đếm nếu đến lượt của bên đó
+                if (isTurnBased) {
+                    if (isRedTimer && !currentTurn.equals("Red")) {
+                        // Không phải lượt Red, dừng timer
+                        countdownTimers[timerIndex].stop();
+                        return;
+                    }
+                    if (isBlackTimer && !currentTurn.equals("Black")) {
+                        // Không phải lượt Black, dừng timer
+                        countdownTimers[timerIndex].stop();
+                        return;
+                    }
+                }
+                
                 remainingSeconds[timerIndex]--;
                 if (remainingSeconds[timerIndex] >= 0) {
                     // Update label mà không trigger listener
@@ -616,7 +656,78 @@ public class GamePanel extends StackPane {
             })
         );
         countdownTimers[timerIndex].setCycleCount(Timeline.INDEFINITE);
-        countdownTimers[timerIndex].play();
+        
+        // Trong blitz/custom mode, KHÔNG tự động play timer
+        // Chỉ tạo Timeline, để updateTimersOnTurnChange() quyết định timer nào được play
+        if (!isTurnBasedMode) {
+            // Không phải blitz/custom mode, chạy bình thường
+            countdownTimers[timerIndex].play();
+        }
+        // Nếu là turn-based mode, không play ở đây, để updateTimersOnTurnChange() xử lý
+    }
+    
+    // Method để cập nhật timer khi đổi lượt (chỉ trong blitz/custom mode)
+    private void updateTimersOnTurnChange() {
+        String gameMode = state.getCurrentGameMode();
+        boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
+        
+        if (!isTurnBasedMode) {
+            // Không phải blitz/custom mode, không cần làm gì
+            return;
+        }
+        
+        // Dừng tất cả timers một cách chắc chắn - đảm bảo không có timer nào đang chạy
+        for (int i = 0; i < 4; i++) {
+            if (countdownTimers[i] != null) {
+                countdownTimers[i].stop();
+                // Đảm bảo status là stopped
+                if (countdownTimers[i].getStatus() == Timeline.Status.RUNNING) {
+                    countdownTimers[i].stop();
+                }
+            }
+        }
+        
+        // Đợi một chút để đảm bảo tất cả timers đã dừng hoàn toàn
+        javafx.application.Platform.runLater(() -> {
+            // Kiểm tra lại game mode (có thể đã thay đổi)
+            String currentGameMode = state.getCurrentGameMode();
+            boolean isStillTurnBased = "blitz".equalsIgnoreCase(currentGameMode) || "custom".equalsIgnoreCase(currentGameMode);
+            
+            if (!isStillTurnBased) {
+                return; // Không còn turn-based mode
+            }
+            
+            // Bắt đầu timer của bên đang đến lượt
+            if (currentTurn.equals("Red")) {
+                // Bắt đầu timer 1 và 2 (Red) - dừng timer 3 và 4 (Black) để chắc chắn
+                if (countdownTimers[2] != null) {
+                    countdownTimers[2].stop();
+                }
+                if (countdownTimers[3] != null) {
+                    countdownTimers[3].stop();
+                }
+                if (countdownTimers[0] != null && remainingSeconds[0] >= 0) {
+                    countdownTimers[0].play();
+                }
+                if (countdownTimers[1] != null && remainingSeconds[1] >= 0) {
+                    countdownTimers[1].play();
+                }
+            } else if (currentTurn.equals("Black")) {
+                // Bắt đầu timer 3 và 4 (Black) - dừng timer 1 và 2 (Red) để chắc chắn
+                if (countdownTimers[0] != null) {
+                    countdownTimers[0].stop();
+                }
+                if (countdownTimers[1] != null) {
+                    countdownTimers[1].stop();
+                }
+                if (countdownTimers[2] != null && remainingSeconds[2] >= 0) {
+                    countdownTimers[2].play();
+                }
+                if (countdownTimers[3] != null && remainingSeconds[3] >= 0) {
+                    countdownTimers[3].play();
+                }
+            }
+        });
     }
     
     private int parseTimeToSeconds(String timeStr) {
@@ -1047,19 +1158,54 @@ public class GamePanel extends StackPane {
                     }
                 }
                 
+                // Tính toán vị trí tại giao điểm (intersection) - giống với vị trí quân cờ
+                double intersectionX = startX + toCol * intersectionSpacingX;
+                double intersectionY = startY + toRow * intersectionSpacingY;
+                
+                // Áp dụng offset tương tự như quân cờ
+                // Nếu có quân cờ địch, dùng offset của quân cờ địch; nếu không, dùng offset của quân cờ đang chọn
+                double offsetX = 0;
+                double offsetY = 0;
+                boolean useRedOffset = isRedPiece;
+                
+                // Nếu có quân cờ địch, dùng offset của quân cờ địch
+                if (hasEnemyPiece) {
+                    useRedOffset = Character.isUpperCase(targetPiece);
+                }
+                
+                if (useRedOffset) {
+                    offsetY = -10;  // Dịch lên trên 10px
+                    // Điều chỉnh thêm cho các cột bên phải
+                    if (toCol >= 5) {  // Cột 5, 6, 7, 8
+                        offsetX = 5;  // Dịch sang phải thêm 5px
+                    } else {
+                        // Cột 0-4: dịch sang trái thêm để khớp với giao điểm
+                        offsetX = -4;  // Dịch sang trái 4px
+                    }
+                } else {
+                    // Black pieces: điều chỉnh offsetX cho cột 0-4
+                    if (toCol < 5) {  // Cột 0, 1, 2, 3, 4
+                        offsetX = -5;  // Dịch sang trái 5px để khớp với giao điểm
+                    } else {  // Cột 5, 6, 7, 8
+                        offsetX = 9;  // Dịch sang phải 9px (4 + 5)
+                    }
+                }
+                
+                // Vị trí cuối cùng với offset
+                double x = intersectionX + offsetX;
+                double y = intersectionY + offsetY;
+                
                 if (hasEnemyPiece) {
                     // Nếu có thể ăn quân cờ địch: vẽ vòng tròn có viền lớn bao quanh quân cờ địch
                     Circle captureCircle = new Circle();
-                    // Vòng tròn lớn hơn để bao quanh quân cờ (khoảng 45% kích thước ô)
-                    double circleRadius = Math.min(cellWidth, cellHeight) * 0.45;
+                    // Vòng tròn lớn hơn để bao quanh quân cờ (khoảng 45% kích thước intersection spacing)
+                    double circleRadius = Math.min(intersectionSpacingX, intersectionSpacingY) * 0.45;
                     captureCircle.setRadius(circleRadius);
                     captureCircle.setFill(Color.TRANSPARENT); // Trong suốt
                     captureCircle.setStroke(dotColor); // Viền cùng màu với quân cờ đang chọn
                     captureCircle.setStrokeWidth(4.5); // Viền dày để nổi bật
                     
-                    // Đặt vị trí ở giữa ô (nơi quân cờ địch đang đứng)
-                    double x = toCol * cellWidth + cellWidth / 2;
-                    double y = toRow * cellHeight + cellHeight / 2;
+                    // Đặt vị trí tại giao điểm với offset (nơi quân cờ địch đang đứng)
                     captureCircle.setLayoutX(x);
                     captureCircle.setLayoutY(y);
                     
@@ -1068,15 +1214,13 @@ public class GamePanel extends StackPane {
                 } else {
                     // Nếu ô trống: dấu chấm tròn đầy
                     Circle dot = new Circle();
-                    double dotRadius = Math.min(cellWidth, cellHeight) * 0.15; // 15% kích thước ô
+                    double dotRadius = Math.min(intersectionSpacingX, intersectionSpacingY) * 0.15; // 15% kích thước intersection spacing
                     dot.setRadius(dotRadius);
                     dot.setFill(dotColor);
                     dot.setStroke(Color.WHITE); // Viền trắng để nổi bật
                     dot.setStrokeWidth(1.5);
                     
-                    // Đặt vị trí ở giữa ô
-                    double x = toCol * cellWidth + cellWidth / 2;
-                    double y = toRow * cellHeight + cellHeight / 2;
+                    // Đặt vị trí tại giao điểm với offset
                     dot.setLayoutX(x);
                     dot.setLayoutY(y);
                     
@@ -1177,6 +1321,9 @@ public class GamePanel extends StackPane {
                     
                     // Đổi lượt sau khi đi xong
                     currentTurn = currentTurn.equals("Red") ? "Black" : "Red";
+                    
+                    // Cập nhật timers khi đổi lượt (trong blitz/custom mode)
+                    updateTimersOnTurnChange();
                 }
                 
                 // Xóa highlights
@@ -1754,10 +1901,19 @@ public class GamePanel extends StackPane {
     // Method để tạo label cho mỗi nước đi
     private Label createMoveLabel(String moveText) {
         Label moveLabel = new Label(moveText);
+        
+        // Xác định màu chữ dựa trên moveText (Red hoặc Black)
+        String textColor = "black"; // Mặc định
+        if (moveText.contains("Red:")) {
+            textColor = "#DC143C"; // Màu đỏ (Crimson)
+        } else if (moveText.contains("Black:")) {
+            textColor = "#000000"; // Màu đen
+        }
+        
         moveLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 24px; " +
-            "-fx-text-fill: black; " +
+            "-fx-font-size: 35px; " + // Tăng từ 24px lên 30px
+            "-fx-text-fill: " + textColor + "; " +
             "-fx-background-color: transparent; " +
             "-fx-wrap-text: true;"
         );
@@ -2316,6 +2472,9 @@ public class GamePanel extends StackPane {
         if (rootPane == null) {
             return; // rootPane chưa được khởi tạo
         }
+        
+        // Reset currentTurn về Red (mặc định Red đi trước)
+        currentTurn = "Red";
         
         // Reset game result panels
         resetGameResultPanels();

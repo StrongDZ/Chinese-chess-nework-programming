@@ -58,16 +58,13 @@ public class LoginPanel extends StackPane {
             if (usernameValue != null && !usernameValue.trim().isEmpty() &&
                 passwordValue != null && !passwordValue.trim().isEmpty()) {
                 isProcessing[0] = true;
-                // Connect to server if not connected, then send login request
+                // Send login request (connection already established)
                 try {
-                    if (!networkManager.isConnected()) {
-                        networkManager.connectToServer();
-                    }
                     networkManager.auth().login(usernameValue.trim(), passwordValue.trim());
                     // Username will be set after successful authentication
                     state.setUsername(usernameValue.trim());
                 } catch (IOException ex) {
-                    System.err.println("Failed to connect or send login request: " + ex.getMessage());
+                    System.err.println("Failed to send login request: " + ex.getMessage());
                     ex.printStackTrace();
                     // If server is not available, auto-navigate to main menu for UI testing
                     // This allows testing frontend UI without backend server

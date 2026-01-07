@@ -172,7 +172,7 @@ public class ProfilePanel extends StackPane {
             "-fx-background-color: transparent;"
         );
         
-        Label eloLabel = new Label();
+        Label eloLabel = new Label("elo 0"); // Set initial text để đảm bảo hiển thị
         eloLabel.textProperty().bind(
             javafx.beans.binding.Bindings.createStringBinding(
                 () -> {
@@ -193,13 +193,21 @@ public class ProfilePanel extends StackPane {
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
+        eloLabel.setVisible(true);
+        eloLabel.setManaged(true);
+        eloLabel.setMinHeight(80); // Đảm bảo có chiều cao để hiển thị
+        eloLabel.setPrefHeight(80);
         
-        userInfo.getChildren().addAll(usernameLabel, eloLabel);
+        userInfo.getChildren().addAll(usernameLabel);
         
-        // Time control buttons (Classical, Blitz) - below user info
+        // ELO label - đặt riêng để đảm bảo hiển thị, ngay dưới username
+        eloLabel.setLayoutX(300); // Cùng X với userInfo
+        eloLabel.setLayoutY(210); // Dưới username (130 + 70 + 10 = 210)
+        
+        // Time control buttons (Classical, Blitz) - below ELO label
         HBox timeControlButtons = createTimeControlButtons();
         timeControlButtons.setLayoutX(300);
-        timeControlButtons.setLayoutY(280);
+        timeControlButtons.setLayoutY(300); // Dưới ELO label (210 + 80 + 10 = 300)
         
         // Statistics section (centered, below profile info)
         VBox statisticsContainer = new VBox(10);  // Container chính
@@ -277,7 +285,7 @@ public class ProfilePanel extends StackPane {
         
         statisticsContainer.getChildren().addAll(topRow, winRateLabel);
         
-        contentPane.getChildren().addAll(header, avatarContainer, userInfo, timeControlButtons, statisticsContainer);
+        contentPane.getChildren().addAll(header, avatarContainer, userInfo, eloLabel, timeControlButtons, statisticsContainer);
         mainPanel.getChildren().addAll(bg, contentPane);
         
         return mainPanel;
