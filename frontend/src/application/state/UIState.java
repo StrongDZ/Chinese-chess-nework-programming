@@ -296,6 +296,13 @@ public class UIState {
     
     public void openGame(String mode) {
         setCurrentGameMode(mode);  // Set game mode before opening game
+        
+        // Reset useCustomBoard nếu không phải custom mode
+        if (!"custom".equals(mode)) {
+            setUseCustomBoard(false);
+        }
+        // Nếu là custom mode, giữ nguyên useCustomBoard (đã được set khi save custom board)
+        
         setGameVisible(true);
         setAppState(AppState.IN_GAME);
         // Đóng tất cả các mode panel

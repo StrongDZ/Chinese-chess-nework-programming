@@ -15,6 +15,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.Circle;
 import javafx.util.Duration;
 import javafx.scene.Cursor;
 import javafx.animation.TranslateTransition;
@@ -22,6 +23,8 @@ import java.util.function.Consumer;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.binding.Bindings;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 
 public class CustomModePanel extends StackPane {
     
@@ -488,7 +491,7 @@ public class CustomModePanel extends StackPane {
             state.setTimer4Value(moveTimerText);
             
             state.closeCustomMode();
-            state.openGame();
+            state.openGame("custom"); // Set mode là "custom" để load custom board
         });
         
         return button;
@@ -645,6 +648,8 @@ public class CustomModePanel extends StackPane {
     
     // Biến để lưu quân cờ đang được chọn
     private PieceEntryInfo selectedPieceEntry = null;
+    private Pane highlightLayer = null; // Layer để hiển thị các vị trí hợp lệ
+    private Pane currentBoardEditor = null; // Reference đến board editor hiện tại
     
     private StackPane createCustomBoardEditor() {
         // Reset selected piece khi mở editor
@@ -666,10 +671,10 @@ public class CustomModePanel extends StackPane {
         bg.setStrokeWidth(3);
         
         // Sử dụng VBox và HBox để căn giữa tự động
-        VBox mainContent = new VBox(30); // Tăng spacing giữa các phần tử
+        VBox mainContent = new VBox(25); // Giảm spacing một chút
         mainContent.setPrefSize(1600, 900);
         mainContent.setAlignment(Pos.TOP_CENTER);
-        mainContent.setPadding(new Insets(30, 0, 50, 0)); // Giảm padding top từ 50 xuống 30
+        mainContent.setPadding(new Insets(60, 0, 80, 0)); // Tăng padding bottom để tránh tràn lề dưới
         
         // Title - căn giữa tự động
         Label title = new Label("Custom Board Setup");
@@ -685,18 +690,22 @@ public class CustomModePanel extends StackPane {
         // Container cho board và panels - sử dụng HBox để căn giữa
         HBox boardContainer = new HBox(50); // 50px spacing giữa panels và board
         boardContainer.setAlignment(Pos.CENTER);
-        boardContainer.setPrefHeight(500);
+        boardContainer.setPrefHeight(600); // Khớp với chiều cao panel (600px)
         
         // Panel quân cờ bên trái (Black pieces)
         VBox leftPiecePanel = createPiecePanel("Black");
         
-        // Board editor ở giữa
+        // Board editor ở giữa - wrap trong VBox để căn giữa theo chiều dọc
         Pane boardEditor = createMiniBoardEditor();
+        VBox boardEditorWrapper = new VBox();
+        boardEditorWrapper.setAlignment(Pos.CENTER);
+        boardEditorWrapper.setPrefHeight(600);
+        boardEditorWrapper.getChildren().add(boardEditor);
         
         // Panel quân cờ bên phải (Red pieces)
         VBox rightPiecePanel = createPiecePanel("Red");
         
-        boardContainer.getChildren().addAll(leftPiecePanel, boardEditor, rightPiecePanel);
+        boardContainer.getChildren().addAll(leftPiecePanel, boardEditorWrapper, rightPiecePanel);
         
         // Buttons container - căn giữa tự động
         HBox buttonsContainer = new HBox(30); // 30px spacing giữa các buttons
@@ -715,8 +724,16 @@ public class CustomModePanel extends StackPane {
         
         StackPane saveButton = createEditorButton("Save", 200, 80);
         saveButton.setOnMouseClicked(e -> {
-            saveCustomBoard();
-            closeCustomBoardEditor();
+            e.consume(); // Ngăn event propagation
+            // Validate trước khi save
+            String validationError = validateCustomBoard(boardEditor);
+            if (validationError != null) {
+                showValidationError(validationError);
+                // KHÔNG đóng dialog khi có lỗi
+            } else {
+                saveCustomBoard();
+                closeCustomBoardEditor();
+            }
         });
         
         StackPane cancelButton = createEditorButton("Cancel", 200, 80);
@@ -751,22 +768,34 @@ public class CustomModePanel extends StackPane {
         panel.setAlignment(Pos.TOP_CENTER);
         panel.setPadding(new Insets(20, 10, 20, 10));
         
-        // Background
+        // Background với màu rõ ràng hơn
         Rectangle bg = new Rectangle(200, 600);
-        bg.setFill(color.equals("Red") ? Color.color(0.95, 0.9, 0.9) : Color.color(0.85, 0.85, 0.85));
-        bg.setStroke(Color.color(0.5, 0.5, 0.5));
-        bg.setStrokeWidth(2);
+        if (color.equals("Red")) {
+            // Màu đỏ nhạt cho bên ĐỎ
+            bg.setFill(Color.color(1.0, 0.85, 0.85)); // Đỏ nhạt
+            bg.setStroke(Color.web("#DC143C")); // Đỏ đậm cho border
+        } else {
+            // Màu xám đậm cho bên ĐEN
+            bg.setFill(Color.color(0.7, 0.7, 0.7)); // Xám đậm
+            bg.setStroke(Color.web("#1C1C1C")); // Đen cho border
+        }
+        bg.setStrokeWidth(3); // Tăng độ dày border
         bg.setArcWidth(10);
         bg.setArcHeight(10);
         
-        // Title
-        Label title = new Label(color + " Pieces");
+        // Title với màu rõ ràng, căn giữa và to hơn
+        String titleText = color + " Pieces";
+        String titleColor = color.equals("Red") ? "#DC143C" : "#1C1C1C";
+        Label title = new Label(titleText);
+        title.setAlignment(Pos.CENTER);
+        title.setMaxWidth(Double.MAX_VALUE);
         title.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 30px; " +
+            "-fx-font-size: 40px; " +
             "-fx-font-weight: bold; " +
-            "-fx-text-fill: black; " +
-            "-fx-background-color: transparent;"
+            "-fx-text-fill: " + titleColor + "; " +
+            "-fx-background-color: transparent; " +
+            "-fx-alignment: center;"
         );
         
         // Tạo các quân cờ với số lượng đầy đủ
@@ -792,9 +821,15 @@ public class CustomModePanel extends StackPane {
             piecesContainer.getChildren().add(pieceEntry);
         }
         
+        // Container cho title để căn giữa hoàn hảo
+        VBox titleContainer = new VBox();
+        titleContainer.setAlignment(Pos.CENTER);
+        titleContainer.setPrefWidth(200);
+        titleContainer.getChildren().add(title);
+        
         StackPane panelContent = new StackPane();
-        panelContent.getChildren().addAll(bg, new VBox(10, title, piecesContainer));
-        StackPane.setAlignment(title, Pos.TOP_CENTER);
+        panelContent.getChildren().addAll(bg, new VBox(15, titleContainer, piecesContainer));
+        StackPane.setAlignment(titleContainer, Pos.TOP_CENTER);
         StackPane.setAlignment(piecesContainer, Pos.CENTER);
         
         panel.getChildren().add(panelContent);
@@ -853,6 +888,9 @@ public class CustomModePanel extends StackPane {
             // Chọn entry mới
             selectedPieceEntry = info;
             entry.setStyle("-fx-background-color: rgba(255, 255, 0, 0.3); -fx-background-radius: 5;");
+            
+            // Hiển thị các vị trí hợp lệ cho quân cờ này
+            showValidPositions(info.color, info.pieceType);
             
             e.consume();
         });
@@ -977,27 +1015,33 @@ public class CustomModePanel extends StackPane {
                 }
             }
             
-            if (!hasPiece) {
-                // Tạo quân cờ mới trên board
-                ImageView newPiece = createBoardPiece(selectedPieceEntry.color, selectedPieceEntry.pieceType, cellWidth, cellHeight);
-                double x = col * cellWidth + (cellWidth - newPiece.getFitWidth()) / 2;
-                double y = row * cellHeight + (cellHeight - newPiece.getFitHeight()) / 2;
-                newPiece.setLayoutX(x);
-                newPiece.setLayoutY(y);
-                newPiece.setUserData(new PieceInfo(selectedPieceEntry.color, selectedPieceEntry.pieceType, selectedPieceEntry.imagePath));
-                container.getChildren().add(newPiece);
-                
-                // Giảm số lượng
-                selectedPieceEntry.count--;
-                if (selectedPieceEntry.count <= 0) {
-                    // Ẩn entry nếu hết
-                    selectedPieceEntry.entryPane.setVisible(false);
-                    selectedPieceEntry.entryPane.setManaged(false);
-                    selectedPieceEntry.entryPane.setStyle("-fx-background-color: transparent;"); // Bỏ highlight
-                    selectedPieceEntry = null; // Bỏ chọn
-                } else {
-                    // Cập nhật label
-                    selectedPieceEntry.countLabel.setText(String.valueOf(selectedPieceEntry.count));
+            // Kiểm tra xem vị trí này có hợp lệ không
+            if (isValidPosition(selectedPieceEntry.color, selectedPieceEntry.pieceType, row, col, container)) {
+                if (!hasPiece) {
+                    // Tạo quân cờ mới trên board
+                    ImageView newPiece = createBoardPiece(selectedPieceEntry.color, selectedPieceEntry.pieceType, cellWidth, cellHeight);
+                    double x = col * cellWidth + (cellWidth - newPiece.getFitWidth()) / 2;
+                    double y = row * cellHeight + (cellHeight - newPiece.getFitHeight()) / 2;
+                    newPiece.setLayoutX(x);
+                    newPiece.setLayoutY(y);
+                    newPiece.setUserData(new PieceInfo(selectedPieceEntry.color, selectedPieceEntry.pieceType, selectedPieceEntry.imagePath));
+                    container.getChildren().add(newPiece);
+                    
+                    // Giảm số lượng
+                    selectedPieceEntry.count--;
+                    if (selectedPieceEntry.count <= 0) {
+                        // Ẩn entry nếu hết
+                        selectedPieceEntry.entryPane.setVisible(false);
+                        selectedPieceEntry.entryPane.setManaged(false);
+                        selectedPieceEntry.entryPane.setStyle("-fx-background-color: transparent;"); // Bỏ highlight
+                        selectedPieceEntry = null; // Bỏ chọn
+                        clearHighlights(); // Xóa highlights
+                    } else {
+                        // Cập nhật label
+                        selectedPieceEntry.countLabel.setText(String.valueOf(selectedPieceEntry.count));
+                        // Cập nhật lại highlights sau khi đặt quân cờ
+                        showValidPositions(selectedPieceEntry.color, selectedPieceEntry.pieceType);
+                    }
                 }
             }
         });
@@ -1005,7 +1049,9 @@ public class CustomModePanel extends StackPane {
         // Bắt đầu với bàn cờ trống - người dùng sẽ click chọn quân cờ và click vào board để đặt
         // Load từ custom setup nếu có
         java.util.Map<String, String> customSetup = state.getCustomBoardSetup();
+        System.out.println("[CustomModePanel] Loading custom board setup. customSetup=" + customSetup + ", isEmpty=" + (customSetup == null || customSetup.isEmpty()) + ", useCustomBoard=" + state.isUseCustomBoard());
         if (customSetup != null && !customSetup.isEmpty() && state.isUseCustomBoard()) {
+            System.out.println("[CustomModePanel] Loading " + customSetup.size() + " pieces from custom setup");
             // Load từ custom setup
             for (java.util.Map.Entry<String, String> entry : customSetup.entrySet()) {
                 String[] posParts = entry.getKey().split("_");
@@ -1022,14 +1068,28 @@ public class CustomModePanel extends StackPane {
                 piece.setLayoutY(y);
                 piece.setUserData(new PieceInfo(color, pieceType, "pieces/" + color + "/Chinese-" + pieceType + "-" + color + ".png"));
                 container.getChildren().add(piece);
+                System.out.println("[CustomModePanel] Loaded piece: " + color + " " + pieceType + " at (" + row + "," + col + ")");
             }
+        } else {
+            System.out.println("[CustomModePanel] Not loading custom setup - starting with empty board");
         }
         
-        // Thêm click layer vào container (sau board image, trước các quân cờ)
+        // Tạo highlight layer để hiển thị các vị trí hợp lệ
+        highlightLayer = new Pane();
+        highlightLayer.setPrefSize(boardSize, boardSize);
+        highlightLayer.setStyle("-fx-background-color: transparent;");
+        highlightLayer.setMouseTransparent(true); // Không chặn click events
+        
+        // Lưu reference đến board editor
+        currentBoardEditor = container;
+        
+        // Thêm các layer vào container theo thứ tự: board image -> click layer -> highlight layer -> pieces
         if (finalBoardImage != null) {
             container.getChildren().add(1, clickLayer);
+            container.getChildren().add(2, highlightLayer);
         } else {
             container.getChildren().add(0, clickLayer);
+            container.getChildren().add(1, highlightLayer);
         }
         
         return container;
@@ -1047,10 +1107,75 @@ public class CustomModePanel extends StackPane {
         // Lưu thông tin quân cờ
         piece.setUserData(new PieceInfo(color, pieceType, imagePath));
         
-        // Click để xóa quân cờ
+        // Click để xóa quân cờ và tăng lại số lượng trong panel
         piece.setOnMouseClicked(e -> {
+            PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
+            if (pieceInfo == null) {
+                e.consume();
+                return;
+            }
+            
+            // Xóa quân cờ khỏi board
             Pane boardEditor = (Pane) piece.getParent();
             boardEditor.getChildren().remove(piece);
+            
+            // Tìm và tăng lại số lượng trong panel tương ứng
+            // Tìm panel chứa entry của quân cờ này
+            // boardEditor.getParent() là VBox (boardEditorWrapper), getParent() của nó là HBox (boardContainer)
+            VBox boardEditorWrapper = (VBox) boardEditor.getParent();
+            HBox boardContainer = (HBox) boardEditorWrapper.getParent();
+            VBox targetPanel = pieceInfo.color.equals("Red") ? 
+                (VBox) boardContainer.getChildren().get(2) : // rightPiecePanel
+                (VBox) boardContainer.getChildren().get(0);  // leftPiecePanel
+            
+            // Tìm entry tương ứng trong panel
+            // Cấu trúc: VBox panel -> StackPane panelContent -> VBox (title + piecesContainer) -> VBox piecesContainer -> StackPane entries
+            for (javafx.scene.Node panelNode : targetPanel.getChildren()) {
+                if (panelNode instanceof StackPane) {
+                    StackPane panelContent = (StackPane) panelNode;
+                    for (javafx.scene.Node contentNode : panelContent.getChildren()) {
+                        if (contentNode instanceof VBox) {
+                            VBox contentVBox = (VBox) contentNode;
+                            for (javafx.scene.Node vboxNode : contentVBox.getChildren()) {
+                                if (vboxNode instanceof VBox) {
+                                    // Đây là piecesContainer
+                                    VBox piecesContainer = (VBox) vboxNode;
+                                    for (javafx.scene.Node entryNode : piecesContainer.getChildren()) {
+                                        if (entryNode instanceof StackPane) {
+                                            StackPane entry = (StackPane) entryNode;
+                                            Object userData = entry.getUserData();
+                                            if (userData instanceof PieceEntryInfo) {
+                                                PieceEntryInfo entryInfo = (PieceEntryInfo) userData;
+                                                if (entryInfo.color.equals(pieceInfo.color) && 
+                                                    entryInfo.pieceType.equals(pieceInfo.pieceType)) {
+                                                    // Tăng lại số lượng
+                                                    entryInfo.count++;
+                                                    entryInfo.countLabel.setText(String.valueOf(entryInfo.count));
+                                                    
+                                                    // Hiện lại entry nếu đã bị ẩn
+                                                    if (!entryInfo.entryPane.isVisible()) {
+                                                        entryInfo.entryPane.setVisible(true);
+                                                        entryInfo.entryPane.setManaged(true);
+                                                    }
+                                                    
+                                                    // Bỏ highlight nếu đang được chọn
+                                                    if (selectedPieceEntry == entryInfo) {
+                                                        selectedPieceEntry = null;
+                                                        entryInfo.entryPane.setStyle("-fx-background-color: transparent;");
+                                                    }
+                                                    
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
             e.consume();
         });
         
@@ -1135,15 +1260,37 @@ public class CustomModePanel extends StackPane {
         
         if (editorDialog != null) {
             // Tìm board editor pane
+            // Cấu trúc: StackPane dialog -> StackPane mainPanel -> VBox mainContent -> HBox boardContainer -> VBox boardEditorWrapper -> Pane boardEditor
             Pane boardEditor = null;
             for (javafx.scene.Node node : editorDialog.getChildren()) {
                 if (node instanceof StackPane) {
                     StackPane mainPanel = (StackPane) node;
                     for (javafx.scene.Node child : mainPanel.getChildren()) {
-                        if (child instanceof Pane && child.getUserData() != null && 
-                            child.getUserData().equals("boardEditor")) {
-                            boardEditor = (Pane) child;
-                            break;
+                        if (child instanceof VBox) {
+                            VBox mainContent = (VBox) child;
+                            for (javafx.scene.Node contentChild : mainContent.getChildren()) {
+                                if (contentChild instanceof HBox) {
+                                    HBox boardContainer = (HBox) contentChild;
+                                    for (javafx.scene.Node boardNode : boardContainer.getChildren()) {
+                                        // boardNode có thể là VBox (boardEditorWrapper) hoặc Pane (boardEditor)
+                                        if (boardNode instanceof VBox) {
+                                            // Nếu là VBox wrapper, tìm boardEditor bên trong
+                                            VBox wrapper = (VBox) boardNode;
+                                            for (javafx.scene.Node wrapperChild : wrapper.getChildren()) {
+                                                if (wrapperChild instanceof Pane && wrapperChild.getUserData() != null && 
+                                                    wrapperChild.getUserData().equals("boardEditor")) {
+                                                    boardEditor = (Pane) wrapperChild;
+                                                    break;
+                                                }
+                                            }
+                                        } else if (boardNode instanceof Pane && boardNode.getUserData() != null && 
+                                            boardNode.getUserData().equals("boardEditor")) {
+                                            boardEditor = (Pane) boardNode;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1151,8 +1298,10 @@ public class CustomModePanel extends StackPane {
             
             if (boardEditor != null) {
                 java.util.Map<String, String> customSetup = new java.util.HashMap<>();
-                double cellWidth = 1000.0 / 9.0;
-                double cellHeight = 500.0 / 10.0;
+                // Kích thước board hiện tại là 500x500 (hình vuông)
+                double boardSize = 500.0;
+                double cellWidth = boardSize / 9.0;
+                double cellHeight = boardSize / 10.0;
                 
                 // Lấy vị trí của tất cả quân cờ
                 for (javafx.scene.Node node : boardEditor.getChildren()) {
@@ -1175,8 +1324,10 @@ public class CustomModePanel extends StackPane {
                     }
                 }
                 
+                System.out.println("[CustomModePanel] Saving custom board setup: " + customSetup.size() + " pieces");
                 state.setCustomBoardSetup(customSetup);
                 state.setUseCustomBoard(true);
+                System.out.println("[CustomModePanel] useCustomBoard set to: " + state.isUseCustomBoard());
             }
         }
     }
@@ -1194,5 +1345,315 @@ public class CustomModePanel extends StackPane {
         fade.setFromValue(getOpacity());
         fade.setToValue(target);
         fade.play();
+    }
+    
+    /**
+     * Validate custom board setup according to Chinese Chess rules
+     * @param boardEditor The board editor pane containing pieces
+     * @return Error message if validation fails, null if valid
+     */
+    private String validateCustomBoard(Pane boardEditor) {
+        if (boardEditor == null) {
+            return "Không tìm thấy bàn cờ để kiểm tra!";
+        }
+        
+        // Kích thước board
+        double boardSize = 500.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        
+        // Tạo map để lưu vị trí các quân cờ
+        java.util.Map<String, PieceInfo> pieceMap = new java.util.HashMap<>();
+        int redKingCount = 0;
+        int blackKingCount = 0;
+        
+        // Thu thập tất cả quân cờ
+        for (javafx.scene.Node node : boardEditor.getChildren()) {
+            if (node instanceof ImageView && node.getUserData() instanceof PieceInfo) {
+                ImageView piece = (ImageView) node;
+                PieceInfo info = (PieceInfo) piece.getUserData();
+                
+                // Tính toán row, col
+                double x = piece.getLayoutX();
+                double y = piece.getLayoutY();
+                int col = (int) Math.round((x - (cellWidth - piece.getFitWidth()) / 2) / cellWidth);
+                int row = (int) Math.round((y - (cellHeight - piece.getFitHeight()) / 2) / cellHeight);
+                
+                col = Math.max(0, Math.min(8, col));
+                row = Math.max(0, Math.min(9, row));
+                
+                String key = row + "_" + col;
+                
+                pieceMap.put(key, info);
+                
+                // Đếm số lượng King
+                if (info.pieceType.equals("King")) {
+                    if (info.color.equals("Red")) {
+                        redKingCount++;
+                    } else {
+                        blackKingCount++;
+                    }
+                }
+            }
+        }
+        
+        // Kiểm tra 1: Phải có cả 2 quân Vua trên bàn cờ (ít nhất 1 Red King và 1 Black King)
+        if (redKingCount == 0) {
+            return "Must have at least 1 Red King on the board!";
+        }
+        if (blackKingCount == 0) {
+            return "Must have at least 1 Black King on the board!";
+        }
+        
+        // Kiểm tra 2: Hai quân Vua không được đối mặt trực tiếp (cùng cột, không có quân cờ chặn giữa)
+        // Thu thập tất cả các vị trí của Red Kings và Black Kings
+        java.util.List<int[]> redKingPositions = new java.util.ArrayList<>();
+        java.util.List<int[]> blackKingPositions = new java.util.ArrayList<>();
+        
+        for (java.util.Map.Entry<String, PieceInfo> entry : pieceMap.entrySet()) {
+            String[] posParts = entry.getKey().split("_");
+            int row = Integer.parseInt(posParts[0]);
+            int col = Integer.parseInt(posParts[1]);
+            PieceInfo info = entry.getValue();
+            
+            if (info.pieceType.equals("King")) {
+                if (info.color.equals("Red")) {
+                    redKingPositions.add(new int[]{row, col});
+                } else {
+                    blackKingPositions.add(new int[]{row, col});
+                }
+            }
+        }
+        
+        // Kiểm tra tất cả các cặp Red King và Black King xem có đối mặt trực tiếp không
+        for (int[] redKingPos : redKingPositions) {
+            for (int[] blackKingPos : blackKingPositions) {
+                int redKingRow = redKingPos[0];
+                int redKingCol = redKingPos[1];
+                int blackKingRow = blackKingPos[0];
+                int blackKingCol = blackKingPos[1];
+                
+                // Nếu cùng cột
+                if (redKingCol == blackKingCol) {
+                    // Kiểm tra xem có quân cờ nào chặn giữa không
+                    int startRow = Math.min(redKingRow, blackKingRow);
+                    int endRow = Math.max(redKingRow, blackKingRow);
+                    boolean hasPieceBetween = false;
+                    
+                    for (int checkRow = startRow + 1; checkRow < endRow; checkRow++) {
+                        String checkKey = checkRow + "_" + redKingCol;
+                        if (pieceMap.containsKey(checkKey)) {
+                            hasPieceBetween = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasPieceBetween) {
+                        return "Two Kings cannot face each other directly (same column " + redKingCol + " with no piece blocking between them)!";
+                    }
+                }
+            }
+        }
+        
+        // Tất cả validation đều pass
+        return null;
+    }
+    
+    /**
+     * Hiển thị thông báo lỗi validation
+     */
+    private void showValidationError(String errorMessage) {
+        Alert alert = new Alert(AlertType.ERROR);
+        alert.setTitle("Custom Board Setup Error");
+        alert.setHeaderText("Invalid Board Setup!");
+        alert.setContentText(errorMessage);
+        alert.getDialogPane().setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 16px;"
+        );
+        // Set owner window để đảm bảo Alert hiển thị đúng trong fullscreen
+        if (getScene() != null && getScene().getWindow() != null) {
+            alert.initOwner(getScene().getWindow());
+        }
+        alert.showAndWait();
+    }
+    
+    /**
+     * Hiển thị các vị trí hợp lệ cho một quân cờ
+     */
+    private void showValidPositions(String color, String pieceType) {
+        System.out.println("[CustomModePanel] showValidPositions called: color=" + color + ", pieceType=" + pieceType);
+        if (highlightLayer == null || currentBoardEditor == null) {
+            System.out.println("[CustomModePanel] highlightLayer or currentBoardEditor is null!");
+            return;
+        }
+        
+        // Xóa highlights cũ
+        clearHighlights();
+        
+        // Tính toán các vị trí hợp lệ
+        java.util.List<int[]> validPositions = getValidPositionsForPiece(color, pieceType, currentBoardEditor);
+        System.out.println("[CustomModePanel] Found " + validPositions.size() + " valid positions");
+        
+        // Hiển thị các vị trí hợp lệ
+        double boardSize = 500.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        double dotSize = Math.min(cellWidth, cellHeight) * 0.3;
+        
+        String dotColor = color.equals("Red") ? "#DC143C" : "#1C1C1C";
+        
+        for (int[] pos : validPositions) {
+            int row = pos[0];
+            int col = pos[1];
+            
+            // Kiểm tra xem vị trí này đã có quân cờ chưa
+            boolean hasPiece = false;
+            for (javafx.scene.Node node : currentBoardEditor.getChildren()) {
+                if (node instanceof ImageView && node.getUserData() instanceof PieceInfo) {
+                    ImageView existingPiece = (ImageView) node;
+                    double pieceX = existingPiece.getLayoutX();
+                    double pieceY = existingPiece.getLayoutY();
+                    int pieceCol = (int) Math.round((pieceX - (cellWidth - existingPiece.getFitWidth()) / 2) / cellWidth);
+                    int pieceRow = (int) Math.round((pieceY - (cellHeight - existingPiece.getFitHeight()) / 2) / cellHeight);
+                    if (pieceRow == row && pieceCol == col) {
+                        hasPiece = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Tính toán vị trí center của cell
+            double centerX = col * cellWidth + cellWidth / 2;
+            double centerY = row * cellHeight + cellHeight / 2;
+            
+            Circle dot = new Circle(dotSize / 2);
+            dot.setFill(Color.web(dotColor));
+            dot.setStroke(Color.WHITE);
+            dot.setStrokeWidth(2);
+            dot.setLayoutX(centerX);
+            dot.setLayoutY(centerY);
+            dot.setOpacity(0.8);
+            
+            highlightLayer.getChildren().add(dot);
+            System.out.println("[CustomModePanel] Added dot at (" + row + "," + col + ")");
+        }
+    }
+    
+    /**
+     * Xóa tất cả highlights
+     */
+    private void clearHighlights() {
+        if (highlightLayer != null) {
+            highlightLayer.getChildren().clear();
+        }
+    }
+    
+    /**
+     * Tính toán các vị trí hợp lệ cho một quân cờ
+     */
+    private java.util.List<int[]> getValidPositionsForPiece(String color, String pieceType, Pane boardEditor) {
+        java.util.List<int[]> validPositions = new java.util.ArrayList<>();
+        
+        // Tạo map các quân cờ hiện có trên board
+        java.util.Map<String, PieceInfo> pieceMap = new java.util.HashMap<>();
+        double boardSize = 500.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        
+        for (javafx.scene.Node node : boardEditor.getChildren()) {
+            if (node instanceof ImageView && node.getUserData() instanceof PieceInfo) {
+                ImageView piece = (ImageView) node;
+                PieceInfo info = (PieceInfo) piece.getUserData();
+                double x = piece.getLayoutX();
+                double y = piece.getLayoutY();
+                int col = (int) Math.round((x - (cellWidth - piece.getFitWidth()) / 2) / cellWidth);
+                int row = (int) Math.round((y - (cellHeight - piece.getFitHeight()) / 2) / cellHeight);
+                col = Math.max(0, Math.min(8, col));
+                row = Math.max(0, Math.min(9, row));
+                String key = row + "_" + col;
+                pieceMap.put(key, info);
+            }
+        }
+        
+        // Duyệt qua tất cả các vị trí trên board
+        for (int row = 0; row < 10; row++) {
+            for (int col = 0; col < 9; col++) {
+                String key = row + "_" + col;
+                
+                // Bỏ qua nếu vị trí này đã có quân cờ
+                if (pieceMap.containsKey(key)) {
+                    continue;
+                }
+                
+                // Kiểm tra xem vị trí này có hợp lệ không
+                if (isValidPosition(color, pieceType, row, col, boardEditor)) {
+                    validPositions.add(new int[]{row, col});
+                }
+            }
+        }
+        
+        return validPositions;
+    }
+    
+    /**
+     * Kiểm tra xem một vị trí có hợp lệ cho một quân cờ không
+     */
+    private boolean isValidPosition(String color, String pieceType, int row, int col, Pane boardEditor) {
+        // Kiểm tra các quy tắc validation tương tự như trong validateCustomBoard
+        
+        // King: chỉ được trong palace
+        if (pieceType.equals("King")) {
+            if (color.equals("Red")) {
+                return (row >= 0 && row <= 2 && col >= 3 && col <= 5);
+            } else {
+                return (row >= 7 && row <= 9 && col >= 3 && col <= 5);
+            }
+        }
+        
+        // Advisor: chỉ được trong palace
+        if (pieceType.equals("Advisor")) {
+            if (color.equals("Red")) {
+                return (row >= 0 && row <= 2 && col >= 3 && col <= 5);
+            } else {
+                return (row >= 7 && row <= 9 && col >= 3 && col <= 5);
+            }
+        }
+        
+        // Elephant: không được vượt sông và chỉ ở các vị trí hợp lệ
+        if (pieceType.equals("Elephant")) {
+            if (color.equals("Red")) {
+                if (row > 4) return false; // Không được vượt sông
+                // Các vị trí hợp lệ cho Red elephant
+                int[][] validPositions = {
+                    {0, 2}, {0, 6},
+                    {2, 0}, {2, 4}, {2, 8},
+                    {4, 2}, {4, 6}
+                };
+                for (int[] pos : validPositions) {
+                    if (row == pos[0] && col == pos[1]) {
+                        return true;
+                    }
+                }
+                return false;
+            } else {
+                if (row < 5) return false; // Không được vượt sông
+                // Các vị trí hợp lệ cho Black elephant
+                int[][] validPositions = {
+                    {5, 2}, {5, 6},
+                    {7, 0}, {7, 4}, {7, 8},
+                    {9, 2}, {9, 6}
+                };
+                for (int[] pos : validPositions) {
+                    if (row == pos[0] && col == pos[1]) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+        
+        // Các quân cờ khác (Horse, Rook, Cannon, Pawn) có thể đặt ở bất kỳ đâu trên board
+        return true;
     }
 }

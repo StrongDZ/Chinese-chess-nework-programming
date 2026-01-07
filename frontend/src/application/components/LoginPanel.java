@@ -69,15 +69,42 @@ public class LoginPanel extends StackPane {
                 } catch (IOException ex) {
                     System.err.println("Failed to connect or send login request: " + ex.getMessage());
                     ex.printStackTrace();
-                    // TODO: Show error message to user
-                } finally {
-                    // Reset after a delay to allow response
-                    javafx.application.Platform.runLater(() -> {
-                        PauseTransition delay = new PauseTransition(Duration.seconds(1));
-                        delay.setOnFinished(event -> isProcessing[0] = false);
-                        delay.play();
-                    });
+                    // If server is not available, auto-navigate to main menu for UI testing
+                    // This allows testing frontend UI without backend server
+                    if (ex.getMessage() != null && ex.getMessage().contains("Connection refused")) {
+                        System.out.println("[LoginPanel] Server not available - auto-navigating to main menu for UI testing");
+                        javafx.application.Platform.runLater(() -> {
+                            PauseTransition delay = new PauseTransition(Duration.seconds(0.5));
+                            delay.setOnFinished(event -> {
+                                state.setUsername(usernameValue.trim());
+                                state.navigateToMainMenu();
+                                isProcessing[0] = false;
+                            });
+                            delay.play();
+                        });
+                        return; // Exit early, don't execute finally block
+                    } else {
+                        // TODO: Show error message to user
+                        javafx.application.Platform.runLater(() -> {
+                            PauseTransition delay = new PauseTransition(Duration.seconds(1));
+                            delay.setOnFinished(event -> isProcessing[0] = false);
+                            delay.play();
+                        });
+                    }
                 }
+                
+                // Wait for server response (if connected successfully)
+                // Reset processing flag after a delay to allow response
+                javafx.application.Platform.runLater(() -> {
+                    PauseTransition delay = new PauseTransition(Duration.seconds(2));
+                    delay.setOnFinished(event -> {
+                        // Only reset if still processing (meaning no response received)
+                        if (isProcessing[0]) {
+                            isProcessing[0] = false;
+                        }
+                    });
+                    delay.play();
+                });
             }
         });
 

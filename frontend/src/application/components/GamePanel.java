@@ -1341,10 +1341,11 @@ public class GamePanel extends StackPane {
             createPlacePiece.apply(piece).accept(pos, color);
         };
         
-        // Check xem có custom board setup không
+        // Check xem có custom board setup không - CHỈ load khi đang ở Custom Mode
+        String currentMode = state.getCurrentGameMode();
         java.util.Map<String, String> customSetup = state.getCustomBoardSetup();
-        if (customSetup != null && !customSetup.isEmpty() && state.isUseCustomBoard()) {
-            // Áp dụng custom board setup
+        if ("custom".equals(currentMode) && customSetup != null && !customSetup.isEmpty() && state.isUseCustomBoard()) {
+            // Áp dụng custom board setup - CHỈ khi đang ở Custom Mode
             for (java.util.Map.Entry<String, String> entry : customSetup.entrySet()) {
                 String[] posParts = entry.getKey().split("_");
                 int row = Integer.parseInt(posParts[0]);
