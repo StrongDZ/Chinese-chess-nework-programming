@@ -31,35 +31,20 @@ public class GamePanel extends StackPane {
     
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
-    private Timeline[] countdownTimers = new Timeline[4];  // 4 timers
-    private int[] remainingSeconds = new int[4];  // Thời gian còn lại (giây)
-    private boolean isUpdatingFromCountdown = false;  // Flag để tránh vòng lặp
     
-    // Chat UI components
-    private StackPane chatInputContainer = null;
-    private StackPane chatPopup = null;
-    private Pane rootPane = null;  // Lưu reference đến root pane để thêm chat UI
-    private StackPane movePanel = null;  // Panel "Move" bên phải
-    private javafx.scene.control.ScrollPane moveHistoryScrollPane = null;  // ScrollPane cho lịch sử nước đi
-    private VBox moveHistoryContainer = null;  // Container chứa danh sách nước đi
-    private java.util.List<String> moveHistory = new java.util.ArrayList<>();  // Lưu lịch sử nước đi
-    private StackPane surrenderDialog = null;  // Dialog xác nhận surrender
-    private StackPane gameResultPanel = null;  // Panel hiển thị kết quả game
-    private StackPane gameResultOverlay = null;  // Overlay để khóa mọi action
-    private StackPane drawRequestDialog = null;  // Dialog xác nhận request draw
-    private StackPane drawReceivedDialog = null;  // Dialog nhận draw request từ đối phương
-    private int eloChange = 10;  // Điểm thay đổi khi win/lose (có thể thay đổi được)
+    // Managers
+    private ChessBoardManager chessBoardManager;
+    private TimerManager timerManager;
+    private CapturedPiecesManager capturedPiecesManager;
+    private MoveHistoryManager moveHistoryManager;
+    private DialogManager dialogManager;
+    private ChatManager chatManager;
+    
+    // Core fields
+    private Pane rootPane = null;  // Lưu reference đến root pane để thêm UI
     private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
     private StackPane boardContainer = null;  // Lưu reference đến board container
     private String currentTurn = "Red";  // Lượt hiện tại: "Red" đi trước, sau đó "Black"
-    
-    // Track captured pieces for each player
-    private java.util.Map<String, Integer> redCapturedPieces = new java.util.HashMap<>();  // Quân cờ đỏ đã ăn được (của người chơi đen)
-    private java.util.Map<String, Integer> blackCapturedPieces = new java.util.HashMap<>();  // Quân cờ đen đã ăn được (của người chơi đỏ)
-    
-    // UI components for captured pieces display
-    private VBox topLeftCapturedPieces = null;  // Hiển thị quân cờ đã ăn của người chơi đỏ (top-left)
-    private VBox bottomRightCapturedPieces = null;  // Hiển thị quân cờ đã ăn của người chơi đen (bottom-right)
 
     public GamePanel(UIState state) {
         this.state = state;
@@ -75,6 +60,23 @@ public class GamePanel extends StackPane {
         container.setPrefSize(1920, 1080);
         container.setStyle("-fx-background-color: transparent;");
         container.setMouseTransparent(false);
+        
+        // Khởi tạo rootPane trước để các Manager có thể sử dụng
+        Pane tempRoot = new Pane();
+        tempRoot.setPrefSize(1920, 1080);
+        tempRoot.setStyle("-fx-background-color: transparent;");
+        this.rootPane = tempRoot;
+        
+        // Khởi tạo các Manager
+        this.capturedPiecesManager = new CapturedPiecesManager(state, this);
+        this.moveHistoryManager = new MoveHistoryManager(state, this, rootPane);
+        this.chatManager = new ChatManager(state, this, rootPane);
+        this.dialogManager = new DialogManager(state, this, rootPane);
+        this.timerManager = new TimerManager(state, this);
+        this.chessBoardManager = new ChessBoardManager(state, this);
+        
+        // Thiết lập callbacks giữa các Manager
+        setupManagerCallbacks();
         
         StackPane gameContent = createGameContent();
         gameContent.setLayoutX(0);
@@ -100,9 +102,11 @@ public class GamePanel extends StackPane {
                 Platform.runLater(() -> {
                     resetAllGamePanels();
                     ensurePiecesVisible();
+                    timerManager.initializeTimers();
                 });
                 fadeTo(1);
             } else {
+                timerManager.stopAllTimers();
                 fadeTo(0);
             }
         });
@@ -113,11 +117,42 @@ public class GamePanel extends StackPane {
                 Platform.runLater(() -> {
                     resetAllGamePanels();
                     ensurePiecesVisible();
+                    timerManager.initializeTimers();
                 });
                 fadeTo(1);
             } else {
+                timerManager.stopAllTimers();
                 fadeTo(0);
             }
+        });
+    }
+    
+    /**
+     * Thiết lập callbacks giữa các Manager
+     */
+    private void setupManagerCallbacks() {
+        // ChessBoardManager callbacks
+        chessBoardManager.setOnPieceCaptured((color, pieceType) -> {
+            capturedPiecesManager.addCapturedPiece(color, pieceType);
+        });
+        
+        chessBoardManager.setOnMoveAddedWithDetails((moveDetails) -> {
+            // Parse moveDetails: "color|pieceType|fromRow|fromCol|toRow|toCol|capturedInfo"
+            String[] parts = moveDetails.split("\\|");
+            if (parts.length >= 7) {
+                String color = parts[0];
+                String pieceType = parts[1];
+                int fromRow = Integer.parseInt(parts[2]);
+                int fromCol = Integer.parseInt(parts[3]);
+                int toRow = Integer.parseInt(parts[4]);
+                int toCol = Integer.parseInt(parts[5]);
+                String capturedInfo = parts[6];
+                moveHistoryManager.addMove(color, pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
+            }
+        });
+        
+        chessBoardManager.setOnTurnChanged(() -> {
+            timerManager.updateTimersOnTurnChange();
         });
     }
     
@@ -141,12 +176,7 @@ public class GamePanel extends StackPane {
         topLeftProfile.setLayoutY(50);
         
         // Top left: Captured pieces display (dưới avatar)
-        topLeftCapturedPieces = createCapturedPiecesDisplay(true);
-        topLeftCapturedPieces.setLayoutX(50);
-        topLeftCapturedPieces.setLayoutY(50 + 120);  // Dưới avatar (120 là height của avatar)
-        
-        // Top left: Captured pieces display (dưới avatar)
-        topLeftCapturedPieces = createCapturedPiecesDisplay(true);
+        VBox topLeftCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(true);
         topLeftCapturedPieces.setLayoutX(50);
         topLeftCapturedPieces.setLayoutY(50 + 120);  // Dưới avatar (120 là height của avatar)
         
@@ -156,17 +186,12 @@ public class GamePanel extends StackPane {
         bottomRightProfile.setLayoutY(1080 - 200);
         
         // Bottom right: Captured pieces display (dưới avatar)
-        bottomRightCapturedPieces = createCapturedPiecesDisplay(false);
-        bottomRightCapturedPieces.setLayoutX(1920 - 450);
-        bottomRightCapturedPieces.setLayoutY(1080 - 200 + 120);  // Dưới avatar
-        
-        // Bottom right: Captured pieces display (dưới avatar)
-        bottomRightCapturedPieces = createCapturedPiecesDisplay(false);
+        VBox bottomRightCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(false);
         bottomRightCapturedPieces.setLayoutX(1920 - 450);
         bottomRightCapturedPieces.setLayoutY(1080 - 200 + 120);  // Dưới avatar
         
         // Left side: Timers - đặt cạnh khung đen bên trái
-        VBox timersContainer = createTimersContainer();
+        VBox timersContainer = timerManager.createTimersContainer();
         double boardX = (1920 - 923) / 2;  // Vị trí X của khung đen
         timersContainer.setLayoutX(boardX - 125);  // Đặt bên trái khung đen, cách 150px
         timersContainer.setLayoutY((1080 - 923) / 2 + 350);  // Tăng từ 50 lên 150 (lùi xuống 100px)
@@ -237,8 +262,17 @@ public class GamePanel extends StackPane {
         
         // Tạo và thêm các quân cờ vào bàn cờ
         // createChessPieces() trả về container có highlight layer và các quân cờ
-        piecesContainer = createChessPieces();
+        piecesContainer = chessBoardManager.createChessPieces();
         boardContainer.getChildren().add(piecesContainer);
+        
+        // Listener để reset quân cờ khi đổi bàn cờ
+        state.selectedBoardImagePathProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.isEmpty() && boardContainer != null) {
+                Platform.runLater(() -> {
+                    resetChessPieces();
+                });
+            }
+        });
         
         root.getChildren().addAll(background, topLeftProfile, topLeftCapturedPieces, bottomRightProfile, bottomRightCapturedPieces, 
             timersContainer, leftIcons, topRightIcons, boardContainer);
@@ -333,518 +367,11 @@ public class GamePanel extends StackPane {
      * Tạo UI để hiển thị các quân cờ đã ăn được
      * @param isTopLeft true nếu là người chơi top-left (Red), false nếu là bottom-right (Black)
      */
-    private VBox createCapturedPiecesDisplay(boolean isTopLeft) {
-        VBox container = new VBox(5);
-        container.setAlignment(Pos.TOP_LEFT);
-        container.setPrefWidth(450);
-        container.setPrefHeight(100);
-        
-        // HBox để chứa các icon quân cờ đã bị ăn
-        HBox piecesContainer = new HBox(8);
-        piecesContainer.setAlignment(Pos.CENTER_LEFT);
-        piecesContainer.setPrefWidth(450);
-        piecesContainer.setPrefHeight(80);
-        
-        // Lưu reference để có thể cập nhật sau
-        container.setUserData(piecesContainer);
-        
-        container.getChildren().add(piecesContainer);
-        return container;
-    }
+    // Methods createCapturedPiecesDisplay, addCapturedPiece, updateCapturedPiecesDisplay, 
+    // createCapturedPieceIcon, resetCapturedPieces đã được chuyển sang CapturedPiecesManager
     
-    /**
-     * Thêm quân cờ đã bị ăn vào danh sách và cập nhật UI
-     * @param capturedPieceColor Màu của quân cờ bị ăn ("Red" hoặc "Black")
-     * @param pieceType Loại quân cờ (King, Advisor, Elephant, Horse, Rook, Cannon, Pawn)
-     */
-    private void addCapturedPiece(String capturedPieceColor, String pieceType) {
-        // Xác định người chơi nào đã ăn (người chơi đối lập với màu quân cờ bị ăn)
-        boolean isRedPlayer = capturedPieceColor.equals("Black");  // Nếu ăn quân Black thì là Red player
-        
-        // Cập nhật map
-        java.util.Map<String, Integer> capturedMap = isRedPlayer ? redCapturedPieces : blackCapturedPieces;
-        capturedMap.put(pieceType, capturedMap.getOrDefault(pieceType, 0) + 1);
-        
-        // Cập nhật UI
-        VBox displayContainer = isRedPlayer ? topLeftCapturedPieces : bottomRightCapturedPieces;
-        if (displayContainer != null) {
-            HBox piecesContainer = (HBox) displayContainer.getUserData();
-            if (piecesContainer != null) {
-                Platform.runLater(() -> {
-                    updateCapturedPiecesDisplay(piecesContainer, capturedMap, capturedPieceColor);
-                });
-            }
-        }
-    }
-    
-    /**
-     * Cập nhật hiển thị các quân cờ đã bị ăn
-     */
-    private void updateCapturedPiecesDisplay(HBox container, java.util.Map<String, Integer> capturedMap, String pieceColor) {
-        container.getChildren().clear();
-        
-        // Thứ tự hiển thị các loại quân cờ (theo giá trị)
-        String[] pieceOrder = {"King", "Advisor", "Elephant", "Horse", "Rook", "Cannon", "Pawn"};
-        
-        for (String pieceType : pieceOrder) {
-            int count = capturedMap.getOrDefault(pieceType, 0);
-            if (count > 0) {
-                // Chỉ tạo 1 icon cho mỗi loại quân cờ, hiển thị số lượng nếu > 1
-                StackPane pieceIcon = createCapturedPieceIcon(pieceType, pieceColor, count);
-                container.getChildren().add(pieceIcon);
-            }
-        }
-    }
-    
-    /**
-     * Tạo icon cho quân cờ đã bị ăn
-     */
-    private StackPane createCapturedPieceIcon(String pieceType, String pieceColor, int count) {
-        StackPane iconContainer = new StackPane();
-        iconContainer.setPrefWidth(50);
-        iconContainer.setPrefHeight(50);
-        
-        // Vòng tròn với màu theo màu quân cờ bị ăn
-        Circle circle = new Circle(25);
-        if (pieceColor.equals("Red")) {
-            circle.setFill(Color.web("#DC143C"));  // Màu đỏ
-        } else {
-            circle.setFill(Color.web("#1C1C1C"));  // Màu đen
-        }
-        circle.setStroke(Color.WHITE);
-        circle.setStrokeWidth(2);
-        
-        // Text hiển thị chữ quân cờ (chữ Hán)
-        Label pieceLabel = new Label();
-        pieceLabel.setStyle("-fx-font-size: 24px; -fx-text-fill: white; -fx-background-color: transparent;");
-        
-        // Map piece type to Chinese character
-        java.util.Map<String, String> pieceChars = new java.util.HashMap<>();
-        pieceChars.put("King", pieceColor.equals("Red") ? "帥" : "將");
-        pieceChars.put("Advisor", pieceColor.equals("Red") ? "仕" : "士");
-        pieceChars.put("Elephant", pieceColor.equals("Red") ? "相" : "象");
-        pieceChars.put("Horse", pieceColor.equals("Red") ? "傌" : "馬");
-        pieceChars.put("Rook", pieceColor.equals("Red") ? "俥" : "車");
-        pieceChars.put("Cannon", pieceColor.equals("Red") ? "炮" : "砲");
-        pieceChars.put("Pawn", pieceColor.equals("Red") ? "兵" : "卒");
-        
-        pieceLabel.setText(pieceChars.getOrDefault(pieceType, "?"));
-        
-        // Label hiển thị số lượng (luôn hiển thị nếu > 1) - đặt ở góc dưới bên phải
-        Label countLabel = null;
-        if (count > 1) {
-            countLabel = new Label(String.valueOf(count));
-            // Màu chữ cùng với màu quân cờ bị ăn
-            String textColor = pieceColor.equals("Red") ? "#DC143C" : "#1C1C1C";
-            countLabel.setStyle(String.format("-fx-font-family: 'Kolker Brush'; -fx-font-size: 20px; -fx-text-fill: %s; -fx-background-color: transparent; -fx-font-weight: 900;", textColor));
-            // Đặt ở góc dưới bên phải của icon
-            StackPane.setAlignment(countLabel, Pos.BOTTOM_RIGHT);
-            StackPane.setMargin(countLabel, new Insets(0, 3, 3, 0));
-        }
-        
-        iconContainer.getChildren().addAll(circle, pieceLabel);
-        if (countLabel != null) {
-            iconContainer.getChildren().add(countLabel);
-        }
-        
-        return iconContainer;
-    }
-    
-    /**
-     * Reset danh sách quân cờ đã bị ăn (khi bắt đầu game mới)
-     */
-    private void resetCapturedPieces() {
-        redCapturedPieces.clear();
-        blackCapturedPieces.clear();
-        
-        if (topLeftCapturedPieces != null) {
-            HBox piecesContainer = (HBox) topLeftCapturedPieces.getUserData();
-            if (piecesContainer != null) {
-                piecesContainer.getChildren().clear();
-            }
-        }
-        
-        if (bottomRightCapturedPieces != null) {
-            HBox piecesContainer = (HBox) bottomRightCapturedPieces.getUserData();
-            if (piecesContainer != null) {
-                piecesContainer.getChildren().clear();
-            }
-        }
-    }
-    
-    private VBox createTimersContainer() {
-        VBox container = new VBox(15);
-        container.setAlignment(Pos.TOP_LEFT);
-        
-        // Tạo 4 timer riêng biệt và bind với state
-        // Timer 1: bind với timer1Value
-        StackPane timer1Pane = createTimerPane(state.timer1ValueProperty(), "2:00", 0);
-        
-        // Timer 2: bind với timer2Value
-        StackPane timer2Pane = createTimerPane(state.timer2ValueProperty(), "10:00", 1);
-        
-        // Timer 3: bind với timer3Value
-        StackPane timer3Pane = createTimerPane(state.timer3ValueProperty(), "10:00", 2);
-        
-        // Timer 4: bind với timer4Value
-        StackPane timer4Pane = createTimerPane(state.timer4ValueProperty(), "2:00", 3);
-        
-        container.getChildren().addAll(timer1Pane, timer2Pane, timer3Pane, timer4Pane);
-        
-        // Bắt đầu countdown khi giá trị thay đổi (chỉ khi không phải từ countdown)
-        state.timer1ValueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !isUpdatingFromCountdown) {
-                startCountdown(0, newVal);
-            }
-        });
-        state.timer2ValueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !isUpdatingFromCountdown) {
-                startCountdown(1, newVal);
-            }
-        });
-        state.timer3ValueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !isUpdatingFromCountdown) {
-                startCountdown(2, newVal);
-            }
-        });
-        state.timer4ValueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !isUpdatingFromCountdown) {
-                startCountdown(3, newVal);
-            }
-        });
-        
-        // Bắt đầu countdown khi game được mở (để đảm bảo timers bắt đầu đếm)
-        state.gameVisibleProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal && state.appStateProperty().get() == UIState.AppState.IN_GAME) {
-                // Sử dụng Platform.runLater để đảm bảo giá trị đã được set
-                javafx.application.Platform.runLater(() -> {
-                    // Force start countdown cho tất cả timers
-                    String timer1 = state.getTimer1Value();
-                    String timer2 = state.getTimer2Value();
-                    String timer3 = state.getTimer3Value();
-                    String timer4 = state.getTimer4Value();
-                    
-                    if (timer1 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(0, timer1);
-                        isUpdatingFromCountdown = false;
-                    }
-                    if (timer2 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(1, timer2);
-                        isUpdatingFromCountdown = false;
-                    }
-                    if (timer3 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(2, timer3);
-                        isUpdatingFromCountdown = false;
-                    }
-                    if (timer4 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(3, timer4);
-                        isUpdatingFromCountdown = false;
-                    }
-                    
-                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
-                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
-                    javafx.application.Platform.runLater(() -> {
-                        updateTimersOnTurnChange();
-                    });
-                    
-                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
-                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
-                    javafx.application.Platform.runLater(() -> {
-                        updateTimersOnTurnChange();
-                    });
-                });
-            } else {
-                // Dừng tất cả timers khi game đóng
-                for (int i = 0; i < 4; i++) {
-                    if (countdownTimers[i] != null) {
-                        countdownTimers[i].stop();
-                    }
-                }
-            }
-        });
-        
-        // Thêm listener cho appState để đảm bảo timers bắt đầu khi vào game
-        state.appStateProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == UIState.AppState.IN_GAME && state.isGameVisible()) {
-                javafx.application.Platform.runLater(() -> {
-                    String timer1 = state.getTimer1Value();
-                    String timer2 = state.getTimer2Value();
-                    String timer3 = state.getTimer3Value();
-                    String timer4 = state.getTimer4Value();
-                    
-                    if (timer1 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(0, timer1);
-                        isUpdatingFromCountdown = false;
-                    }
-                    if (timer2 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(1, timer2);
-                        isUpdatingFromCountdown = false;
-                    }
-                    if (timer3 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(2, timer3);
-                        isUpdatingFromCountdown = false;
-                    }
-                    if (timer4 != null) {
-                        isUpdatingFromCountdown = true;
-                        startCountdown(3, timer4);
-                        isUpdatingFromCountdown = false;
-                    }
-                    
-                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
-                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
-                    javafx.application.Platform.runLater(() -> {
-                        updateTimersOnTurnChange();
-                    });
-                    
-                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
-                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
-                    javafx.application.Platform.runLater(() -> {
-                        updateTimersOnTurnChange();
-                    });
-                });
-            }
-        });
-        
-        return container;
-    }
-    
-    private void startCountdown(int timerIndex, String initialValue) {
-        // Dừng timer cũ nếu có
-        if (countdownTimers[timerIndex] != null) {
-            countdownTimers[timerIndex].stop();
-        }
-        
-        // Parse giá trị ban đầu
-        int seconds = parseTimeToSeconds(initialValue);
-        
-        if (seconds < 0) {
-            // "Unlimited time" - không đếm
-            return;
-        }
-        
-        remainingSeconds[timerIndex] = seconds;
-        
-        // Cập nhật label ban đầu (không trigger listener)
-        isUpdatingFromCountdown = true;
-        updateTimerLabel(timerIndex, seconds);
-        isUpdatingFromCountdown = false;
-        
-        // Kiểm tra xem có phải blitz hoặc custom mode không (chế độ timer theo lượt)
-        String gameMode = state.getCurrentGameMode();
-        boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
-        
-        // Xác định timer thuộc bên nào
-        // Timer 1, 2 (index 0, 1): Red player
-        // Timer 3, 4 (index 2, 3): Black player
-        boolean isRedTimer = (timerIndex == 0 || timerIndex == 1);
-        boolean isBlackTimer = (timerIndex == 2 || timerIndex == 3);
-        
-        // Tạo Timeline đếm ngược mỗi giây
-        countdownTimers[timerIndex] = new Timeline(
-            new KeyFrame(Duration.seconds(1), e -> {
-                // Kiểm tra lại game mode mỗi lần để đảm bảo logic đúng
-                String currentGameMode = state.getCurrentGameMode();
-                boolean isTurnBased = "blitz".equalsIgnoreCase(currentGameMode) || "custom".equalsIgnoreCase(currentGameMode);
-                
-                // Trong blitz/custom mode, chỉ đếm nếu đến lượt của bên đó
-                if (isTurnBased) {
-                    if (isRedTimer && !currentTurn.equals("Red")) {
-                        // Không phải lượt Red, dừng timer
-                        countdownTimers[timerIndex].stop();
-                        return;
-                    }
-                    if (isBlackTimer && !currentTurn.equals("Black")) {
-                        // Không phải lượt Black, dừng timer
-                        countdownTimers[timerIndex].stop();
-                        return;
-                    }
-                }
-                
-                remainingSeconds[timerIndex]--;
-                if (remainingSeconds[timerIndex] >= 0) {
-                    // Update label mà không trigger listener
-                    isUpdatingFromCountdown = true;
-                    updateTimerLabel(timerIndex, remainingSeconds[timerIndex]);
-                    isUpdatingFromCountdown = false;
-                } else {
-                    countdownTimers[timerIndex].stop();
-                }
-            })
-        );
-        countdownTimers[timerIndex].setCycleCount(Timeline.INDEFINITE);
-        
-        // Trong blitz/custom mode, KHÔNG tự động play timer
-        // Chỉ tạo Timeline, để updateTimersOnTurnChange() quyết định timer nào được play
-        if (!isTurnBasedMode) {
-            // Không phải blitz/custom mode, chạy bình thường
-            countdownTimers[timerIndex].play();
-        }
-        // Nếu là turn-based mode, không play ở đây, để updateTimersOnTurnChange() xử lý
-    }
-    
-    // Method để cập nhật timer khi đổi lượt (chỉ trong blitz/custom mode)
-    private void updateTimersOnTurnChange() {
-        String gameMode = state.getCurrentGameMode();
-        boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
-        
-        if (!isTurnBasedMode) {
-            // Không phải blitz/custom mode, không cần làm gì
-            return;
-        }
-        
-        // Dừng tất cả timers một cách chắc chắn - đảm bảo không có timer nào đang chạy
-        for (int i = 0; i < 4; i++) {
-            if (countdownTimers[i] != null) {
-                countdownTimers[i].stop();
-                // Đảm bảo status là stopped
-                if (countdownTimers[i].getStatus() == Timeline.Status.RUNNING) {
-                    countdownTimers[i].stop();
-                }
-            }
-        }
-        
-        // Đợi một chút để đảm bảo tất cả timers đã dừng hoàn toàn
-        javafx.application.Platform.runLater(() -> {
-            // Kiểm tra lại game mode (có thể đã thay đổi)
-            String currentGameMode = state.getCurrentGameMode();
-            boolean isStillTurnBased = "blitz".equalsIgnoreCase(currentGameMode) || "custom".equalsIgnoreCase(currentGameMode);
-            
-            if (!isStillTurnBased) {
-                return; // Không còn turn-based mode
-            }
-            
-            // Bắt đầu timer của bên đang đến lượt
-            if (currentTurn.equals("Red")) {
-                // Bắt đầu timer 1 và 2 (Red) - dừng timer 3 và 4 (Black) để chắc chắn
-                if (countdownTimers[2] != null) {
-                    countdownTimers[2].stop();
-                }
-                if (countdownTimers[3] != null) {
-                    countdownTimers[3].stop();
-                }
-                if (countdownTimers[0] != null && remainingSeconds[0] >= 0) {
-                    countdownTimers[0].play();
-                }
-                if (countdownTimers[1] != null && remainingSeconds[1] >= 0) {
-                    countdownTimers[1].play();
-                }
-            } else if (currentTurn.equals("Black")) {
-                // Bắt đầu timer 3 và 4 (Black) - dừng timer 1 và 2 (Red) để chắc chắn
-                if (countdownTimers[0] != null) {
-                    countdownTimers[0].stop();
-                }
-                if (countdownTimers[1] != null) {
-                    countdownTimers[1].stop();
-                }
-                if (countdownTimers[2] != null && remainingSeconds[2] >= 0) {
-                    countdownTimers[2].play();
-                }
-                if (countdownTimers[3] != null && remainingSeconds[3] >= 0) {
-                    countdownTimers[3].play();
-                }
-            }
-        });
-    }
-    
-    private int parseTimeToSeconds(String timeStr) {
-        if (timeStr == null || timeStr.contains("Unlimited")) {
-            return -1;  // Unlimited
-        }
-        
-        // Parse "X mins" hoặc "X min"
-        if (timeStr.contains("min")) {
-            try {
-                String number = timeStr.replaceAll("[^0-9]", "");
-                int minutes = Integer.parseInt(number);
-                return minutes * 60;
-            } catch (NumberFormatException e) {
-                return -1;
-            }
-        }
-        
-        // Parse "MM:SS"
-        if (timeStr.contains(":")) {
-            try {
-                String[] parts = timeStr.split(":");
-                int minutes = Integer.parseInt(parts[0]);
-                int seconds = Integer.parseInt(parts[1]);
-                return minutes * 60 + seconds;
-            } catch (Exception e) {
-                return -1;
-            }
-        }
-        
-        return -1;
-    }
-    
-    private void updateTimerLabel(int timerIndex, int totalSeconds) {
-        String formattedTime = formatSecondsToTime(totalSeconds);
-        
-        switch (timerIndex) {
-            case 0:
-                state.setTimer1Value(formattedTime);
-                break;
-            case 1:
-                state.setTimer2Value(formattedTime);
-                break;
-            case 2:
-                state.setTimer3Value(formattedTime);
-                break;
-            case 3:
-                state.setTimer4Value(formattedTime);
-                break;
-        }
-    }
-    
-    private String formatSecondsToTime(int totalSeconds) {
-        if (totalSeconds < 0) {
-            return "Unlimited time";
-        }
-        
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-        
-        return String.format("%d:%02d", minutes, seconds);
-    }
-    
-    private StackPane createTimerPane(javafx.beans.property.StringProperty valueProperty, String defaultValue, int index) {
-        Rectangle timerBg = new Rectangle(120, 50);
-        timerBg.setArcWidth(10);
-        timerBg.setArcHeight(10);
-        timerBg.setStroke(Color.color(0.3, 0.3, 0.3));
-        timerBg.setStrokeWidth(1);
-        
-        // Timer 2 và 3 (index 1, 2) = #A8A4A4, còn lại = xám
-        if (index == 1 || index == 2) {
-            timerBg.setFill(Color.web("#A8A4A4"));
-        } else {
-            timerBg.setFill(Color.color(0.85, 0.85, 0.85));
-        }
-        
-        Label timerLabel = new Label(defaultValue);
-        timerLabel.textProperty().bind(valueProperty);  // Bind text với state
-        timerLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 35px; " +
-            "-fx-text-fill: black; " +
-            "-fx-background-color: transparent;"
-        );
-        timerLabel.setAlignment(Pos.CENTER);
-        
-        StackPane timerPane = new StackPane();
-        timerPane.setPrefSize(120, 50);
-        timerPane.setAlignment(Pos.CENTER);
-        timerPane.getChildren().addAll(timerBg, timerLabel);
-        
-        return timerPane;
-    }
+    // Methods createTimersContainer, startCountdown, updateTimersOnTurnChange, parseTimeToSeconds,
+    // formatSecondsToTime, updateTimerLabel, createTimerPane đã được chuyển sang TimerManager
     
     private VBox createLeftIcons() {
         VBox container = new VBox(15);
@@ -896,7 +423,7 @@ public class GamePanel extends StackPane {
         
         // Click handler để hiển thị confirmation dialog
         resignContainer.setOnMouseClicked(e -> {
-            showSurrenderConfirmation();
+            dialogManager.showSurrenderConfirmation();
             e.consume();
         });
         
@@ -923,7 +450,7 @@ public class GamePanel extends StackPane {
         
         // Click handler để hiển thị draw request confirmation
         drawContainer.setOnMouseClicked(e -> {
-            showDrawRequestConfirmation();
+            dialogManager.showDrawRequestConfirmation();
             e.consume();
         });
         
@@ -945,14 +472,12 @@ public class GamePanel extends StackPane {
         
         // Click handler để toggle move panel
         moveIcon.setOnMouseClicked(e -> {
-            if (movePanel != null && rootPane != null && rootPane.getChildren().contains(movePanel)) {
+            if (moveHistoryManager.isMovePanelVisible()) {
                 // Nếu panel đang hiện, đóng nó
-                hideMovePanel();
+                moveHistoryManager.hideMovePanel();
             } else {
                 // Nếu chưa hiện, mở nó
-                if (rootPane != null) {
-                    showMovePanel();
-                }
+                moveHistoryManager.showMovePanel();
             }
             e.consume();
         });
@@ -992,13 +517,11 @@ public class GamePanel extends StackPane {
         // Click handler để toggle chat input (mở/đóng)
         chatIcon.setOnMouseClicked(e -> {
             // Nếu chat input đang hiện, đóng nó
-            if (chatInputContainer != null && rootPane != null && rootPane.getChildren().contains(chatInputContainer)) {
-                rootPane.getChildren().remove(chatInputContainer);
+            if (chatManager.isChatInputVisible()) {
+                // ChatManager sẽ tự xử lý việc đóng
             } else {
                 // Nếu chưa hiện, mở nó
-                if (rootPane != null) {
-                    showChatInput();
-                }
+                chatManager.showChatInput();
             }
             e.consume();
         });
@@ -1015,6 +538,9 @@ public class GamePanel extends StackPane {
         fade.play();
     }
 
+    // Method createChessPieces() đã được chuyển sang ChessBoardManager
+    // Giữ lại method cũ để tham khảo (sẽ xóa sau khi kiểm tra)
+    /*
     private Pane createChessPieces() {
         Pane container = new Pane();
         container.setPrefSize(923, 923);
@@ -1117,7 +643,7 @@ public class GamePanel extends StackPane {
                         
                         PieceInfo info = (PieceInfo) imgView.getUserData();
                         // Convert piece type to character
-                        char pieceChar = GamePanel.getPieceChar(info.pieceType, info.color.equals("Red"));
+                        char pieceChar = ChessBoardManager.getPieceChar(info.pieceType, info.color.equals("Red"));
                         board[pieceRow][pieceCol] = pieceChar;
                         
                         // Tìm quân cờ tại vị trí được click
@@ -1396,7 +922,7 @@ public class GamePanel extends StackPane {
             piece.setPickOnBounds(true);
             
             // Lưu thông tin quân cờ vào userData
-            piece.setUserData(new PieceInfo(color, pieceType, imagePath));
+            piece.setUserData(new ChessBoardManager.PieceInfo(color, pieceType, imagePath));
             
             // Thêm shadow cho quân cờ
             DropShadow shadow = new DropShadow();
@@ -1585,6 +1111,9 @@ public class GamePanel extends StackPane {
         return container;
     }
     
+    /**
+     * Reset quân cờ về vị trí ban đầu
+     */
     private void resetChessPieces() {
         // Xóa quân cờ cũ nếu có
         if (piecesContainer != null && boardContainer != null) {
@@ -1592,399 +1121,36 @@ public class GamePanel extends StackPane {
         }
         
         // Tạo lại quân cờ mới
-        piecesContainer = createChessPieces();
+        piecesContainer = chessBoardManager.createChessPieces();
         
         // Thêm vào board container
         if (boardContainer != null) {
             boardContainer.getChildren().add(piecesContainer);
         }
     }
-
-    private void showChatInput() {
-        // Nếu đã có input field, ẩn nó trước
-        if (chatInputContainer != null && rootPane != null && rootPane.getChildren().contains(chatInputContainer)) {
-            rootPane.getChildren().remove(chatInputContainer);
-        }
-        
-        // Tạo chat input field
-        chatInputContainer = new StackPane();
-        chatInputContainer.setLayoutX((1920 - 400) / 2 + 750);  // Dịch sang phải 100px
-        chatInputContainer.setLayoutY(100);
-        chatInputContainer.setPrefSize(400, 60);    
-        
-        // Background cho input
-        Rectangle inputBg = new Rectangle(400, 60);
-        inputBg.setFill(Color.WHITE);
-        inputBg.setStroke(Color.color(0.3, 0.3, 0.3));
-        inputBg.setStrokeWidth(2);
-        inputBg.setArcWidth(10);
-        inputBg.setArcHeight(10);
-        
-        // TextField để nhập chat
-        javafx.scene.control.TextField chatInput = new javafx.scene.control.TextField();
-        chatInput.setPrefSize(380, 40);
-        chatInput.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 24px; " +
-            "-fx-background-color: transparent; " +
-            "-fx-border-color: transparent;"
-        );
-        chatInput.setPromptText("Nhập tin nhắn...");
-        
-        // Xử lý khi nhấn Enter
-        chatInput.setOnKeyPressed(e -> {
-            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
-                String message = chatInput.getText().trim();
-                if (!message.isEmpty()) {
-                    showChatPopup(message);
-                    chatInput.clear();
-                    // Ẩn input field
-                    if (rootPane.getChildren().contains(chatInputContainer)) {
-                        rootPane.getChildren().remove(chatInputContainer);
-                    }
-                }
-            } else if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
-                // Ẩn input field khi nhấn ESC
-                if (rootPane.getChildren().contains(chatInputContainer)) {
-                    rootPane.getChildren().remove(chatInputContainer);
-                }
-            }
-        });
-        
-        chatInputContainer.getChildren().addAll(inputBg, chatInput);
-        chatInputContainer.setAlignment(Pos.CENTER);
-        
-        // Thêm vào root pane
-        rootPane.getChildren().add(chatInputContainer);
-        
-        // Focus vào input field
-        Platform.runLater(() -> chatInput.requestFocus());
+    
+    /**
+     * Get current turn
+     */
+    public String getCurrentTurn() {
+        return currentTurn;
     }
     
-    private void showChatPopup(String message) {
-        // Nếu đã có popup, xóa nó trước
-        if (chatPopup != null && rootPane != null && rootPane.getChildren().contains(chatPopup)) {
-            rootPane.getChildren().remove(chatPopup);
-        }
-        
-        // Vị trí avatar của đối thủ (bottom-right)
-        double avatarX = 1920 - 525;  // 1470
-        double avatarY = 1080 - 200;  // 880
-        double avatarWidth = 450;  // Width của profile container
-        double avatarHeight = 120;  // Height của profile container
-        
-        // Tính toán vị trí popup - đặt phía trên avatar, căn chỉnh để không tràn ra ngoài
-        double popupWidth = 300;
-        double popupHeight = 120;
-        double popupX = avatarX + (avatarWidth - popupWidth) / 2;  // Căn giữa theo avatar
-        // Đảm bảo không tràn ra ngoài màn hình bên phải
-        if (popupX + popupWidth > 1920) {
-            popupX = 1920 - popupWidth - 20;  // Cách lề phải 20px
-        }
-        // Đảm bảo không tràn ra ngoài màn hình bên trái
-        if (popupX < 0) {
-            popupX = 20;  // Cách lề trái 20px
-        }
-        double popupY = avatarY - popupHeight - 20;  // Phía trên avatar, cách 20px
-        
-        // Tạo popup container
-        Pane popupContainer = new Pane();
-        popupContainer.setLayoutX(popupX);
-        popupContainer.setLayoutY(popupY);
-        popupContainer.setPrefSize(popupWidth, popupHeight);
-        
-        // Background chính cho popup (nền trắng, viền đỏ nâu)
-        Rectangle popupBg = new Rectangle(popupWidth, popupHeight);
-        popupBg.setFill(Color.WHITE);
-        popupBg.setStroke(Color.color(0.6, 0.4, 0.3));  // Màu đỏ nâu giống border của avatar
-        popupBg.setStrokeWidth(2);
-        popupBg.setArcWidth(20);
-        popupBg.setArcHeight(20);
-        popupBg.setLayoutX(0);
-        popupBg.setLayoutY(0);
-        
-        // Tạo tail (đuôi nhọn) trỏ xuống về phía avatar
-        // Tính toán vị trí tail để trỏ vào giữa avatar
-        double avatarCenterX = avatarX + avatarWidth / 2;  // Giữa avatar: 1470 + 225 = 1695
-        // Vị trí tail tương đối với popupContainer (không phải popupX vì đã wrap trong StackPane)
-        double tailX = avatarCenterX - popupX - 90;  // Dịch sang trái 30px
-        
-        // Giới hạn tail trong phạm vi popup (tránh tail ra ngoài)
-        tailX = Math.max(30, Math.min(popupWidth - 70, tailX));
-        
-        javafx.scene.shape.Polygon tail = new javafx.scene.shape.Polygon();
-        tail.getPoints().addAll(
-            tailX, popupHeight,           // Điểm bắt đầu từ bubble (góc dưới)
-            tailX - 15, popupHeight + 20, // Điểm nhọn trỏ xuống
-            tailX + 15, popupHeight + 20  // Điểm kết thúc
-        );
-        tail.setFill(Color.WHITE);
-        tail.setStroke(Color.color(0.6, 0.4, 0.3));
-        tail.setStrokeWidth(2);
-        
-        // Label để hiển thị message
-        Label messageLabel = new Label(message);
-        messageLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 36px; " +
-            "-fx-text-fill: black; " +
-            "-fx-background-color: transparent;"
-        );
-        messageLabel.setLayoutX(20);  // Padding trái
-        messageLabel.setLayoutY(40);  // Căn giữa theo chiều dọc
-        messageLabel.setPrefWidth(popupWidth - 40);  // Chiều rộng còn lại
-        messageLabel.setWrapText(true);
-        messageLabel.setAlignment(Pos.CENTER_LEFT);
-        
-        popupContainer.getChildren().addAll(popupBg, tail, messageLabel);
-        
-        // Lưu vào chatPopup - KHÔNG wrap trong StackPane, dùng trực tiếp Pane
-        chatPopup = new StackPane();
-        // Set vị trí cho chatPopup
-        chatPopup.setLayoutX(popupX);
-        chatPopup.setLayoutY(popupY);
-        chatPopup.getChildren().add(popupContainer);
-        
-        // Thêm vào root pane
-        rootPane.getChildren().add(chatPopup);
-        
-        // Fade in animation
-        chatPopup.setOpacity(0);
-        FadeTransition fadeIn = new FadeTransition(Duration.millis(300), chatPopup);
-        fadeIn.setToValue(1.0);
-        fadeIn.play();
-        
-        // Tự động ẩn sau 5 giây
-        Timeline hideTimer = new Timeline(
-            new KeyFrame(Duration.seconds(5), e -> {
-                // Fade out animation
-                FadeTransition fadeOut = new FadeTransition(Duration.millis(300), chatPopup);
-                fadeOut.setToValue(0.0);
-                fadeOut.setOnFinished(event -> {
-                    if (rootPane.getChildren().contains(chatPopup)) {
-                        rootPane.getChildren().remove(chatPopup);
-                    }
-                });
-                fadeOut.play();
-            })
-        );
-        hideTimer.play();
+    /**
+     * Set current turn
+     */
+    public void setCurrentTurn(String turn) {
+        this.currentTurn = turn;
     }
 
-    private void showMovePanel() {
-        // Nếu đã có panel, xóa nó trước
-        if (movePanel != null && rootPane != null && rootPane.getChildren().contains(movePanel)) {
-            rootPane.getChildren().remove(movePanel);
-        }
-        
-        // Tạo panel "Move" bên phải - kích thước 450x755
-        movePanel = new StackPane();
-        movePanel.setLayoutX(1920 - 450);  // Bên phải, rộng 450px
-        movePanel.setLayoutY((1080 - 755) / 2 - 70);  // Dịch lên 100px so với căn giữa
-        movePanel.setPrefSize(450, 755);  // Kích thước 450x755
-        
-        // Background cho panel (rounded rectangle màu xám nhạt)
-        Rectangle panelBg = new Rectangle(450, 755);
-        panelBg.setFill(Color.color(0.9, 0.9, 0.9, 0.95));  // Màu xám nhạt, hơi trong suốt
-        panelBg.setArcWidth(40);  // Tăng từ 20 lên 40 để bo góc thêm
-        panelBg.setArcHeight(40);  // Tăng từ 20 lên 40 để bo góc thêm
-        panelBg.setLayoutX(0);
-        panelBg.setLayoutY(0);
-        
-        // Thêm shadow cho panel
-        DropShadow shadow = new DropShadow();
-        shadow.setColor(Color.color(0, 0, 0, 0.3));  // Màu đen với độ trong suốt 30%
-        shadow.setRadius(15);  // Độ mờ của shadow
-        shadow.setOffsetX(5);  // Độ lệch theo chiều ngang
-        shadow.setOffsetY(5);  // Độ lệch theo chiều dọc
-        panelBg.setEffect(shadow);
-        
-        // Header container
-        HBox header = new HBox();
-        header.setPrefSize(450, 80);
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setStyle("-fx-padding: 10 20 20 20;");  // Giảm padding top từ 20 xuống 10
-        
-        // Container cho Move label và gạch ngang
-        VBox moveLabelContainer = new VBox(5);  // Khoảng cách 5px giữa label và gạch
-        moveLabelContainer.setAlignment(Pos.CENTER_LEFT);
-        
-        // Label "Move" (font calligraphic)
-        Label moveLabel = new Label("Move");
-        moveLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 80px; " +
-            "-fx-text-fill: black; " +
-            "-fx-background-color: transparent;"
-        );
-        
-        // Gạch ngang dưới chữ Move
-        Rectangle dividerLine = new Rectangle(200, 3);  // Chiều rộng 200px, chiều cao 3px
-        dividerLine.setFill(Color.color(0.3, 0.3, 0.3));  // Màu xám đậm
-        dividerLine.setArcWidth(2);
-        dividerLine.setArcHeight(2);
-        
-        moveLabelContainer.getChildren().addAll(moveLabel, dividerLine);
-        moveLabelContainer.setTranslateY(-35);  // Dùng setTranslateY để dịch lên (hoạt động với layout containers)
-        
-        // Thêm Move label container vào header
-        header.getChildren().add(moveLabelContainer);
-        
-        // Container chính cho panel
-        VBox panelContainer = new VBox();
-        panelContainer.setPrefSize(450, 755);
-        panelContainer.setStyle("-fx-background-color: rgba(230, 230, 230, 0.95);");  // Cùng màu với panel background
-        panelContainer.getChildren().add(header);
-        
-        // ScrollPane để hiển thị lịch sử nước đi
-        moveHistoryScrollPane = new javafx.scene.control.ScrollPane();
-        moveHistoryScrollPane.setPrefSize(450, 675);  // Chiều cao = 755 - 80 (header)
-        moveHistoryScrollPane.setStyle(
-            "-fx-background: rgba(230, 230, 230, 0.95); " +  // Dùng -fx-background thay vì -fx-background-color
-            "-fx-background-color: rgba(230, 230, 230, 0.95); " +
-            "-fx-border-color: transparent;"
-        );
-        moveHistoryScrollPane.setFitToWidth(true);
-        moveHistoryScrollPane.setVbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        moveHistoryScrollPane.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
-        
-        // Container cho danh sách nước đi
-        moveHistoryContainer = new VBox(10);
-        moveHistoryContainer.setPrefWidth(430);  // Nhỏ hơn scrollPane một chút để tránh scroll ngang
-        moveHistoryContainer.setStyle(
-            "-fx-padding: 20; " +
-            "-fx-background-color: transparent;"  // Trong suốt để hiển thị màu của ScrollPane
-        );
-        moveHistoryContainer.setAlignment(Pos.TOP_LEFT);
-        
-        // Hiển thị các nước đi đã lưu
-        for (String move : moveHistory) {
-            Label moveHistoryLabel = createMoveLabel(move);
-            moveHistoryContainer.getChildren().add(moveHistoryLabel);
-        }
-        
-        moveHistoryScrollPane.setContent(moveHistoryContainer);
-        
-        // Thêm ScrollPane vào panel container
-        panelContainer.getChildren().add(moveHistoryScrollPane);
-        
-        movePanel.getChildren().addAll(panelBg, panelContainer);
-        
-        // Thêm vào root pane
-        rootPane.getChildren().add(movePanel);
-        
-        // Fade in animation
-        movePanel.setOpacity(0);
-        FadeTransition fadeIn = new FadeTransition(Duration.millis(300), movePanel);
-        fadeIn.setToValue(1.0);
-        fadeIn.play();
-    }
-    
-    private void hideMovePanel() {
-        if (movePanel != null && rootPane != null && rootPane.getChildren().contains(movePanel)) {
-            // Fade out animation
-            FadeTransition fadeOut = new FadeTransition(Duration.millis(300), movePanel);
-            fadeOut.setToValue(0.0);
-            fadeOut.setOnFinished(event -> {
-                if (rootPane.getChildren().contains(movePanel)) {
-                    rootPane.getChildren().remove(movePanel);
-                }
-            });
-            fadeOut.play();
-        }
-    }
-    
-    // Helper class để lưu thông tin quân cờ
-    private static class PieceInfo {
-        String color;
-        String pieceType;
-        String imagePath;
-        
-        PieceInfo(String color, String pieceType, String imagePath) {
-            this.color = color;
-            this.pieceType = pieceType;
-            this.imagePath = imagePath;
-        }
-    }
-    
-    // Helper method để convert piece type và color thành character
-    private static char getPieceChar(String pieceType, boolean isRed) {
-        char baseChar = ' ';
-        switch (pieceType) {
-            case "King": baseChar = 'K'; break;
-            case "Advisor": baseChar = 'A'; break;
-            case "Elephant": baseChar = 'B'; break;
-            case "Horse": baseChar = 'N'; break;
-            case "Rook": baseChar = 'R'; break;
-            case "Cannon": baseChar = 'C'; break;
-            case "Pawn": baseChar = 'P'; break;
-        }
-        return isRed ? baseChar : Character.toLowerCase(baseChar);
-    }
-    
-    // Method để tạo label cho mỗi nước đi
-    private Label createMoveLabel(String moveText) {
-        Label moveLabel = new Label(moveText);
-        
-        // Xác định màu chữ dựa trên moveText (Red hoặc Black)
-        String textColor = "black"; // Mặc định
-        if (moveText.contains("Red:")) {
-            textColor = "#DC143C"; // Màu đỏ (Crimson)
-        } else if (moveText.contains("Black:")) {
-            textColor = "#000000"; // Màu đen
-        }
-        
-        moveLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 35px; " +
-            "-fx-text-fill: " + textColor + "; " +
-            "-fx-background-color: transparent; " +
-            "-fx-wrap-text: true;"
-        );
-        moveLabel.setPrefWidth(410);
-        moveLabel.setAlignment(Pos.CENTER_LEFT);
-        return moveLabel;
-    }
-    
-    // Method để thêm nước đi mới vào lịch sử
-    public void addMove(String color, String pieceType, int fromRow, int fromCol, int toRow, int toCol) {
-        addMove(color, pieceType, fromRow, fromCol, toRow, toCol, "");
-    }
-    
-    // Method để thêm nước đi mới vào lịch sử (với thông tin quân cờ bị ăn)
-    public void addMove(String color, String pieceType, int fromRow, int fromCol, int toRow, int toCol, String capturedInfo) {
-        String moveText = String.format("%d. %s: %s (%d,%d) -> (%d,%d)%s", 
-            moveHistory.size() + 1, 
-            color, 
-            pieceType, 
-            fromRow, fromCol, 
-            toRow, toCol,
-            capturedInfo
-        );
-        moveHistory.add(moveText);
-        
-        // Cập nhật UI nếu panel đang hiển thị
-        if (moveHistoryContainer != null) {
-            Label newMoveLabel = createMoveLabel(moveText);
-            moveHistoryContainer.getChildren().add(newMoveLabel);
-            
-            // Scroll xuống nước đi mới nhất
-            Platform.runLater(() -> {
-                if (moveHistoryScrollPane != null) {
-                    moveHistoryScrollPane.setVvalue(1.0);
-                }
-            });
-        }
-    }
-    
-    // Method để xóa lịch sử nước đi (khi bắt đầu game mới)
-    public void clearMoveHistory() {
-        moveHistory.clear();
-        if (moveHistoryContainer != null) {
-            moveHistoryContainer.getChildren().clear();
-        }
-    }
+    // Methods showChatInput, showChatPopup đã được chuyển sang ChatManager
+    // Methods showMovePanel, hideMovePanel, createMoveLabel, addMove, clearMoveHistory đã được chuyển sang MoveHistoryManager
 
+    // Methods showSurrenderConfirmation, hideSurrenderConfirmation, showDrawRequestConfirmation,
+    // hideDrawRequestConfirmation, showDrawRequestReceived, hideDrawRequestReceived, showGameResult,
+    // showGameResultWithCustomText, showGameResultDraw, hideGameResult, resetGameResultPanels,
+    // createDialogButton, setEloChange, getEloChange đã được chuyển sang DialogManager
+    /*
     private void showSurrenderConfirmation() {
         // Nếu đã có dialog, xóa nó trước
         if (surrenderDialog != null && rootPane != null && rootPane.getChildren().contains(surrenderDialog)) {
@@ -2491,7 +1657,9 @@ public class GamePanel extends StackPane {
         }
     }
     
-    // Method để reset tất cả các panel và dialog của game
+    /**
+     * Reset tất cả các panel và dialog của game
+     */
     private void resetAllGamePanels() {
         if (rootPane == null) {
             return; // rootPane chưa được khởi tạo
@@ -2500,59 +1668,10 @@ public class GamePanel extends StackPane {
         // Reset currentTurn về Red (mặc định Red đi trước)
         currentTurn = "Red";
         
-        // Reset currentTurn về Red (mặc định Red đi trước)
-        currentTurn = "Red";
-        
-        // Reset game result panels
-        resetGameResultPanels();
-        
-        // Reset các dialog khác
-        if (surrenderDialog != null) {
-            if (rootPane.getChildren().contains(surrenderDialog)) {
-                rootPane.getChildren().remove(surrenderDialog);
-            }
-            surrenderDialog = null;
-        }
-        if (drawRequestDialog != null) {
-            if (rootPane.getChildren().contains(drawRequestDialog)) {
-                rootPane.getChildren().remove(drawRequestDialog);
-            }
-            drawRequestDialog = null;
-        }
-        if (drawReceivedDialog != null) {
-            if (rootPane.getChildren().contains(drawReceivedDialog)) {
-                rootPane.getChildren().remove(drawReceivedDialog);
-            }
-            drawReceivedDialog = null;
-        }
-        
-        // Reset chat và move panel
-        if (chatInputContainer != null) {
-            if (rootPane.getChildren().contains(chatInputContainer)) {
-                rootPane.getChildren().remove(chatInputContainer);
-            }
-            chatInputContainer = null;
-        }
-        if (chatPopup != null) {
-            if (rootPane.getChildren().contains(chatPopup)) {
-                rootPane.getChildren().remove(chatPopup);
-            }
-            chatPopup = null;
-        }
-        if (movePanel != null) {
-            if (rootPane.getChildren().contains(movePanel)) {
-                rootPane.getChildren().remove(movePanel);
-            }
-            movePanel = null;
-        }
-        
-        // Reset move history
-        if (moveHistory != null) {
-            moveHistory.clear();
-        }
-        if (moveHistoryContainer != null) {
-            moveHistoryContainer.getChildren().clear();
-        }
+        // Reset các Manager
+        dialogManager.resetAllDialogs();
+        moveHistoryManager.clearMoveHistory();
+        capturedPiecesManager.resetCapturedPieces();
         
         // Reset quân cờ về vị trí ban đầu
         if (boardContainer != null) {
@@ -2560,11 +1679,6 @@ public class GamePanel extends StackPane {
                 resetChessPieces();
             });
         }
-        // Reset captured pieces
-        resetCapturedPieces();
-        
-        // Reset các biến state
-        eloChange = 10; // Reset về giá trị mặc định
     }
     
     // Method để đảm bảo pieces luôn hiển thị
