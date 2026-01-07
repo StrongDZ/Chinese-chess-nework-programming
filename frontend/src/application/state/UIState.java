@@ -35,6 +35,7 @@ public class UIState {
     private final BooleanProperty blitzModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty customModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty gameVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
+    private final BooleanProperty playWithFriendMode = new SimpleBooleanProperty(false);  // Phân biệt play with friend mode
     
     // Timer values for game panel
     private final StringProperty timer1Value = new SimpleStringProperty("2:00");
@@ -135,10 +136,29 @@ public class UIState {
 
     public void openFriends() {
         setFriendsVisible(true);
+        setPlayWithFriendMode(false);  // Khi bấm icon friend, không phải play with friend mode
     }
 
     public void closeFriends() {
         setFriendsVisible(false);
+        setPlayWithFriendMode(false);  // Reset khi đóng
+    }
+    
+    public void openPlayWithFriend() {
+        setPlayWithFriendMode(true);  // Đánh dấu đang trong play with friend mode
+        setFriendsVisible(true);
+    }
+    
+    public BooleanProperty playWithFriendModeProperty() {
+        return playWithFriendMode;
+    }
+    
+    public boolean isPlayWithFriendMode() {
+        return playWithFriendMode.get();
+    }
+    
+    public void setPlayWithFriendMode(boolean value) {
+        playWithFriendMode.set(value);
     }
 
     public BooleanProperty inventoryVisibleProperty() {
@@ -254,6 +274,7 @@ public class UIState {
 
     public void openClassicMode() {
         setClassicModeVisible(true);
+        setAppState(AppState.MAIN_MENU);  // Đảm bảo appState là MAIN_MENU
     }
 
     public void closeClassicMode() {
@@ -274,6 +295,7 @@ public class UIState {
 
     public void openBlitzMode() {
         setBlitzModeVisible(true);
+        setAppState(AppState.MAIN_MENU);  // Đảm bảo appState là MAIN_MENU
     }
 
     public void closeBlitzMode() {
@@ -294,6 +316,7 @@ public class UIState {
 
     public void openCustomMode() {
         setCustomModeVisible(true);
+        setAppState(AppState.MAIN_MENU);  // Đảm bảo appState là MAIN_MENU
     }
 
     public void closeCustomMode() {

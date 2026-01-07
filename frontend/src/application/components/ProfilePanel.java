@@ -200,14 +200,28 @@ public class ProfilePanel extends StackPane {
         
         userInfo.getChildren().addAll(usernameLabel);
         
-        // ELO label - đặt riêng để đảm bảo hiển thị, ngay dưới username
-        eloLabel.setLayoutX(300); // Cùng X với userInfo
-        eloLabel.setLayoutY(210); // Dưới username (130 + 70 + 10 = 210)
+        // ELO label và Time control buttons - cùng dòng, ELO bên trái, buttons bên phải
+        HBox eloAndButtonsRow = new HBox(20);
+        eloAndButtonsRow.setLayoutX(300);
+        eloAndButtonsRow.setLayoutY(210); // Dưới username (130 + 70 + 10 = 210)
+        eloAndButtonsRow.setAlignment(Pos.CENTER_LEFT);
+        eloAndButtonsRow.setPrefWidth(900); // Đủ rộng để chứa ELO và buttons
         
-        // Time control buttons (Classical, Blitz) - below ELO label
+        // ELO label - bên trái
+        eloLabel.setLayoutX(0);
+        eloLabel.setLayoutY(0);
+        
+        // Spacer để đẩy buttons sang phải
+        javafx.scene.layout.Region eloSpacer = new javafx.scene.layout.Region();
+        HBox.setHgrow(eloSpacer, javafx.scene.layout.Priority.ALWAYS);
+        
+        // Time control buttons (Classical, Blitz) - bên phải, dịch sang trái một chút
         HBox timeControlButtons = createTimeControlButtons();
-        timeControlButtons.setLayoutX(300);
-        timeControlButtons.setLayoutY(300); // Dưới ELO label (210 + 80 + 10 = 300)
+        timeControlButtons.setLayoutX(0);
+        timeControlButtons.setLayoutY(0);
+        timeControlButtons.setTranslateX(-50); // Dịch sang trái 50px
+        
+        eloAndButtonsRow.getChildren().addAll(eloLabel, eloSpacer, timeControlButtons);
         
         // Statistics section (centered, below profile info)
         VBox statisticsContainer = new VBox(10);  // Container chính
@@ -285,7 +299,7 @@ public class ProfilePanel extends StackPane {
         
         statisticsContainer.getChildren().addAll(topRow, winRateLabel);
         
-        contentPane.getChildren().addAll(header, avatarContainer, userInfo, eloLabel, timeControlButtons, statisticsContainer);
+        contentPane.getChildren().addAll(header, avatarContainer, userInfo, eloAndButtonsRow, statisticsContainer);
         mainPanel.getChildren().addAll(bg, contentPane);
         
         return mainPanel;

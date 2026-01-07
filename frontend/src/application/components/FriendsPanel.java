@@ -48,25 +48,28 @@ public class FriendsPanel extends StackPane {
         container.getChildren().add(friendsContent);
         getChildren().add(container);
         
-        // Bind visibility với MAIN_MENU và friendsVisible
+        // Bind visibility - hiển thị khi bấm icon friend (KHÔNG phải play with friend mode)
+        // Có thể hiển thị trong MAIN_MENU hoặc khi đang trong mode panel
+        // Hiển thị khi: friendsVisible = true AND playWithFriendMode = false
+        // (KHÔNG cần kiểm tra appState, vì mode panel vẫn ở trong MAIN_MENU)
         visibleProperty().bind(
-            state.appStateProperty().isEqualTo(UIState.AppState.MAIN_MENU)
-                .and(state.friendsVisibleProperty())
+            state.friendsVisibleProperty()
+                .and(state.playWithFriendModeProperty().not())  // KHÔNG hiển thị khi play with friend mode
         );
         managedProperty().bind(visibleProperty());
         setOpacity(0);
         
         // Fade animation khi friendsVisible thay đổi
         state.friendsVisibleProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU) {
+            if (newVal && !state.isPlayWithFriendMode()) {
                 fadeTo(1);
             } else {
                 fadeTo(0);
             }
         });
         
-        state.appStateProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == UIState.AppState.MAIN_MENU && state.isFriendsVisible()) {
+        state.playWithFriendModeProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal && state.isFriendsVisible()) {
                 fadeTo(1);
             } else {
                 fadeTo(0);

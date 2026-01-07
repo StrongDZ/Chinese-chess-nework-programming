@@ -58,17 +58,19 @@ public class CustomModePanel extends StackPane {
         container.getChildren().add(customModeContent);
         getChildren().add(container);
         
-        // Bind visibility
+        // Bind visibility - ẩn khi playWithFriendMode = true (chọn Friend + bấm Play)
+        // KHÔNG ẩn khi chỉ bấm icon friend (để FriendsPanel hiển thị trên mode panel)
         visibleProperty().bind(
             state.appStateProperty().isEqualTo(UIState.AppState.MAIN_MENU)
                 .and(state.customModeVisibleProperty())
+                .and(state.playWithFriendModeProperty().not())  // Chỉ ẩn khi playWithFriendMode = true
         );
         managedProperty().bind(visibleProperty());
         setOpacity(0);
         
-        // Fade animation
+        // Fade animation - ẩn ngay khi playWithFriendMode = true
         state.customModeVisibleProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU) {
+            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU && !state.isPlayWithFriendMode()) {
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -76,10 +78,19 @@ public class CustomModePanel extends StackPane {
         });
         
         state.appStateProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == UIState.AppState.MAIN_MENU && state.isCustomModeVisible()) {
+            if (newVal == UIState.AppState.MAIN_MENU && state.isCustomModeVisible() && !state.isPlayWithFriendMode()) {
                 fadeTo(1);
             } else {
                 fadeTo(0);
+            }
+        });
+        
+        // Ẩn ngay khi playWithFriendMode = true
+        state.playWithFriendModeProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                setOpacity(0);  // Ẩn ngay lập tức khi playWithFriendMode = true
+            } else if (state.appStateProperty().get() == UIState.AppState.MAIN_MENU && state.isCustomModeVisible()) {
+                fadeTo(1);
             }
         });
     }
