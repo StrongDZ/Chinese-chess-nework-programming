@@ -49,17 +49,19 @@ public class ClassicModePanel extends StackPane {
         container.getChildren().add(classicModeContent);
         getChildren().add(container);
         
-        // Bind visibility
+        // Bind visibility - ẩn khi playWithFriendMode = true (chọn Friend + bấm Play)
+        // KHÔNG ẩn khi chỉ bấm icon friend (để FriendsPanel hiển thị trên mode panel)
         visibleProperty().bind(
             state.appStateProperty().isEqualTo(UIState.AppState.MAIN_MENU)
                 .and(state.classicModeVisibleProperty())
+                .and(state.playWithFriendModeProperty().not())  // Chỉ ẩn khi playWithFriendMode = true
         );
         managedProperty().bind(visibleProperty());
         setOpacity(0);
         
-        // Fade animation
+        // Fade animation - ẩn ngay khi playWithFriendMode = true
         state.classicModeVisibleProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU) {
+            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU && !state.isPlayWithFriendMode()) {
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -67,7 +69,15 @@ public class ClassicModePanel extends StackPane {
         });
         
         state.appStateProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == UIState.AppState.MAIN_MENU && state.isClassicModeVisible()) {
+            if (newVal == UIState.AppState.MAIN_MENU && state.isClassicModeVisible() && !state.isPlayWithFriendMode()) {
+                fadeTo(1);
+            } else {
+                fadeTo(0);
+            }
+        });
+        
+        state.playWithFriendModeProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU && state.isClassicModeVisible()) {
                 fadeTo(1);
             } else {
                 fadeTo(0);
@@ -344,28 +354,33 @@ public class ClassicModePanel extends StackPane {
             state.setTimer3Value("Unlimited time");
             state.setTimer4Value("Unlimited time");
             
-            // Kiểm tra xem có chọn "Random" không
-            boolean isRandomSelected = false;
+            // Kiểm tra xem đã chọn option nào
+            String selectedOptionText = null;
             if (selectedOption != null) {
                 // Lấy text từ label trong selectedOption
                 for (javafx.scene.Node node : selectedOption.getChildren()) {
                     if (node instanceof Label) {
                         Label label = (Label) node;
-                        if ("Random".equals(label.getText())) {
-                            isRandomSelected = true;
+                        String text = label.getText();
+                        if ("Random".equals(text) || "Friend".equals(text) || "AI".equals(text)) {
+                            selectedOptionText = text;
                             break;
                         }
                     }
                 }
             }
             
-            state.closeClassicMode();
-            
-            if (isRandomSelected) {
+            if ("Random".equals(selectedOptionText)) {
                 // Mở waiting panel khi chọn Random
+                state.closeClassicMode();
                 state.openWaiting();
+            } else if ("Friend".equals(selectedOptionText)) {
+                // Mở PlayWithFriendPanel khi chọn Friend và bấm Play
+                // Sử dụng openPlayWithFriend() để đánh dấu đang trong play with friend mode
+                state.openPlayWithFriend();
             } else {
-                // Vào game trực tiếp khi chọn Friend hoặc AI
+                // Vào game trực tiếp khi chọn AI
+                state.closeClassicMode();
                 state.openGame("classical");
             }
         });
