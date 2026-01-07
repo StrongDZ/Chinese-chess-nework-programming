@@ -31,7 +31,7 @@ struct Move {
     int time_taken;
 };
 
-// Game model
+// Game model (active games)
 struct Game {
     std::string id;               // MongoDB _id
     std::string red_player;       // Red player username
@@ -51,6 +51,27 @@ struct Game {
     int increment;
     bool rated;
     std::vector<Move> moves;
+    std::string draw_offered_by;  // Username of player who offered draw (empty if none)
+};
+
+// Archived game model (completed games)
+struct ArchivedGame {
+    std::string id;               // MongoDB _id
+    std::string original_game_id; // Original game ID from active_games
+    std::string red_player;
+    std::string black_player;
+    std::string winner;
+    std::string result;           // red_win, black_win, draw
+    std::chrono::system_clock::time_point start_time;
+    std::chrono::system_clock::time_point end_time;
+    std::string time_control;
+    int time_limit;
+    int increment;
+    bool rated;
+    int move_count;
+    std::vector<Move> moves;
+    std::string rematch_offered_by;  // Username of player who offered rematch (empty if none)
+    bool rematch_accepted;           // True if rematch was accepted and new game created
 };
 
 class GameRepository {
@@ -82,6 +103,14 @@ public:
                  const std::string& result,
                  const std::string& winner = "");
     
+    // ============ Draw Offer Operations ============
+    
+    // Set draw offer (username who offered)
+    bool setDrawOffer(const std::string& gameId, const std::string& username);
+    
+    // Clear draw offer (after decline or new move)
+    bool clearDrawOffer(const std::string& gameId);
+    
     // Get games by user (username)
     std::vector<Game> findByUser(const std::string& username,
                                   const std::string& filter = "all",
@@ -102,6 +131,23 @@ public:
     std::optional<std::string> findRandomOpponentByElo(const std::string& username,
                                                        const std::string& timeControl,
                                                        int ratingWindow = 200);
+    
+    // ============ Rematch Operations ============
+    
+    // Find archived game by ID
+    std::optional<ArchivedGame> findArchivedGameById(const std::string& gameId);
+    
+    // Find game history for a user (completed games from archive)
+    std::vector<ArchivedGame> findGameHistory(const std::string& username, int limit = 50, int offset = 0);
+    
+    // Set rematch offer on archived game
+    bool setRematchOffer(const std::string& gameId, const std::string& username);
+    
+    // Clear rematch offer
+    bool clearRematchOffer(const std::string& gameId);
+    
+    // Set rematch accepted flag
+    bool setRematchAccepted(const std::string& gameId);
     
     // ============ Helper Operations ============
     

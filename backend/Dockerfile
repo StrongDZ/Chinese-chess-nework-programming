@@ -85,7 +85,7 @@ RUN rm -rf /opt/app && \
     cd /opt/app && \
     cp -r /app/* . && \
     cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && \
     cmake --build . -j$(nproc)
 
 # Expose port (default 8080)
