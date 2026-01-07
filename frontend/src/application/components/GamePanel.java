@@ -901,16 +901,16 @@ public class GamePanel extends StackPane {
         double endY = boardSize - 45.0;  // Vị trí giao điểm cuối cùng theo chiều dọc
         
         // Khoảng cách giữa các giao điểm
-        double intersectionSpacingX = (endX - startX) / 8.0;  // 8 khoảng cách cho 9 giao điểm
-        double intersectionSpacingY = (endY - startY) / 9.0;  // 9 khoảng cách cho 10 giao điểm
+        final double intersectionSpacingX = (endX - startX) / 8.0;  // 8 khoảng cách cho 9 giao điểm
+        final double intersectionSpacingY = (endY - startY) / 9.0;  // 9 khoảng cách cho 10 giao điểm
         
         // Kích thước quân cờ
-        double pieceWidth = intersectionSpacingX * 0.8;
-        double pieceHeight = intersectionSpacingY * 0.8;
+        final double pieceWidth = intersectionSpacingX * 0.8;
+        final double pieceHeight = intersectionSpacingY * 0.8;
         
-        // Kích thước cell (để tính toán vị trí)
-        double cellWidth = boardSize / 9.0;
-        double cellHeight = boardSize / 10.0;
+        // Kích thước cell cho clickLayer
+        final double cellWidth = boardSize / 9.0;
+        final double cellHeight = boardSize / 10.0;
         
         // Pane để chứa các highlight rectangles
         // Đặt ở cuối để nằm trên các quân cờ
@@ -1265,7 +1265,7 @@ public class GamePanel extends StackPane {
                         // Nếu khác màu, thử di chuyển và ăn quân cờ này
                         if (clickedIsRed != selectedIsRed) {
                             movePieceTo.accept(pieceRow, pieceCol);
-                e.consume();
+                            e.consume();
                             return;
                         }
                     }
@@ -1301,7 +1301,7 @@ public class GamePanel extends StackPane {
         // Sử dụng BiFunction để có thể truyền thêm thông tin màu
         java.util.function.Function<ImageView, java.util.function.BiConsumer<int[], String>> createPlacePiece = (piece) -> {
             return (pos, color) -> {
-                // pos[0] = row (0-9), pos[1] = col (0-8)
+            // pos[0] = row (0-9), pos[1] = col (0-8)
                 // Quân cờ được đặt tại giao điểm, tâm quân cờ trùng với giao điểm
                 // Vị trí giao điểm từ startX, startY
                 double intersectionX = startX + pos[1] * intersectionSpacingX;
@@ -1327,9 +1327,9 @@ public class GamePanel extends StackPane {
                 // Đặt tâm quân cờ tại giao điểm (trừ đi một nửa kích thước)
                 double x = intersectionX - pieceWidth / 2.0 + offsetX;
                 double y = intersectionY - pieceHeight / 2.0 + offsetY;
-                piece.setLayoutX(x);
-                piece.setLayoutY(y);
-                container.getChildren().add(piece);
+            piece.setLayoutX(x);
+            piece.setLayoutY(y);
+            container.getChildren().add(piece);
             };
         };
         
@@ -1340,13 +1340,6 @@ public class GamePanel extends StackPane {
             String color = pieceInfo != null ? pieceInfo.color : "";
             createPlacePiece.apply(piece).accept(pos, color);
         };
-        
-        // Thêm highlight layer và click layer
-        // Thứ tự: click layer (dưới cùng, invisible) -> quân cờ -> highlight layer (trên cùng)
-        // Click layer được thêm trước để không chặn click vào quân cờ
-        // Nhưng vì nó transparent và ở dưới, click vào quân cờ sẽ được xử lý bởi quân cờ trước
-        container.getChildren().add(0, clickLayer); // Thêm vào đầu để ở dưới cùng
-        container.getChildren().add(highlightLayer); // Highlight layer ở trên cùng
         
         // Check xem có custom board setup không
         java.util.Map<String, String> customSetup = state.getCustomBoardSetup();
@@ -1363,8 +1356,7 @@ public class GamePanel extends StackPane {
                 placePiece.accept(createPiece.apply(color, pieceType), new int[]{row, col});
             }
         } else {
-            // Standard starting positions
-            // Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
+            // Standard starting positions - Sắp xếp quân cờ ĐỎ (hàng 0-4, dưới cùng)
             // Hàng 0: Xe, Mã, Tượng, Sĩ, Tướng, Sĩ, Tượng, Mã, Xe
             placePiece.accept(createPiece.apply("Red", "Rook"), new int[]{0, 0});
             placePiece.accept(createPiece.apply("Red", "Horse"), new int[]{0, 1});
@@ -1410,6 +1402,13 @@ public class GamePanel extends StackPane {
             placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 6});
             placePiece.accept(createPiece.apply("Black", "Pawn"), new int[]{6, 8});
         }
+        
+        // Thêm highlight layer và click layer
+        // Thứ tự: click layer (dưới cùng, invisible) -> quân cờ -> highlight layer (trên cùng)
+        // Click layer được thêm trước để không chặn click vào quân cờ
+        // Nhưng vì nó transparent và ở dưới, click vào quân cờ sẽ được xử lý bởi quân cờ trước
+        container.getChildren().add(0, clickLayer); // Thêm vào đầu để ở dưới cùng
+        container.getChildren().add(highlightLayer); // Highlight layer ở trên cùng
         
         return container;
     }
@@ -2374,7 +2373,6 @@ public class GamePanel extends StackPane {
                 resetChessPieces();
             });
         }
-        
         // Reset captured pieces
         resetCapturedPieces();
         

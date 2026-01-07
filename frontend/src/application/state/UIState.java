@@ -58,9 +58,6 @@ public class UIState {
     
     // Flag để biết có sử dụng custom board setup không
     private final BooleanProperty useCustomBoard = new SimpleBooleanProperty(false);
-    
-    // Elo score (legacy, kept for compatibility)
-    private final javafx.beans.property.IntegerProperty elo = new javafx.beans.property.SimpleIntegerProperty(100);
 
     // Profile statistics
     private final javafx.beans.property.IntegerProperty totalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
