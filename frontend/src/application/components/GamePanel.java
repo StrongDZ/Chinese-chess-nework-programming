@@ -16,6 +16,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.Circle;
+import javafx.scene.shape.Circle;
 import javafx.util.Duration;
 import javafx.scene.Cursor;
 import java.util.Random;
@@ -144,10 +145,20 @@ public class GamePanel extends StackPane {
         topLeftCapturedPieces.setLayoutX(50);
         topLeftCapturedPieces.setLayoutY(50 + 120);  // Dưới avatar (120 là height của avatar)
         
+        // Top left: Captured pieces display (dưới avatar)
+        topLeftCapturedPieces = createCapturedPiecesDisplay(true);
+        topLeftCapturedPieces.setLayoutX(50);
+        topLeftCapturedPieces.setLayoutY(50 + 120);  // Dưới avatar (120 là height của avatar)
+        
         // Bottom right: Opponent profile
         HBox bottomRightProfile = createUserProfile("ySern", "do 100", false);
         bottomRightProfile.setLayoutX(1920 - 450);  // Giảm từ 500 xuống 550 (sang phải 50px)
         bottomRightProfile.setLayoutY(1080 - 200);
+        
+        // Bottom right: Captured pieces display (dưới avatar)
+        bottomRightCapturedPieces = createCapturedPiecesDisplay(false);
+        bottomRightCapturedPieces.setLayoutX(1920 - 450);
+        bottomRightCapturedPieces.setLayoutY(1080 - 200 + 120);  // Dưới avatar
         
         // Bottom right: Captured pieces display (dưới avatar)
         bottomRightCapturedPieces = createCapturedPiecesDisplay(false);
@@ -539,6 +550,12 @@ public class GamePanel extends StackPane {
                     javafx.application.Platform.runLater(() -> {
                         updateTimersOnTurnChange();
                     });
+                    
+                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
+                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
+                    javafx.application.Platform.runLater(() -> {
+                        updateTimersOnTurnChange();
+                    });
                 });
             } else {
                 // Dừng tất cả timers khi game đóng
@@ -579,6 +596,12 @@ public class GamePanel extends StackPane {
                         startCountdown(3, timer4);
                         isUpdatingFromCountdown = false;
                     }
+                    
+                    // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
+                    // Sử dụng Platform.runLater để đảm bảo game mode đã được set
+                    javafx.application.Platform.runLater(() -> {
+                        updateTimersOnTurnChange();
+                    });
                     
                     // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
                     // Sử dụng Platform.runLater để đảm bảo game mode đã được set
@@ -1413,6 +1436,7 @@ public class GamePanel extends StackPane {
                         if (clickedIsRed != selectedIsRed) {
                             movePieceTo.accept(pieceRow, pieceCol);
                             e.consume();
+                            e.consume();
                             return;
                         }
                     }
@@ -1912,7 +1936,7 @@ public class GamePanel extends StackPane {
         
         moveLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 35px; " + // Tăng từ 24px lên 30px
+            "-fx-font-size: 35px; " +
             "-fx-text-fill: " + textColor + "; " +
             "-fx-background-color: transparent; " +
             "-fx-wrap-text: true;"
@@ -2472,6 +2496,9 @@ public class GamePanel extends StackPane {
         if (rootPane == null) {
             return; // rootPane chưa được khởi tạo
         }
+        
+        // Reset currentTurn về Red (mặc định Red đi trước)
+        currentTurn = "Red";
         
         // Reset currentTurn về Red (mặc định Red đi trước)
         currentTurn = "Red";

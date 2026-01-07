@@ -344,8 +344,30 @@ public class ClassicModePanel extends StackPane {
             state.setTimer3Value("Unlimited time");
             state.setTimer4Value("Unlimited time");
             
+            // Kiểm tra xem có chọn "Random" không
+            boolean isRandomSelected = false;
+            if (selectedOption != null) {
+                // Lấy text từ label trong selectedOption
+                for (javafx.scene.Node node : selectedOption.getChildren()) {
+                    if (node instanceof Label) {
+                        Label label = (Label) node;
+                        if ("Random".equals(label.getText())) {
+                            isRandomSelected = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
             state.closeClassicMode();
-            state.openGame("classical");
+            
+            if (isRandomSelected) {
+                // Mở waiting panel khi chọn Random
+                state.openWaiting();
+            } else {
+                // Vào game trực tiếp khi chọn Friend hoặc AI
+                state.openGame("classical");
+            }
         });
         
         return button;
