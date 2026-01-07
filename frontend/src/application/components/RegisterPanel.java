@@ -62,16 +62,13 @@ public class RegisterPanel extends StackPane {
                 confirmValue != null && !confirmValue.trim().isEmpty() &&
                 passwordValue.equals(confirmValue)) {
                 isProcessing[0] = true;
-                // Connect to server if not connected, then send register request
+                // Send register request (connection already established)
                 try {
-                    if (!networkManager.isConnected()) {
-                        networkManager.connectToServer();
-                    }
                     networkManager.auth().register(usernameValue.trim(), passwordValue.trim());
                     // Username will be set after successful authentication
                     state.setUsername(usernameValue.trim());
                 } catch (IOException ex) {
-                    System.err.println("Failed to connect or send register request: " + ex.getMessage());
+                    System.err.println("Failed to send register request: " + ex.getMessage());
                     ex.printStackTrace();
                     // TODO: Show error message to user
                 } finally {

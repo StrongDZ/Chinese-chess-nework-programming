@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <iostream>
 #include <string>
 
 #include "../../include/protocol/handle_socket.h"
@@ -52,9 +53,19 @@ static bool sendAll(int fd, const void *buffer, size_t bytes) {
 bool sendMessage(int fd, MessageType type, const Payload &payload) {
   string data = makeMessage(type, payload);
   uint32_t len = htonl(static_cast<uint32_t>(data.size()));
-  if (!sendAll(fd, &len, sizeof(len)))
+  if (!sendAll(fd, &len, sizeof(len))) {
+    cerr << "[SEND fd=" << fd << "] FAILED to send "
+         << messageTypeToString(type) << " (length header)" << endl;
     return false;
-  return sendAll(fd, data.data(), data.size());
+  }
+  if (!sendAll(fd, data.data(), data.size())) {
+    cerr << "[SEND fd=" << fd << "] FAILED to send "
+         << messageTypeToString(type) << " (message body)" << endl;
+    return false;
+  }
+  cout << "[SEND fd=" << fd << "] " << messageTypeToString(type) << " " << data
+       << endl;
+  return true;
 }
 
 bool recvMessage(int fd, string &out) {

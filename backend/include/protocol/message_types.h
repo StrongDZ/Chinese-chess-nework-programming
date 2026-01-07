@@ -134,7 +134,7 @@ struct MessagePayload {
 
 struct UserStatsPayload {
   string target_username;
-  string time_control;  // Optional: classical, blitz, or "all"
+  string time_control; // Optional: classical, blitz, or "all"
 };
 
 struct GameHistoryPayload {
@@ -351,10 +351,6 @@ inline optional<Payload> parsePayload(MessageType type,
   doc.Parse(payloadStr.c_str());
 
   if (doc.HasParseError() || !doc.IsObject()) {
-    if (type == MessageType::USER_STATS) {
-      cout << "[parsePayload] USER_STATS parse error - HasParseError=" << doc.HasParseError() 
-           << ", IsObject=" << doc.IsObject() << ", payload=" << payloadStr << endl;
-    }
     return nullopt;
   }
 
@@ -495,10 +491,8 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::USER_STATS: {
-      cout << "[parsePayload] Parsing USER_STATS payload: " << payloadStr << endl;
       if (!doc.HasMember("target_username") ||
           !doc["target_username"].IsString()) {
-        cout << "[parsePayload] USER_STATS ERROR: Missing or invalid target_username" << endl;
         return nullopt;
       }
       UserStatsPayload p;
@@ -507,10 +501,8 @@ inline optional<Payload> parsePayload(MessageType type,
       if (doc.HasMember("time_control") && doc["time_control"].IsString()) {
         p.time_control = doc["time_control"].GetString();
       } else {
-        p.time_control = "all";  // Default to all
+        p.time_control = "all"; // Default to all
       }
-      cout << "[parsePayload] USER_STATS parsed successfully - target_username=" 
-           << p.target_username << ", time_control=" << p.time_control << endl;
       return p;
     }
 
@@ -723,27 +715,14 @@ inline ParsedMessage parseMessage(const string &msg) {
 
   auto it = commandMap.find(ucmd);
   pm.type = (it != commandMap.end()) ? it->second : MessageType::UNKNOWN;
-  
-  if (ucmd == "USER_STATS") {
-    cout << "[parseMessage] Parsing USER_STATS message: " << msg << endl;
-  }
 
   // Extract payload string
   string rest;
   getline(iss, rest);
   if (!rest.empty() && rest[0] == ' ')
     rest.erase(0, 1);
-  
-  if (ucmd == "USER_STATS") {
-    cout << "[parseMessage] USER_STATS payload string: " << rest << endl;
-  }
-  
+
   pm.payload = parsePayload(pm.type, rest);
-  
-  if (ucmd == "USER_STATS") {
-    cout << "[parseMessage] USER_STATS parse result - has_payload=" 
-         << pm.payload.has_value() << endl;
-  }
 
   // Parse typed payload
   return pm;
@@ -782,6 +761,11 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::RESPONSE_ADD_FRIEND, "RESPONSE_ADD_FRIEND"},
     {MessageType::UNFRIEND, "UNFRIEND"},
     {MessageType::ERROR, "ERROR"}};
+
+inline const char *messageTypeToString(MessageType type) {
+  auto it = typeStrings.find(type);
+  return (it != typeStrings.end()) ? it->second : "UNKNOWN";
+}
 
 inline string makeMessage(MessageType type,
                           const Payload &payload = EmptyPayload{}) {

@@ -26,12 +26,10 @@ public class AuthSender {
      * @throws IOException if send fails
      */
     public void login(String username, String password) throws IOException {
-        System.out.println("[DEBUG AuthSender] Sending LOGIN for user: " + username);
         JsonObject payload = new JsonObject();
         payload.addProperty("username", username);
         payload.addProperty("password", password);
         socketClient.send(MessageType.LOGIN, gson.toJson(payload));
-        System.out.println("[DEBUG AuthSender] LOGIN sent successfully");
     }
     
     /**
