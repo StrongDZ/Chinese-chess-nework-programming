@@ -59,3 +59,5 @@ Thumbs.db
 backend/tests/
 
 /python_backend
+src/ChineseChess_AI/.DS_Store
+/.vscode
