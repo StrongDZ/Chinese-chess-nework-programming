@@ -691,43 +691,6 @@ int GameRepository::getPlayerRating(const string &username,
   }
 }
 
-optional<string> GameRepository::findRandomOpponentByElo(const string& username,
-                                                         const string& timeControl,
-                                                         int ratingWindow) {
-    try {
-        auto db = mongoClient.getDatabase();
-        auto stats = db["player_stats"];
-
-        const int playerRating = getPlayerRating(username, timeControl);
-        const int minRating = max(0, playerRating - ratingWindow);
-        const int maxRating = playerRating + ratingWindow;
-
-        auto filter = make_document(
-            kvp("username", make_document(kvp("$ne", username))),
-            kvp("time_control", timeControl),
-            kvp("rating", make_document(kvp("$gte", minRating), kvp("$lte", maxRating)))
-        );
-
-        std::vector<std::string> candidates;
-        for (auto&& doc : stats.find(filter.view())) {
-            if (doc["username"] && doc["username"].type() == bsoncxx::type::k_string) {
-                candidates.emplace_back(doc["username"].get_string().value);
-            }
-        }
-
-        if (candidates.empty()) {
-            return nullopt;
-        }
-
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
-        return candidates[dist(gen)];
-
-    } catch (const std::exception&) {
-        return nullopt;
-    }
-}
 
 // ============ Helper Operations ============
 
