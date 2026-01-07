@@ -63,7 +63,7 @@ void handleAIMatch(const ParsedMessage &pm, int fd) {
   sender.in_game = true;
   sender.opponent_fd = ai_fd; // Mark as AI game
   sender.is_red =
-      true; // Player always plays Red (goes first) when playing against AI
+      true; // Player always plays red (goes first) when playing against AI
 
   // g_game_state.initializeGame(fd, ai_fd, difficulty);
 
@@ -160,4 +160,3 @@ void handleAIMove(int player_fd) {
   // g_game_state.applyMove(player_fd, ai_move);
   // pushAIMessage(player_fd, MessageType::MOVE, ai_move);
 }
-

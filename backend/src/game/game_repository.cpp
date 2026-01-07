@@ -96,7 +96,8 @@ optional<Game> GameRepository::findById(const string &gameId) {
           chrono::milliseconds(view["end_time"].get_date().value.count()));
     }
 
-    if (view["draw_offered_by"] && view["draw_offered_by"].type() == bsoncxx::type::k_string) {
+    if (view["draw_offered_by"] &&
+        view["draw_offered_by"].type() == bsoncxx::type::k_string) {
       game.draw_offered_by = string(view["draw_offered_by"].get_string().value);
     }
 
@@ -235,24 +236,29 @@ bool GameRepository::endGame(const string &gameId, const string &status,
       archiveDoc.append(kvp("original_game_id", bsoncxx::oid(gameId)));
       archiveDoc.append(kvp("red_player", g.red_player));
       archiveDoc.append(kvp("black_player", g.black_player));
-      archiveDoc.append(kvp(
-          "winner",
-          winner.empty() ? bsoncxx::types::bson_value::value{bsoncxx::types::b_null{}}
-                         : bsoncxx::types::bson_value::value{winner}));
+      archiveDoc.append(
+          kvp("winner",
+              winner.empty()
+                  ? bsoncxx::types::bson_value::value{bsoncxx::types::b_null{}}
+                  : bsoncxx::types::bson_value::value{winner}));
       archiveDoc.append(kvp("result", result));
-      archiveDoc.append(kvp("start_time", bsoncxx::types::b_date{g.start_time}));
+      archiveDoc.append(
+          kvp("start_time", bsoncxx::types::b_date{g.start_time}));
       archiveDoc.append(kvp("end_time", bsoncxx::types::b_date{now}));
       archiveDoc.append(kvp("initial_xfen", g.xfen));
       archiveDoc.append(kvp("final_xfen", g.xfen));
-      archiveDoc.append(kvp("move_count", bsoncxx::types::b_int32{g.move_count}));
+      archiveDoc.append(
+          kvp("move_count", bsoncxx::types::b_int32{g.move_count}));
       archiveDoc.append(kvp("time_control", g.time_control));
-      archiveDoc.append(kvp("time_limit", bsoncxx::types::b_int32{g.time_limit}));
+      archiveDoc.append(
+          kvp("time_limit", bsoncxx::types::b_int32{g.time_limit}));
       archiveDoc.append(kvp("increment", bsoncxx::types::b_int32{g.increment}));
 
       bsoncxx::builder::basic::array movesArray;
       for (const auto &m : g.moves) {
         bsoncxx::builder::basic::document moveDoc;
-        moveDoc.append(kvp("move_number", bsoncxx::types::b_int32{m.move_number}));
+        moveDoc.append(
+            kvp("move_number", bsoncxx::types::b_int32{m.move_number}));
         moveDoc.append(kvp("player", m.player));
 
         bsoncxx::builder::basic::document fromDoc;
@@ -274,7 +280,8 @@ bool GameRepository::endGame(const string &gameId, const string &status,
         moveDoc.append(kvp("notation", m.notation));
         moveDoc.append(kvp("xfen_after", m.xfen_after));
         moveDoc.append(kvp("timestamp", bsoncxx::types::b_date{m.timestamp}));
-        moveDoc.append(kvp("time_taken", bsoncxx::types::b_int32{m.time_taken}));
+        moveDoc.append(
+            kvp("time_taken", bsoncxx::types::b_int32{m.time_taken}));
 
         movesArray.append(moveDoc.extract());
       }
@@ -290,7 +297,8 @@ bool GameRepository::endGame(const string &gameId, const string &status,
 
       // Remove from active_games to keep only ongoing games
       try {
-        games.delete_one(document{} << "_id" << bsoncxx::oid(gameId) << finalize);
+        games.delete_one(document{} << "_id" << bsoncxx::oid(gameId)
+                                    << finalize);
       } catch (const exception &) {
         // best-effort cleanup
       }
@@ -305,14 +313,16 @@ bool GameRepository::endGame(const string &gameId, const string &status,
 
 // ============ Draw Offer Operations ============
 
-bool GameRepository::setDrawOffer(const string &gameId, const string &username) {
+bool GameRepository::setDrawOffer(const string &gameId,
+                                  const string &username) {
   try {
     auto db = mongoClient.getDatabase();
     auto games = db["active_games"];
 
     auto updateResult = games.update_one(
         document{} << "_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$set", make_document(kvp("draw_offered_by", username)))));
+        make_document(
+            kvp("$set", make_document(kvp("draw_offered_by", username)))));
 
     return updateResult && updateResult->matched_count() > 0;
 
@@ -328,7 +338,8 @@ bool GameRepository::clearDrawOffer(const string &gameId) {
 
     auto updateResult = games.update_one(
         document{} << "_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$unset", make_document(kvp("draw_offered_by", "")))));
+        make_document(
+            kvp("$unset", make_document(kvp("draw_offered_by", "")))));
 
     return updateResult && updateResult->matched_count() > 0;
 
@@ -339,17 +350,20 @@ bool GameRepository::clearDrawOffer(const string &gameId) {
 
 // ============ Rematch Operations ============
 
-optional<ArchivedGame> GameRepository::findArchivedGameById(const string &gameId) {
+optional<ArchivedGame>
+GameRepository::findArchivedGameById(const string &gameId) {
   try {
     auto db = mongoClient.getDatabase();
     auto archive = db["game_archive"];
 
     // Try to find by _id first
-    auto result = archive.find_one(document{} << "_id" << bsoncxx::oid(gameId) << finalize);
-    
+    auto result = archive.find_one(document{} << "_id" << bsoncxx::oid(gameId)
+                                              << finalize);
+
     // If not found, try by original_game_id
     if (!result) {
-      result = archive.find_one(document{} << "original_game_id" << bsoncxx::oid(gameId) << finalize);
+      result = archive.find_one(document{} << "original_game_id"
+                                           << bsoncxx::oid(gameId) << finalize);
     }
 
     if (!result) {
@@ -359,24 +373,26 @@ optional<ArchivedGame> GameRepository::findArchivedGameById(const string &gameId
     auto view = result->view();
     ArchivedGame game;
     game.id = view["_id"].get_oid().value.to_string();
-    
-    if (view["original_game_id"] && view["original_game_id"].type() == bsoncxx::type::k_oid) {
-      game.original_game_id = view["original_game_id"].get_oid().value.to_string();
+
+    if (view["original_game_id"] &&
+        view["original_game_id"].type() == bsoncxx::type::k_oid) {
+      game.original_game_id =
+          view["original_game_id"].get_oid().value.to_string();
     }
-    
+
     game.red_player = string(view["red_player"].get_string().value);
     game.black_player = string(view["black_player"].get_string().value);
-    
+
     if (view["winner"] && view["winner"].type() == bsoncxx::type::k_string) {
       game.winner = string(view["winner"].get_string().value);
     }
-    
+
     game.result = string(view["result"].get_string().value);
     game.time_control = string(view["time_control"].get_string().value);
     game.time_limit = view["time_limit"].get_int32().value;
     game.increment = view["increment"].get_int32().value;
     game.move_count = view["move_count"].get_int32().value;
-    
+
     // Check for rated field (might not exist in old records)
     if (view["rated"] && view["rated"].type() == bsoncxx::type::k_bool) {
       game.rated = view["rated"].get_bool().value;
@@ -389,50 +405,58 @@ optional<ArchivedGame> GameRepository::findArchivedGameById(const string &gameId
     game.end_time = chrono::system_clock::time_point(
         chrono::milliseconds(view["end_time"].get_date().value.count()));
 
-    if (view["rematch_offered_by"] && view["rematch_offered_by"].type() == bsoncxx::type::k_string) {
-      game.rematch_offered_by = string(view["rematch_offered_by"].get_string().value);
+    if (view["rematch_offered_by"] &&
+        view["rematch_offered_by"].type() == bsoncxx::type::k_string) {
+      game.rematch_offered_by =
+          string(view["rematch_offered_by"].get_string().value);
     }
 
     // Check rematch_accepted field
-    if (view["rematch_accepted"] && view["rematch_accepted"].type() == bsoncxx::type::k_bool) {
+    if (view["rematch_accepted"] &&
+        view["rematch_accepted"].type() == bsoncxx::type::k_bool) {
       game.rematch_accepted = view["rematch_accepted"].get_bool().value;
     } else {
       game.rematch_accepted = false;
     }
-    
+
     // Load moves for replay functionality
     if (view["moves"] && view["moves"].type() == bsoncxx::type::k_array) {
-      for (auto&& moveDoc : view["moves"].get_array().value) {
+      for (auto &&moveDoc : view["moves"].get_array().value) {
         Move move;
         auto mv = moveDoc.get_document().value;
-        
+
         move.move_number = mv["move_number"].get_int32().value;
         move.player = string(mv["player"].get_string().value);
         move.from_x = mv["from_x"].get_int32().value;
         move.from_y = mv["from_y"].get_int32().value;
         move.to_x = mv["to_x"].get_int32().value;
         move.to_y = mv["to_y"].get_int32().value;
-        
+
         if (mv["piece"] && mv["piece"].type() == bsoncxx::type::k_string) {
           move.piece = string(mv["piece"].get_string().value);
         }
-        if (mv["captured"] && mv["captured"].type() == bsoncxx::type::k_string) {
+        if (mv["captured"] &&
+            mv["captured"].type() == bsoncxx::type::k_string) {
           move.captured = string(mv["captured"].get_string().value);
         }
-        if (mv["notation"] && mv["notation"].type() == bsoncxx::type::k_string) {
+        if (mv["notation"] &&
+            mv["notation"].type() == bsoncxx::type::k_string) {
           move.notation = string(mv["notation"].get_string().value);
         }
-        if (mv["xfen_after"] && mv["xfen_after"].type() == bsoncxx::type::k_string) {
+        if (mv["xfen_after"] &&
+            mv["xfen_after"].type() == bsoncxx::type::k_string) {
           move.xfen_after = string(mv["xfen_after"].get_string().value);
         }
-        if (mv["timestamp"] && mv["timestamp"].type() == bsoncxx::type::k_date) {
+        if (mv["timestamp"] &&
+            mv["timestamp"].type() == bsoncxx::type::k_date) {
           move.timestamp = chrono::system_clock::time_point(
               chrono::milliseconds(mv["timestamp"].get_date().value.count()));
         }
-        if (mv["time_taken"] && mv["time_taken"].type() == bsoncxx::type::k_int32) {
+        if (mv["time_taken"] &&
+            mv["time_taken"].type() == bsoncxx::type::k_int32) {
           move.time_taken = mv["time_taken"].get_int32().value;
         }
-        
+
         game.moves.push_back(move);
       }
     }
@@ -444,45 +468,49 @@ optional<ArchivedGame> GameRepository::findArchivedGameById(const string &gameId
   }
 }
 
-vector<ArchivedGame> GameRepository::findGameHistory(const string &username, int limit, int offset) {
+vector<ArchivedGame> GameRepository::findGameHistory(const string &username,
+                                                     int limit, int offset) {
   vector<ArchivedGame> result;
-  
+
   try {
     auto db = mongoClient.getDatabase();
     auto archive = db["game_archive"];
-    
-    // Find games where user was red or black player, sorted by end_time descending
-    auto cursor = archive.find(
-        document{} << "$or" << open_array 
-                   << open_document << "red_player" << username << close_document
-                   << open_document << "black_player" << username << close_document
-                   << close_array << finalize,
-        mongocxx::options::find{}
-            .sort(document{} << "end_time" << -1 << finalize)
-            .skip(offset)
-            .limit(limit));
-    
-    for (auto&& doc : cursor) {
+
+    // Find games where user was red or black player, sorted by end_time
+    // descending
+    auto cursor =
+        archive.find(document{} << "$or" << open_array << open_document
+                                << "red_player" << username << close_document
+                                << open_document << "black_player" << username
+                                << close_document << close_array << finalize,
+                     mongocxx::options::find{}
+                         .sort(document{} << "end_time" << -1 << finalize)
+                         .skip(offset)
+                         .limit(limit));
+
+    for (auto &&doc : cursor) {
       ArchivedGame game;
       game.id = doc["_id"].get_oid().value.to_string();
-      
-      if (doc["original_game_id"] && doc["original_game_id"].type() == bsoncxx::type::k_oid) {
-        game.original_game_id = doc["original_game_id"].get_oid().value.to_string();
+
+      if (doc["original_game_id"] &&
+          doc["original_game_id"].type() == bsoncxx::type::k_oid) {
+        game.original_game_id =
+            doc["original_game_id"].get_oid().value.to_string();
       }
-      
+
       game.red_player = string(doc["red_player"].get_string().value);
       game.black_player = string(doc["black_player"].get_string().value);
-      
+
       if (doc["winner"] && doc["winner"].type() == bsoncxx::type::k_string) {
         game.winner = string(doc["winner"].get_string().value);
       }
-      
+
       game.result = string(doc["result"].get_string().value);
       game.time_control = string(doc["time_control"].get_string().value);
       game.time_limit = doc["time_limit"].get_int32().value;
       game.increment = doc["increment"].get_int32().value;
       game.move_count = doc["move_count"].get_int32().value;
-      
+
       if (doc["rated"] && doc["rated"].type() == bsoncxx::type::k_bool) {
         game.rated = doc["rated"].get_bool().value;
       } else {
@@ -493,20 +521,22 @@ vector<ArchivedGame> GameRepository::findGameHistory(const string &username, int
           chrono::milliseconds(doc["start_time"].get_date().value.count()));
       game.end_time = chrono::system_clock::time_point(
           chrono::milliseconds(doc["end_time"].get_date().value.count()));
-      
-      // Note: moves not loaded here for performance (use findArchivedGameById for full details)
-      
+
+      // Note: moves not loaded here for performance (use findArchivedGameById
+      // for full details)
+
       result.push_back(game);
     }
-    
+
   } catch (const exception &) {
     // Return empty on error
   }
-  
+
   return result;
 }
 
-bool GameRepository::setRematchOffer(const string &gameId, const string &username) {
+bool GameRepository::setRematchOffer(const string &gameId,
+                                     const string &username) {
   try {
     auto db = mongoClient.getDatabase();
     auto archive = db["game_archive"];
@@ -514,7 +544,8 @@ bool GameRepository::setRematchOffer(const string &gameId, const string &usernam
     // Try to update by _id first
     auto updateResult = archive.update_one(
         document{} << "_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$set", make_document(kvp("rematch_offered_by", username)))));
+        make_document(
+            kvp("$set", make_document(kvp("rematch_offered_by", username)))));
 
     if (updateResult && updateResult->matched_count() > 0) {
       return true;
@@ -523,7 +554,8 @@ bool GameRepository::setRematchOffer(const string &gameId, const string &usernam
     // If not found, try by original_game_id
     updateResult = archive.update_one(
         document{} << "original_game_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$set", make_document(kvp("rematch_offered_by", username)))));
+        make_document(
+            kvp("$set", make_document(kvp("rematch_offered_by", username)))));
 
     return updateResult && updateResult->matched_count() > 0;
 
@@ -540,7 +572,8 @@ bool GameRepository::clearRematchOffer(const string &gameId) {
     // Try to update by _id first
     auto updateResult = archive.update_one(
         document{} << "_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$unset", make_document(kvp("rematch_offered_by", "")))));
+        make_document(
+            kvp("$unset", make_document(kvp("rematch_offered_by", "")))));
 
     if (updateResult && updateResult->matched_count() > 0) {
       return true;
@@ -549,7 +582,8 @@ bool GameRepository::clearRematchOffer(const string &gameId) {
     // If not found, try by original_game_id
     updateResult = archive.update_one(
         document{} << "original_game_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$unset", make_document(kvp("rematch_offered_by", "")))));
+        make_document(
+            kvp("$unset", make_document(kvp("rematch_offered_by", "")))));
 
     return updateResult && updateResult->matched_count() > 0;
 
@@ -566,10 +600,10 @@ bool GameRepository::setRematchAccepted(const string &gameId) {
     // Try to update by _id first
     auto updateResult = archive.update_one(
         document{} << "_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$set", make_document(
-            kvp("rematch_accepted", true),
-            kvp("rematch_offered_by", "")  // Clear the offer
-        ))));
+        make_document(kvp("$set", make_document(kvp("rematch_accepted", true),
+                                                kvp("rematch_offered_by",
+                                                    "") // Clear the offer
+                                                ))));
 
     if (updateResult && updateResult->matched_count() > 0) {
       return true;
@@ -578,10 +612,9 @@ bool GameRepository::setRematchAccepted(const string &gameId) {
     // If not found, try by original_game_id
     updateResult = archive.update_one(
         document{} << "original_game_id" << bsoncxx::oid(gameId) << finalize,
-        make_document(kvp("$set", make_document(
-            kvp("rematch_accepted", true),
-            kvp("rematch_offered_by", "")
-        ))));
+        make_document(
+            kvp("$set", make_document(kvp("rematch_accepted", true),
+                                      kvp("rematch_offered_by", "")))));
 
     return updateResult && updateResult->matched_count() > 0;
 

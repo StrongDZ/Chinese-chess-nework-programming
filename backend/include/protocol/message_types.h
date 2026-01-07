@@ -188,9 +188,8 @@ struct RematchResponsePayload {
 };
 
 // Quick matching payload
-struct CancelQMPayload {
-  // Empty payload - no data needed
-};
+struct QuickMatchingPayload {};
+struct CancelQMPayload {};
 
 // Empty payload cho các message không cần data
 struct EmptyPayload {};

@@ -43,40 +43,6 @@
 
 using namespace std;
 
-// // Helper function to parse UCI move format (e.g., "a0a1") to MovePayload
-// // TODO: This will be replaced by Python API calls
-// static MovePayload parseUCIMove(const string &uci_move) {
-//   MovePayload move;
-//   move.from = {-1, -1};
-//   move.to = {-1, -1};
-//   move.piece = "";
-
-//   if (uci_move.length() < 4) {
-//     return move;
-//   }
-
-//   char from_col_char = uci_move[0];
-//   char from_row_char = uci_move[1];
-//   char to_col_char = uci_move[2];
-//   char to_row_char = uci_move[3];
-
-//   if (from_col_char < 'a' || from_col_char > 'i' || to_col_char < 'a' ||
-//       to_col_char > 'i' || from_row_char < '0' || from_row_char > '9' ||
-//       to_row_char < '0' || to_row_char > '9') {
-//     return move;
-//   }
-
-//   int from_col = from_col_char - 'a';
-//   int from_row = from_row_char - '0';
-//   int to_col = to_col_char - 'a';
-//   int to_row = to_row_char - '0';
-
-//   move.from = {from_row, from_col};
-//   move.to = {to_row, to_col};
-
-//   return move;
-// }
-
 // Global controllers (non-static so they can be accessed from other files)
 AuthController *g_auth_controller = nullptr;
 FriendController *g_friend_controller = nullptr;
@@ -241,6 +207,8 @@ int main(int argc, char **argv) {
             lock_guard<mutex> lock(g_clients_mutex);
             g_clients[client_fd] = PlayerInfo{-1, string(), false, -1};
           }
+          // Initialize read buffer for this connection
+          initReadBuffer(client_fd);
           cout << "New connection: fd=" << client_fd << endl;
 
           // Add client to epoll
@@ -248,6 +216,7 @@ int main(int argc, char **argv) {
           ev.data.fd = client_fd;
           if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
             perror("epoll_ctl: client_fd");
+            cleanupReadBuffer(client_fd);
             close(client_fd);
             {
               lock_guard<mutex> lock(g_clients_mutex);
@@ -321,6 +290,8 @@ int main(int argc, char **argv) {
                           InfoPayload{nlohmann::json("opponent_disconnected")});
             }
           }
+          // Cleanup read buffer before closing
+          cleanupReadBuffer(fd);
           close(fd);
           g_clients.erase(fd);
         }
@@ -379,8 +350,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
     sendMessage(fd, MessageType::AUTHENTICATED);
     break;
   case MessageType::QUICK_MATCHING:
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"QUICK_MATCHING not implemented"});
+    handleQuickMatching(pm, fd);
     break;
   case MessageType::CHALLENGE_REQUEST:
     handleChallenge(pm, fd);
@@ -447,44 +417,19 @@ void processMessage(const ParsedMessage &pm, int fd) {
     sender.opponent_fd = -1;
     break;
   }
-  case MessageType::RESIGN: {
-    lock_guard<mutex> lock(g_clients_mutex);
-    if (g_clients.count(fd) == 0) {
-      return;
-    }
-    auto &sender = g_clients[fd];
-    if (!sender.in_game) {
-      sendMessage(fd, MessageType::ERROR,
-                  ErrorPayload{"You are not in a game"});
-      break;
-    }
-    int opp = sender.opponent_fd;
-
-    // TODO: Cleanup AI game state via Python API
-    // if (g_game_state.hasGame(fd)) {
-    //   g_game_state.endGame(fd);
-    // }
-
-    GameEndPayload gp;
-    gp.win_side = string("opponent");
-    if (opp >= 0 && g_clients.count(opp)) {
-      // Regular PvP game
-      sendMessage(opp, MessageType::GAME_END, gp);
-      g_clients[opp].in_game = false;
-      g_clients[opp].opponent_fd = -1;
-    } else {
-      // AI game - just end it
-    }
-    sender.in_game = false;
-    sender.opponent_fd = -1;
+  case MessageType::RESIGN:
+    handleResign(pm, fd);
     break;
-  }
   case MessageType::CANCEL_QM:
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"CANCEL_QM not implemented"});
     break;
   case MessageType::DRAW_REQUEST:
+    handleDrawRequest(pm, fd);
+    break;
   case MessageType::DRAW_RESPONSE:
+    handleDrawResponse(pm, fd);
+    break;
   case MessageType::REMATCH_REQUEST:
   case MessageType::REMATCH_RESPONSE:
     sendMessage(fd, MessageType::ERROR,

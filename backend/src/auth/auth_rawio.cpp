@@ -53,6 +53,12 @@ void handleLogin(const ParsedMessage &pm, int fd) {
         g_username_to_fd.erase(sender.username);
       }
       sender.username = username;
+      // Store avatar_id from response
+      if (response.contains("data") && response["data"].contains("avatar_id")) {
+        sender.avatar_id = response["data"]["avatar_id"].get<int>();
+      } else {
+        sender.avatar_id = 1; // Default avatar
+      }
       g_username_to_fd[sender.username] = fd;
       sendMessage(fd, MessageType::AUTHENTICATED);
     } else {
@@ -121,6 +127,12 @@ void handleRegister(const ParsedMessage &pm, int fd) {
         g_username_to_fd.erase(sender.username);
       }
       sender.username = username;
+      // Store avatar_id from response
+      if (response.contains("data") && response["data"].contains("avatar_id")) {
+        sender.avatar_id = response["data"]["avatar_id"].get<int>();
+      } else {
+        sender.avatar_id = 1; // Default avatar
+      }
       g_username_to_fd[sender.username] = fd;
       sendMessage(fd, MessageType::AUTHENTICATED);
     } else {

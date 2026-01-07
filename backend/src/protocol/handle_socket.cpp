@@ -13,29 +13,18 @@
 
 using namespace std;
 
-static bool recvAll(int fd, void *buffer, size_t bytes) {
-  char *ptr = static_cast<char *>(buffer);
-  size_t total = 0;
-  while (total < bytes) {
-    ssize_t n = recv(fd, ptr + total, bytes - total, 0);
-    if (n < 0) {
-      // Check if it's just "no data available" (OK in edge-triggered mode)
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        // No data yet, but connection is still open
-        // errno is preserved for caller to check
-        return false; // Signal "no data yet"
-      }
-      // Real error - connection closed or error
-      return false;
-    }
-    if (n == 0) {
-      // Connection closed by peer - set errno to indicate this
-      errno = ECONNRESET;
-      return false;
-    }
-    total += static_cast<size_t>(n);
-  }
-  return true;
+// Global read buffers
+map<int, ConnectionReadBuffer> g_read_buffers;
+mutex g_read_buffers_mutex;
+
+void initReadBuffer(int fd) {
+    lock_guard<mutex> lock(g_read_buffers_mutex);
+    g_read_buffers[fd] = ConnectionReadBuffer();
+}
+
+void cleanupReadBuffer(int fd) {
+    lock_guard<mutex> lock(g_read_buffers_mutex);
+    g_read_buffers.erase(fd);
 }
 
 static bool sendAll(int fd, const void *buffer, size_t bytes) {
@@ -69,24 +58,98 @@ bool sendMessage(int fd, MessageType type, const Payload &payload) {
 }
 
 bool recvMessage(int fd, string &out) {
-  uint32_t netLen = 0;
-  if (!recvAll(fd, &netLen, sizeof(netLen))) {
-    // Connection closed or error reading length
-    return false;
+  ConnectionReadBuffer* buf = nullptr;
+  {
+    lock_guard<mutex> lock(g_read_buffers_mutex);
+    auto it = g_read_buffers.find(fd);
+    if (it == g_read_buffers.end()) {
+      // Initialize buffer if not exists
+      g_read_buffers[fd] = ConnectionReadBuffer();
+      it = g_read_buffers.find(fd);
+    }
+    buf = &it->second;
   }
-  uint32_t len = ntohl(netLen);
-  if (len > 10 * 1024 * 1024) {
-    // Message too large
-    return false; // guard 10MB
+  
+  // Phase 1: Read length header (4 bytes)
+  if (buf->state == ConnectionReadBuffer::State::READING_LENGTH) {
+    while (buf->bytes_read < 4) {
+      ssize_t n = recv(fd, buf->length_buffer.data() + buf->bytes_read, 
+                       4 - buf->bytes_read, 0);
+      if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // No more data - wait for next epoll event
+          // State is preserved, will resume on next call
+          return false;
+        }
+        // Real error
+        buf->reset();
+        return false;
+      }
+      if (n == 0) {
+        // Connection closed
+        errno = ECONNRESET;
+        buf->reset();
+        return false;
+      }
+      buf->bytes_read += static_cast<size_t>(n);
+    }
+    
+    // Got full length header
+    uint32_t netLen;
+    memcpy(&netLen, buf->length_buffer.data(), 4);
+    buf->expected_length = ntohl(netLen);
+    
+    // Validate length
+    if (buf->expected_length > 10 * 1024 * 1024) {
+      cerr << "[RECV fd=" << fd << "] ERROR: Message too large: " 
+           << buf->expected_length << " bytes" << endl;
+      buf->reset();
+      errno = EINVAL;
+      return false;
+    }
+    
+    // Move to body reading phase
+    buf->state = ConnectionReadBuffer::State::READING_BODY;
+    buf->bytes_read = 0;
+    buf->body_buffer.resize(buf->expected_length);
   }
-  out.resize(len);
-  if (len == 0) {
-    // Empty message is valid
+  
+  // Phase 2: Read message body
+  if (buf->state == ConnectionReadBuffer::State::READING_BODY) {
+    if (buf->expected_length == 0) {
+      // Empty message
+      out.clear();
+      buf->reset();
+      return true;
+    }
+    
+    while (buf->bytes_read < buf->expected_length) {
+      ssize_t n = recv(fd, buf->body_buffer.data() + buf->bytes_read,
+                       buf->expected_length - buf->bytes_read, 0);
+      if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // No more data - wait for next epoll event
+          // State is preserved, will resume on next call
+          return false;
+        }
+        // Real error
+        buf->reset();
+        return false;
+      }
+      if (n == 0) {
+        // Connection closed
+        errno = ECONNRESET;
+        buf->reset();
+        return false;
+      }
+      buf->bytes_read += static_cast<size_t>(n);
+    }
+    
+    // Got full message
+    out.assign(buf->body_buffer.begin(), buf->body_buffer.end());
+    buf->reset();
     return true;
   }
-  if (!recvAll(fd, out.data(), len)) {
-    // Connection closed or error reading message body
-    return false;
-  }
-  return true;
+  
+  return false;
 }

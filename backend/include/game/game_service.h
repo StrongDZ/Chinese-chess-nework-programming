@@ -143,11 +143,6 @@ public:
     // Dùng cho GET_GAME_DETAILS handler
     GameResult getGameDetails(const std::string& gameId);
 
-    // Tìm đối thủ ngẫu nhiên trong khoảng rating (elo) cho matchmaking nhanh
-    GameResult autoMatchAndCreateGame(const std::string& username,
-                                      const std::string& timeControl = "blitz",
-                                      bool rated = true,
-                                      int ratingWindow = 200);
 };
 
 #endif
