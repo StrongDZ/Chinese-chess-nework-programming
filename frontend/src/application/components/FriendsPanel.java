@@ -1367,6 +1367,7 @@ public class FriendsPanel extends Pane {
     
     /**
      * Refresh friends list from UIState.
+     * Sắp xếp: Online trước, Offline sau, trong mỗi nhóm sắp xếp theo bảng chữ cái A-Z.
      */
     private void refreshFriendsList() {
         if (friendsListContainer == null) {
@@ -1392,8 +1393,22 @@ public class FriendsPanel extends Pane {
             emptyLabel.setPrefHeight(100);
             friendsListContainer.getChildren().add(emptyLabel);
         } else {
+            // Sắp xếp friends: Online trước, Offline sau, trong mỗi nhóm theo bảng chữ cái
+            List<String> sortedFriends = new ArrayList<>(friends);
+            sortedFriends.sort((a, b) -> {
+                boolean aOnline = onlinePlayers.contains(a);
+                boolean bOnline = onlinePlayers.contains(b);
+                
+                // Online trước, Offline sau
+                if (aOnline && !bOnline) return -1;
+                if (!aOnline && bOnline) return 1;
+                
+                // Cùng trạng thái -> sắp xếp theo bảng chữ cái (case-insensitive)
+                return a.compareToIgnoreCase(b);
+            });
+            
             // Display friends với online status thực tế
-            for (String username : friends) {
+            for (String username : sortedFriends) {
                 // Check if friend is in online players list
                 boolean isOnline = onlinePlayers.contains(username);
                 String status = isOnline ? "Online" : "Offline";
