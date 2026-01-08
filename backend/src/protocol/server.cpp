@@ -28,6 +28,7 @@
 
 // ===================== Controller Layer ===================== //
 #include "auth/auth_controller.h"
+#include "auth/auth_repository.h"
 #include "friend/friend_controller.h"
 #include "game/game_controller.h"
 #include "player_stat/player_stat_controller.h"
@@ -48,6 +49,9 @@ AuthController *g_auth_controller = nullptr;
 FriendController *g_friend_controller = nullptr;
 GameController *g_game_controller = nullptr;
 PlayerStatController *g_player_stat_controller = nullptr;
+
+// Global repositories
+AuthRepository *g_auth_repo = nullptr;
 
 // Global client management (protected by g_clients_mutex)
 map<int, PlayerInfo> g_clients;    // fd -> PlayerInfo
@@ -129,6 +133,7 @@ int main(int argc, char **argv) {
   g_friend_controller = &friendController;
   g_game_controller = &gameController;
   g_player_stat_controller = &playerStatController;
+  g_auth_repo = &authRepo;
 
   // TODO: Initialize Python AI service via HTTP API
   // AI features will be called via Python API endpoints instead of C++ wrapper
@@ -463,11 +468,24 @@ void processMessage(const ParsedMessage &pm, int fd) {
                   ErrorPayload{"UNFRIEND requires to_user"});
       break;
     }
-    const auto &p = get<UnfriendPayload>(*pm.payload);
-    // TODO: Implement unfriend logic (database operation)
-    sendMessage(fd, MessageType::INFO,
-                InfoPayload{nlohmann::json{{"unfriend", "ok"},
-                                           {"to_user", p.to_user}}});
+    if (g_friend_controller == nullptr) {
+      sendMessage(fd, MessageType::ERROR,
+                  ErrorPayload{"Friend controller not initialized"});
+      break;
+    }
+    try {
+      const auto &p = get<UnfriendPayload>(*pm.payload);
+      // Call controller to handle unfriend (database operation)
+      nlohmann::json request;
+      request["username"] = sender.username;
+      request["friend_username"] = p.to_user;
+      nlohmann::json response = g_friend_controller->handleUnfriend(request);
+      
+      // Send response via INFO message
+      sendMessage(fd, MessageType::INFO, InfoPayload{response});
+    } catch (...) {
+      sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
+    }
     break;
   }
   case MessageType::LOGOUT: {
@@ -522,10 +540,110 @@ void processMessage(const ParsedMessage &pm, int fd) {
   case MessageType::SUGGEST_MOVE:
     handleSuggestMove(pm, fd);
     break;
-  case MessageType::INFO:
+  case MessageType::INFO: {
+    // Handle INFO messages with special actions (e.g., list_friends)
+    if (pm.payload.has_value() &&
+        holds_alternative<InfoPayload>(*pm.payload)) {
+      try {
+        const auto &info = get<InfoPayload>(*pm.payload);
+        if (info.data.is_object() && info.data.contains("action")) {
+          string action = info.data["action"].get<string>();
+          if (action == "list_friends") {
+            // Request friends list
+            lock_guard<mutex> lock(g_clients_mutex);
+            if (g_clients.count(fd) == 0) {
+              return;
+            }
+            auto &sender = g_clients[fd];
+            if (sender.username.empty()) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"Please LOGIN before requesting friends list"});
+              break;
+            }
+            if (g_friend_controller == nullptr) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"Friend controller not initialized"});
+              break;
+            }
+            // Call controller to get friends list
+            nlohmann::json request;
+            request["username"] = sender.username;
+            nlohmann::json response = g_friend_controller->handleListFriends(request);
+            // Send response via INFO message
+            sendMessage(fd, MessageType::INFO, InfoPayload{response});
+            break;
+          } else if (action == "list_all_received_requests") {
+            // Request all received friend requests (pending + accepted)
+            lock_guard<mutex> lock(g_clients_mutex);
+            if (g_clients.count(fd) == 0) {
+              return;
+            }
+            auto &sender = g_clients[fd];
+            if (sender.username.empty()) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"Please LOGIN before requesting friend requests"});
+              break;
+            }
+            if (g_friend_controller == nullptr) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"Friend controller not initialized"});
+              break;
+            }
+            // Call controller to get all received requests
+            nlohmann::json request;
+            request["username"] = sender.username;
+            nlohmann::json response = g_friend_controller->handleListAllReceivedRequests(request);
+            // Send response via INFO message
+            sendMessage(fd, MessageType::INFO, InfoPayload{response});
+            break;
+          } else if (action == "search_users") {
+            // Search users by username prefix
+            lock_guard<mutex> lock(g_clients_mutex);
+            if (g_clients.count(fd) == 0) {
+              return;
+            }
+            auto &sender = g_clients[fd];
+            if (sender.username.empty()) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"Please LOGIN before searching users"});
+              break;
+            }
+            
+            // Get search query from request
+            string searchQuery = "";
+            if (info.data.contains("search_query") && info.data["search_query"].is_string()) {
+              searchQuery = info.data["search_query"].get<string>();
+            }
+            
+            if (searchQuery.empty()) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"search_query is required"});
+              break;
+            }
+            
+            // Search users in database
+            vector<string> usernames = g_auth_repo->searchUsers(searchQuery, 50);
+            
+            // Exclude current user from results
+            usernames.erase(remove(usernames.begin(), usernames.end(), sender.username), usernames.end());
+            
+            // Send results via INFO message
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto &username : usernames) {
+              arr.push_back(username);
+            }
+            sendMessage(fd, MessageType::INFO, InfoPayload{arr});
+            break;
+          }
+        }
+      } catch (...) {
+        // Not a special action, fall through to error
+      }
+    }
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"Unsupported inbound message"});
     break;
+  }
   default:
     if (!sendMessage(fd, MessageType::ERROR,
                      ErrorPayload{"Unknown message type"})) {

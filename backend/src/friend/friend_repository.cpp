@@ -197,6 +197,28 @@ FriendRepository::findPendingSent(const string &username) {
   return out;
 }
 
+vector<FriendRelation>
+FriendRepository::findAllReceivedRequests(const string &username) {
+  vector<FriendRelation> out;
+  try {
+    auto db = mongoClient.getDatabase();
+    auto friends = db["friends"];
+    // Find all relations where friend_name = username and status is pending or accepted
+    auto cursor = friends.find(
+        document{} << "friend_name" << username
+                   << "status" << open_document << "$in" << open_array
+                   << "pending" << "accepted" << close_array << close_document
+                   << finalize);
+    for (auto &&doc : cursor) {
+      auto rel = mapDocToRelation(doc);
+      if (rel)
+        out.push_back(rel.value());
+    }
+  } catch (const exception &) {
+  }
+  return out;
+}
+
 vector<FriendRelation> FriendRepository::findBlocked(const string &username) {
   vector<FriendRelation> out;
   try {

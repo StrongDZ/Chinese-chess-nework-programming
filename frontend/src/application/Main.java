@@ -135,6 +135,10 @@ public class Main extends Application {
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);
         root.getChildren().add(stageLayer);
+        
+        // Set root pane for friend handler and friends panel to show dialogs
+        networkManager.setFriendHandlerRootPane(stageLayer);
+        friendsPanel.setRootPane(stageLayer);
 
         Scene scene = new Scene(root, 1920, 1080);
         Path cssPath = Path.of(System.getProperty("user.dir"),

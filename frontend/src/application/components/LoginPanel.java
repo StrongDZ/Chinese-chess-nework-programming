@@ -68,7 +68,9 @@ public class LoginPanel extends StackPane {
                     ex.printStackTrace();
                     // If server is not available, auto-navigate to main menu for UI testing
                     // This allows testing frontend UI without backend server
-                    if (ex.getMessage() != null && ex.getMessage().contains("Connection refused")) {
+                    String errorMsg = ex.getMessage();
+                    if (errorMsg != null && (errorMsg.contains("Connection refused") || 
+                                             errorMsg.contains("Not connected to server"))) {
                         System.out.println("[LoginPanel] Server not available - auto-navigating to main menu for UI testing");
                         javafx.application.Platform.runLater(() -> {
                             PauseTransition delay = new PauseTransition(Duration.seconds(0.5));

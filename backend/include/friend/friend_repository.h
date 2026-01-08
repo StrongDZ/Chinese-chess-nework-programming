@@ -39,6 +39,8 @@ public:
     std::vector<FriendRelation> findPendingSent(const std::string& username);
     std::vector<FriendRelation> findBlocked(const std::string& username);
     std::vector<FriendRelation> searchFriends(const std::string& username, const std::string& searchQuery);
+    // Get all friend requests received (pending + accepted)
+    std::vector<FriendRelation> findAllReceivedRequests(const std::string& username);
 };
 
 #endif

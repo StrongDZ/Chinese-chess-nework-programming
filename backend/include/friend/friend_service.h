@@ -32,6 +32,8 @@ public:
     FriendResult listPendingSent(const std::string& username);
     FriendResult listBlocked(const std::string& username);
     FriendResult searchFriends(const std::string& username, const std::string& searchQuery);
+    // Get all friend requests received (pending + accepted)
+    FriendResult listAllReceivedRequests(const std::string& username);
 };
 
 #endif

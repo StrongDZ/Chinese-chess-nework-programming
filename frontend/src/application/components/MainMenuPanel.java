@@ -15,6 +15,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.Circle;
 import javafx.util.Duration;
 import javafx.scene.Cursor;
 import java.util.Random;
@@ -26,12 +27,19 @@ public class MainMenuPanel extends StackPane {
 
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;  // Thêm field state
+    
+    // Badge references for Friends icon in bottom menu
+    private Circle friendsBadgeCircle;
+    private Label friendsBadgeLabel;
 
     public MainMenuPanel(UIState state) {
         this.state = state;  // Lưu state vào field
         setPrefSize(1920, 1080);
         setLayoutX(0);
         setLayoutY(0);
+        
+        // Register callback để update badge khi friend requests thay đổi
+        state.setFriendsBadgeUpdateCallback(count -> updateFriendsBadge(count));
 
         Pane container = new Pane();
         container.setPrefSize(1920, 1080);
@@ -233,6 +241,11 @@ public class MainMenuPanel extends StackPane {
         playNow.setLayoutX(0);
         playNow.setLayoutY(0);
         playNow.setOnMouseClicked(e -> {
+            // Đóng FriendsPanel nếu đang mở
+            if (state.isFriendsVisible()) {
+                state.closeFriends();
+            }
+ 
             // Mở waiting panel ngay lập tức
             state.openWaiting();
             
@@ -252,6 +265,10 @@ public class MainMenuPanel extends StackPane {
         history.setLayoutX(480);
         history.setLayoutY(0);
         history.setOnMouseClicked(e -> {
+            // Đóng FriendsPanel nếu đang mở
+            if (state.isFriendsVisible()) {
+                state.closeFriends();
+            }
             state.openHistory();
         });
 
@@ -260,6 +277,10 @@ public class MainMenuPanel extends StackPane {
         gameMode.setLayoutX(480);
         gameMode.setLayoutY(235);
         gameMode.setOnMouseClicked(e -> {
+            // Đóng FriendsPanel nếu đang mở
+            if (state.isFriendsVisible()) {
+                state.closeFriends();
+            }
             state.openGameMode();
         });
 
@@ -347,8 +368,40 @@ public class MainMenuPanel extends StackPane {
             }
         });
         
-        // Friends icon với hover effect và click handler
+        // Friends icon với hover effect, click handler và badge
         StackPane friendsContainer = createIconWithHover(AssetHelper.image("icon_friend.png"), 100);
+        
+        // Badge for friend requests count - đặt ở đỉnh bên phải
+        Circle friendsBadgeCircle = new Circle(8);
+        friendsBadgeCircle.setFill(Color.web("#FF4444")); // Red badge
+        friendsBadgeCircle.setStroke(Color.WHITE);
+        friendsBadgeCircle.setStrokeWidth(2);
+        friendsBadgeCircle.setVisible(false); // Hidden by default
+        
+        Label friendsBadgeLabel = new Label("0");
+        friendsBadgeLabel.setStyle(
+            "-fx-font-family: 'Kumar One'; " +
+            "-fx-font-size: 10px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: white; " +
+            "-fx-background-color: transparent;"
+        );
+        friendsBadgeLabel.setVisible(false);
+        
+        StackPane friendsBadgeContainer = new StackPane(friendsBadgeCircle, friendsBadgeLabel);
+        // Position at top-right corner of icon
+        // Icon size is 100, center is at (0,0) in StackPane coordinate system
+        // Top-right corner: X = icon_width/2 - badge_radius (khoảng 40-45), Y = -icon_height/2 - badge_radius (khoảng -45 đến -50)
+        friendsBadgeContainer.setLayoutX(40); // Đỉnh bên phải (từ center sang phải)
+        friendsBadgeContainer.setLayoutY(-50); // Đỉnh trên (từ center lên trên)
+        friendsBadgeContainer.setMouseTransparent(true);
+        
+        friendsContainer.getChildren().add(friendsBadgeContainer);
+        
+        // Store badge references for updating
+        this.friendsBadgeCircle = friendsBadgeCircle;
+        this.friendsBadgeLabel = friendsBadgeLabel;
+        
         friendsContainer.setOnMouseClicked(e -> {
             // Toggle: nếu đang mở thì đóng, nếu đang đóng thì mở
             if (state.isFriendsVisible()) {
@@ -361,6 +414,10 @@ public class MainMenuPanel extends StackPane {
         // Settings icon với hover effect và click handler
         StackPane settingsContainer = createIconWithHover(AssetHelper.image("icon_setting.png"), 100);
         settingsContainer.setOnMouseClicked(e -> {
+            // Đóng FriendsPanel nếu đang mở
+            if (state.isFriendsVisible()) {
+                state.closeFriends();
+            }
             state.openSettings();
         });
 
@@ -378,5 +435,24 @@ public class MainMenuPanel extends StackPane {
         fade.setFromValue(getOpacity());
         fade.setToValue(target);
         fade.play();
+    }
+    
+    /**
+     * Update badge on Friends icon in bottom menu.
+     */
+    public void updateFriendsBadge(int count) {
+        javafx.application.Platform.runLater(() -> {
+            if (friendsBadgeCircle != null && friendsBadgeLabel != null) {
+                if (count > 0) {
+                    friendsBadgeCircle.setVisible(true);
+                    friendsBadgeLabel.setVisible(true);
+                    String countText = count > 99 ? "99+" : String.valueOf(count);
+                    friendsBadgeLabel.setText(countText);
+                } else {
+                    friendsBadgeCircle.setVisible(false);
+                    friendsBadgeLabel.setVisible(false);
+                }
+            }
+        });
     }
 }

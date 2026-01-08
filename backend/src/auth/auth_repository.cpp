@@ -107,6 +107,32 @@ bool AuthRepository::updateLastLogin(const string &username) {
   return result && result->modified_count() > 0;
 }
 
+vector<string> AuthRepository::searchUsers(const string &searchQuery, int limit) {
+  vector<string> results;
+  try {
+    auto db = mongoClient.getDatabase();
+    auto users = db["users"];
+    
+    // Search users by username prefix (case-insensitive)
+    auto cursor = users.find(
+        document{} << "username" << open_document << "$regex" << searchQuery
+                   << "$options" << "i" << close_document << finalize);
+    
+    int count = 0;
+    for (auto &&doc : cursor) {
+      if (count >= limit) break;
+      if (doc["username"]) {
+        string username = string(doc["username"].get_string().value);
+        results.push_back(username);
+        count++;
+      }
+    }
+  } catch (const exception &e) {
+    cerr << "Error searching users: " << e.what() << endl;
+  }
+  return results;
+}
+
 // ============================================
 // PLAYER STATS (MongoDB)
 // ============================================

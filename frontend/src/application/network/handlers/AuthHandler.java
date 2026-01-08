@@ -54,15 +54,17 @@ public class AuthHandler implements MessageHandler {
                 onUsernameSet.accept(username);
             }
             
-            // Fetch user stats (elo) from backend after successful authentication
+            // Fetch user stats (elo) and friends list from backend after successful authentication
             try {
                 NetworkManager networkManager = NetworkManager.getInstance();
                 if (networkManager.isConnected() && username != null && !username.isEmpty()) {
                     // Fetch stats for both modes
                     networkManager.info().requestUserStats(username, "all");  // Fetch all modes at once
+                    // Request friends list
+                    networkManager.friend().requestFriendsList();
                 }
             } catch (IOException e) {
-                System.err.println("[AuthHandler] Failed to fetch user stats: " + e.getMessage());
+                System.err.println("[AuthHandler] Failed to fetch user data: " + e.getMessage());
             }
             
             // Navigate to main menu on successful authentication

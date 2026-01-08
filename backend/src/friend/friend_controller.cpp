@@ -213,3 +213,38 @@ FriendController::handleSearchFriends(const nlohmann::json &request) {
   resp["count"] = static_cast<int>(arr.size());
   return resp;
 }
+
+nlohmann::json
+FriendController::handleListAllReceivedRequests(const nlohmann::json &request) {
+  nlohmann::json resp;
+  if (!request.contains("username")) {
+    resp["status"] = "error";
+    resp["message"] = "Missing username";
+    return resp;
+  }
+  auto result = service.listAllReceivedRequests(request["username"].get<string>());
+  resp["status"] = result.success ? "success" : "error";
+  resp["message"] = result.message;
+  
+  // Separate into pending and accepted
+  nlohmann::json pendingArr = nlohmann::json::array();
+  nlohmann::json acceptedArr = nlohmann::json::array();
+  
+  for (const auto &rel : result.relations) {
+    nlohmann::json item;
+    item["from_username"] = rel.user_name;
+    item["status"] = rel.status;
+    if (rel.status == "pending") {
+      pendingArr.push_back(item);
+    } else if (rel.status == "accepted") {
+      acceptedArr.push_back(item);
+    }
+  }
+  
+  resp["pending"] = pendingArr;
+  resp["accepted"] = acceptedArr;
+  resp["pending_count"] = static_cast<int>(pendingArr.size());
+  resp["accepted_count"] = static_cast<int>(acceptedArr.size());
+  resp["total_count"] = static_cast<int>(result.relations.size());
+  return resp;
+}
