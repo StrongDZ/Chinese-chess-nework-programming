@@ -108,3 +108,38 @@ vector<LeaderboardEntry> PlayerStatRepository::getLeaderboard(const string& time
     }
     return out;
 }
+
+vector<PlayerStat> PlayerStatRepository::getAllUsersStats() {
+    vector<PlayerStat> out;
+    try {
+        auto db = mongoClient.getDatabase();
+        auto stats = db["player_stats"];
+        // Get all stats for both blitz and classical
+        auto cursor = stats.find(document{}
+            << "$or" << open_array
+                << open_document << "time_control" << "blitz" << close_document
+                << open_document << "time_control" << "classical" << close_document
+            << close_array
+            << finalize);
+        for (auto&& doc : cursor) {
+            PlayerStat s{};
+            s.username = string(doc["username"].get_string().value);
+            s.time_control = string(doc["time_control"].get_string().value);
+            s.rating = doc["rating"].get_int32().value;
+            s.rd = doc["rd"].get_double().value;
+            s.volatility = doc["volatility"].get_double().value;
+            s.highest_rating = doc["highest_rating"].get_int32().value;
+            s.lowest_rating = doc["lowest_rating"].get_int32().value;
+            s.total_games = doc["total_games"].get_int32().value;
+            s.wins = doc["wins"].get_int32().value;
+            s.losses = doc["losses"].get_int32().value;
+            s.draws = doc["draws"].get_int32().value;
+            s.win_streak = doc["win_streak"].get_int32().value;
+            s.longest_win_streak = doc["longest_win_streak"].get_int32().value;
+            out.push_back(s);
+        }
+    } catch (const exception&) {
+        // swallow and return what we have
+    }
+    return out;
+}

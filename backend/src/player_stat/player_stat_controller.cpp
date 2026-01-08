@@ -95,3 +95,27 @@ PlayerStatController::handleGetLeaderboard(const nlohmann::json &request) {
 
   return response;
 }
+
+nlohmann::json
+PlayerStatController::handleGetAllUsersStats(const nlohmann::json &request) {
+  (void)request; // No parameters needed
+  
+  nlohmann::json response;
+  
+  auto result = service.getAllUsersStats();
+  if (!result.success) {
+    response["status"] = "error";
+    response["message"] = result.message;
+    return response;
+  }
+  
+  response["status"] = "success";
+  response["message"] = result.message;
+  response["all_users_stats"] = nlohmann::json::array();
+  
+  for (const auto &stat : result.stats) {
+    response["all_users_stats"].push_back(statToJson(stat));
+  }
+  
+  return response;
+}

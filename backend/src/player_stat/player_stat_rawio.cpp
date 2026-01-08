@@ -85,13 +85,10 @@ void handleLeaderBoard(const ParsedMessage &pm, int fd) {
   }
 
   try {
-    // Default request: blitz leaderboard, top 100
+    // Get all users stats (both classical and blitz)
     nlohmann::json request;
-    request["time_control"] = "blitz";
-    request["limit"] = 100;
-
     nlohmann::json response =
-        g_player_stat_controller->handleGetLeaderboard(request);
+        g_player_stat_controller->handleGetAllUsersStats(request);
 
     sendMessage(fd, MessageType::INFO, InfoPayload{response});
   } catch (...) {

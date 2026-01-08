@@ -23,6 +23,8 @@ public:
 
     PlayerStatResult getStats(const std::string& username, const std::string& timeControl = "all");
     PlayerStatResult getLeaderboard(const std::string& timeControl = "blitz", int limit = 100);
+    // Get all user stats (both classical and blitz) for all users
+    PlayerStatResult getAllUsersStats();
 };
 
 #endif
