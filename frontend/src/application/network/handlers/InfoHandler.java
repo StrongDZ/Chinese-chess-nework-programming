@@ -99,6 +99,19 @@ public class InfoHandler implements MessageHandler {
                 return;
             }
             
+            // Check if this is a leaderboard response (has "leaderboard" field)
+            if (response.has("leaderboard")) {
+                System.out.println("[InfoHandler] Inner payload has leaderboard field");
+                
+                // Reuse handleLeaderBoard logic by wrapping back into payload format
+                // so that any future changes in handleLeaderBoard are reused
+                if (uiState.getLeaderboardUpdateCallback() != null) {
+                    // Directly notify via callback with the response object
+                    uiState.getLeaderboardUpdateCallback().accept(response);
+                }
+                return;
+            }
+            
             // Check if this is a logout response
             if (response.has("logout")) {
                 String logoutStatus = response.get("logout").getAsString();
@@ -143,6 +156,24 @@ public class InfoHandler implements MessageHandler {
             if (response.has("pending") || response.has("accepted")) {
                 System.out.println("[InfoHandler] Inner payload has friend requests");
                 handleFriendRequests(innerPayload);
+                return;
+            }
+            
+            // Check if it's a leaderboard response with all_users_stats (new format)
+            if (response.has("all_users_stats")) {
+                System.out.println("[InfoHandler] Inner payload has all_users_stats");
+                if (uiState.getLeaderboardUpdateCallback() != null) {
+                    uiState.getLeaderboardUpdateCallback().accept(response);
+                }
+                return;
+            }
+            
+            // Check if it's a leaderboard response (old format with "leaderboard" field)
+            if (response.has("leaderboard")) {
+                System.out.println("[InfoHandler] Inner payload has leaderboard");
+                if (uiState.getLeaderboardUpdateCallback() != null) {
+                    uiState.getLeaderboardUpdateCallback().accept(response);
+                }
                 return;
             }
             
@@ -413,11 +444,33 @@ public class InfoHandler implements MessageHandler {
     
     private void handleLeaderBoard(String payload) {
         try {
-            JsonArray leaderboard = JsonParser.parseString(payload).getAsJsonArray();
-            // TODO: Update leaderboard in UIState
-            // uiState.updateLeaderboard(leaderboard);
+            System.out.println("[InfoHandler] Received LEADER_BOARD message, payload: " + payload);
+            
+            // Backend wraps INFO payload in "data" field
+            JsonObject wrapper = JsonParser.parseString(payload).getAsJsonObject();
+            JsonObject response = wrapper;
+            
+            // Unwrap "data" field if present
+            if (wrapper.has("data") && wrapper.get("data").isJsonObject()) {
+                response = wrapper.getAsJsonObject("data");
+            }
+            
+            // Check status
+            if (response.has("status") && response.get("status").getAsString().equals("error")) {
+                System.err.println("[InfoHandler] Error getting leaderboard: " + 
+                    response.get("message").getAsString());
+                return;
+            }
+            
+            // Notify RankingPanel via UIState callback
+            if (uiState.getLeaderboardUpdateCallback() != null) {
+                uiState.getLeaderboardUpdateCallback().accept(response);
+            }
+            
+            System.out.println("[InfoHandler] Leaderboard data processed");
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[InfoHandler] Error parsing leaderboard: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     

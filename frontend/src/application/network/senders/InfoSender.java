@@ -50,12 +50,13 @@ public class InfoSender {
     
     /**
      * Request leaderboard.
+     * @param timeControl Time control (classical/blitz) - ignored, backend returns all
+     * @param limit Limit - ignored, backend returns all
      */
     public void requestLeaderBoard(String timeControl, int limit) throws IOException {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("time_control", timeControl);
-        payload.addProperty("limit", limit);
-        socketClient.send(MessageType.LEADER_BOARD, gson.toJson(payload));
+        // Backend returns all user stats (both classical and blitz)
+        // Payload is empty or ignored
+        socketClient.send(MessageType.LEADER_BOARD, "{}");
     }
     
     /**

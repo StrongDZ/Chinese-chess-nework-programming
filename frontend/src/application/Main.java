@@ -33,6 +33,8 @@ import application.components.ProfilePanel;
 import application.components.WaitingPanel;
 import application.components.PlayWithFriendPanel;
 import application.components.ReconnectingOverlay;
+import application.components.ToastNotification;
+import application.components.RankingPanel;
 import application.network.NetworkManager;
 
 /**
@@ -109,6 +111,8 @@ public class Main extends Application {
         PlayWithFriendPanel playWithFriendPanel = new PlayWithFriendPanel(state);
         ReconnectingOverlay reconnectingOverlay = new ReconnectingOverlay(state);
         ReplayPanel replayPanel = new ReplayPanel(state);
+        RankingPanel rankingPanel = new RankingPanel(state);
+        ToastNotification toastNotification = new ToastNotification(state);
 
         stageLayer.getChildren().addAll(
                 background,
@@ -134,7 +138,9 @@ public class Main extends Application {
                 historyPanel,
                 profilePanel,
                 replayPanel,
-                reconnectingOverlay  // Add last so it appears on top of everything
+                rankingPanel,
+                reconnectingOverlay,  // Reconnecting overlay
+                toastNotification     // Toast notification - add last so it appears on top
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);
@@ -156,6 +162,11 @@ public class Main extends Application {
             friendsPanel.updateOnlinePlayers(players);
             // Call PlayWithFriendPanel's update method
             playWithFriendPanel.updateOnlinePlayers(players);
+        });
+        
+        // Register callback for leaderboard updates
+        state.setLeaderboardUpdateCallback(response -> {
+            rankingPanel.updateLeaderboard(response);
         });
         
         // Register callback for online players not in game updates

@@ -59,22 +59,41 @@ public class AuthHandler implements MessageHandler {
             // Hide reconnecting overlay if it was showing (auto-login after reconnect)
             networkManager.hideReconnectingOverlay();
             
-            // Fetch user stats (elo) and friends list from backend after successful authentication
-            try {
-                if (networkManager.isConnected() && username != null && !username.isEmpty()) {
-                    // Fetch stats for both modes
-                    networkManager.info().requestUserStats(username, "all");  // Fetch all modes at once
-                    // Request friends list
-                    networkManager.friend().requestFriendsList();
-                    // Request active game to restore game state if any
-                    networkManager.info().requestActiveGame(username);
-                }
-            } catch (IOException e) {
-                System.err.println("[AuthHandler] Failed to fetch user data: " + e.getMessage());
-            }
-            
-            // Navigate to main menu on successful authentication
+            // Navigate to main menu FIRST to ensure UI changes immediately
             uiState.navigateToMainMenu();
+            
+            // Fetch user stats (elo) and friends list from backend after successful authentication
+            // Do this AFTER navigation so UI doesn't get stuck
+            try {
+                if (networkManager != null && networkManager.isConnected() && username != null && !username.isEmpty()) {
+                    // Fetch stats for both modes
+                    try {
+                        networkManager.info().requestUserStats(username, "all");  // Fetch all modes at once
+                    } catch (Exception e) {
+                        System.err.println("[AuthHandler] Failed to fetch user stats: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                    
+                    // Request friends list
+                    try {
+                        networkManager.friend().requestFriendsList();
+                    } catch (Exception e) {
+                        System.err.println("[AuthHandler] Failed to fetch friends list: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                    
+                    // Request active game to restore game state if any
+                    try {
+                        networkManager.info().requestActiveGame(username);
+                    } catch (Exception e) {
+                        System.err.println("[AuthHandler] Failed to fetch active game: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[AuthHandler] Error in handleAuthenticated: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
     
@@ -85,10 +104,15 @@ public class AuthHandler implements MessageHandler {
                 ? errorJson.get("message").getAsString() 
                 : "Unknown error";
             
-            // TODO: Show error message to user via UIState
-            // uiState.showError(errorMessage);
+            // Show error message via toast notification
+            if (uiState != null) {
+                uiState.showToast(errorMessage);
+            }
         } catch (Exception e) {
-            // Ignore parse errors
+            // If parsing fails, show generic error message
+            if (uiState != null) {
+                uiState.showToast("An error occurred");
+            }
         }
     }
 }

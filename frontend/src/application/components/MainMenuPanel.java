@@ -55,13 +55,22 @@ public class MainMenuPanel extends StackPane {
 
         // Top-right: Social icons
         HBox socialIcons = createSocialIcons();
-        socialIcons.setLayoutX(1920 - 350);
+        // Calculate width: 4 icons * 80px + 3 spacings * 15px = 365px
+        // Add padding from right edge: 50px
+        double iconsWidth = 4 * 80 + 3 * 15; // 365px
+        double rightPadding = 50;
+        socialIcons.setLayoutX(1920 - iconsWidth - rightPadding);
         socialIcons.setLayoutY(50);
 
-        // Ẩn social icons khi friends panel mở hoặc gameMode mở
+        // Hiển thị social icons khi ở MAIN_MENU, không mở friends panel
+        // và không mở bất kỳ mode panel nào (GameMode/Classic/Blitz/Custom)
         socialIcons.visibleProperty().bind(
-            state.friendsVisibleProperty().not()
-                .and(state.gameModeVisibleProperty().not())  // Thêm điều kiện này
+            state.appStateProperty().isEqualTo(UIState.AppState.MAIN_MENU)
+                .and(state.friendsVisibleProperty().not())
+                .and(state.gameModeVisibleProperty().not())
+                .and(state.classicModeVisibleProperty().not())
+                .and(state.blitzModeVisibleProperty().not())
+                .and(state.customModeVisibleProperty().not())
         );
         socialIcons.managedProperty().bind(socialIcons.visibleProperty());
 
@@ -182,6 +191,13 @@ public class MainMenuPanel extends StackPane {
         HBox icons = new HBox(15);
         icons.setAlignment(Pos.CENTER);
 
+        // Ranking icon với hover effect và click handler
+        StackPane rankingContainer = createIconWithHover(AssetHelper.image("icon_ranking.png"), 80);
+        rankingContainer.setOnMouseClicked(e -> {
+            state.openRanking();
+            e.consume();
+        });
+        
         // Facebook icon với hover effect
         StackPane fbContainer = createIconWithHover(AssetHelper.image("icon_fb.png"), 80);
         
@@ -191,12 +207,15 @@ public class MainMenuPanel extends StackPane {
         // Help icon với hover effect
         StackPane helpContainer = createIconWithHover(AssetHelper.image("icon_rule.png"), 80);
 
-        icons.getChildren().addAll(fbContainer, igContainer, helpContainer);
+        icons.getChildren().addAll(rankingContainer, fbContainer, igContainer, helpContainer);
         return icons;
     }
 
     private StackPane createIconWithHover(javafx.scene.image.Image image, double size) {
         StackPane container = new StackPane();
+        container.setPrefSize(size, size);
+        container.setMinSize(size, size);
+        container.setMaxSize(size, size);
         
         ImageView icon = new ImageView(image);
         icon.setFitWidth(size);

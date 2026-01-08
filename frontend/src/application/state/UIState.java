@@ -32,6 +32,7 @@ public class UIState {
     private final BooleanProperty waitingVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty gameModeVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty replayVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
+    private final BooleanProperty rankingVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final StringProperty replayGameId = new SimpleStringProperty("");  // Game ID for replay
     private final BooleanProperty replayPlayerIsRed = new SimpleBooleanProperty(true);  // Màu quân cờ của người chơi trong replay (từ database)
     private final BooleanProperty reconnectingVisible = new SimpleBooleanProperty(false);  // Reconnecting overlay visibility
@@ -217,6 +218,26 @@ public class UIState {
 
     public BooleanProperty profileVisibleProperty() {
         return profileVisible;
+    }
+    
+    public BooleanProperty rankingVisibleProperty() {
+        return rankingVisible;
+    }
+    
+    public boolean isRankingVisible() {
+        return rankingVisible.get();
+    }
+    
+    public void setRankingVisible(boolean value) {
+        rankingVisible.set(value);
+    }
+    
+    public void openRanking() {
+        setRankingVisible(true);
+    }
+    
+    public void closeRanking() {
+        setRankingVisible(false);
     }
     
     public boolean isProfileVisible() {
@@ -875,6 +896,9 @@ public class UIState {
     private java.util.function.BiConsumer<java.util.List<application.components.HistoryPanel.HistoryEntry>,
                                          java.util.List<application.components.HistoryPanel.HistoryEntry>> gameHistoryUpdateCallback;
     
+    // Callback for updating leaderboard (used by InfoHandler)
+    private java.util.function.Consumer<com.google.gson.JsonObject> leaderboardUpdateCallback;
+    
     // Callback for applying opponent move (from server)
     private OpponentMoveCallback opponentMoveCallback;
     
@@ -914,6 +938,14 @@ public class UIState {
         java.util.List<application.components.HistoryPanel.HistoryEntry>,
         java.util.List<application.components.HistoryPanel.HistoryEntry>> callback) {
         this.gameHistoryUpdateCallback = callback;
+    }
+    
+    public void setLeaderboardUpdateCallback(java.util.function.Consumer<com.google.gson.JsonObject> callback) {
+        this.leaderboardUpdateCallback = callback;
+    }
+    
+    public java.util.function.Consumer<com.google.gson.JsonObject> getLeaderboardUpdateCallback() {
+        return leaderboardUpdateCallback;
     }
     
     public void updateOnlinePlayers(java.util.List<String> players) {
@@ -981,6 +1013,43 @@ public class UIState {
             opponentMoveCallback.onOpponentMove(fromCol, fromRow, toCol, toRow);
         } else {
             System.err.println("[UIState] opponentMoveCallback is null, cannot apply move");
+        }
+    }
+    
+    // Toast notification property
+    private final StringProperty toastMessage = new SimpleStringProperty("");
+    
+    public StringProperty toastMessageProperty() {
+        return toastMessage;
+    }
+    
+    public String getToastMessage() {
+        return toastMessage.get();
+    }
+    
+    public void setToastMessage(String value) {
+        toastMessage.set(value);
+    }
+    
+    /**
+     * Show toast notification with error message.
+     * @param message Error message to display
+     */
+    public void showToast(String message) {
+        if (message != null && !message.isEmpty()) {
+            // Reset to empty first to ensure listener triggers even if same message
+            // This ensures the property change listener will fire even for duplicate messages
+            String currentMessage = getToastMessage();
+            if (message.equals(currentMessage)) {
+                // If same message, reset first then set again
+                setToastMessage("");
+                javafx.application.Platform.runLater(() -> {
+                    setToastMessage(message);
+                });
+            } else {
+                // Different message, can set directly
+                setToastMessage(message);
+            }
         }
     }
 }

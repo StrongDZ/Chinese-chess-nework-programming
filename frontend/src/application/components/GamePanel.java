@@ -40,6 +40,9 @@ public class GamePanel extends StackPane implements IGamePanel {
     private DialogManager dialogManager;
     private ChatManager chatManager;
     
+    // Game End Checker
+    private application.game.GameEndChecker gameEndChecker;
+    
     // Core fields
     private Pane rootPane = null;  // Lưu reference đến root pane để thêm UI
     private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
@@ -81,6 +84,9 @@ public class GamePanel extends StackPane implements IGamePanel {
         this.moveHistoryManager = new MoveHistoryManager(state, this, rootPane);
         this.chatManager = new ChatManager(state, this, rootPane);
         this.dialogManager = new DialogManager(state, this, rootPane);
+        
+        // Khởi tạo GameEndChecker
+        this.gameEndChecker = new application.game.GameEndChecker();
         
         // Thiết lập callbacks giữa các Manager
         setupManagerCallbacks();
@@ -149,6 +155,11 @@ public class GamePanel extends StackPane implements IGamePanel {
                 int toCol = Integer.parseInt(parts[5]);
                 String capturedInfo = parts[6];
                 moveHistoryManager.addMove(color, pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
+                
+                // Check game end after move
+                Platform.runLater(() -> {
+                    checkGameEndAfterMove(capturedInfo.contains("captured"));
+                });
             }
         });
         
@@ -192,7 +203,8 @@ public class GamePanel extends StackPane implements IGamePanel {
                     break;
                 case "chat_message":
                     if (result != null && !result.isEmpty()) {
-                        chatManager.showChatPopup(result);
+                        // Message từ opponent (nhận từ server), hiển thị ở avatar opponent
+                        chatManager.showChatPopup(result, false);
                     }
                     break;
                 default:
@@ -658,7 +670,7 @@ public class GamePanel extends StackPane implements IGamePanel {
         chatIcon.setOnMouseClicked(e -> {
             // Nếu chat input đang hiện, đóng nó
             if (chatManager.isChatInputVisible()) {
-                // ChatManager sẽ tự xử lý việc đóng
+                chatManager.hideChatInput();
             } else {
                 // Nếu chưa hiện, mở nó
                 chatManager.showChatInput();
@@ -793,6 +805,11 @@ public class GamePanel extends StackPane implements IGamePanel {
             timerManager.updateTimersOnTurnChange();
             
             System.out.println("[GamePanel] Applied opponent move: (" + fromRow + "," + fromCol + ") -> (" + toRow + "," + toCol + ")");
+            
+            // Check game end after opponent move
+            Platform.runLater(() -> {
+                checkGameEndAfterMove(false); // captured info not available here, will check from board
+            });
         });
     }
 
@@ -882,6 +899,11 @@ public class GamePanel extends StackPane implements IGamePanel {
         moveHistoryManager.clearMoveHistory();
         capturedPiecesManager.resetCapturedPieces();
         
+        // Reset GameEndChecker
+        if (gameEndChecker != null) {
+            gameEndChecker.reset();
+        }
+        
         // Reset quân cờ về vị trí ban đầu
         if (boardContainer != null) {
             Platform.runLater(() -> {
@@ -917,5 +939,130 @@ public class GamePanel extends StackPane implements IGamePanel {
      */
     public UIState getState() {
         return state;
+    }
+    
+    /**
+     * Get current board state from piecesContainer
+     * @return char[10][9] board representation
+     */
+    private char[][] getCurrentBoardState() {
+        char[][] board = new char[10][9];
+        // Initialize with empty squares
+        for (int i = 0; i < 10; i++) {
+            for (int j = 0; j < 9; j++) {
+                board[i][j] = ' ';
+            }
+        }
+        
+        if (piecesContainer == null) {
+            return board;
+        }
+        
+        // Calculate cell dimensions
+        double boardSize = 923.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        
+        // Extract piece positions from piecesContainer
+        for (javafx.scene.Node node : piecesContainer.getChildren()) {
+            if (node instanceof ImageView) {
+                ImageView piece = (ImageView) node;
+                if (piece.getUserData() instanceof ChessBoardManager.PieceInfo) {
+                    ChessBoardManager.PieceInfo info = (ChessBoardManager.PieceInfo) piece.getUserData();
+                    
+                    // Calculate row and col from layout position
+                    int row = (int) Math.round(piece.getLayoutY() / cellHeight);
+                    int col = (int) Math.round(piece.getLayoutX() / cellWidth);
+                    row = Math.max(0, Math.min(9, row));
+                    col = Math.max(0, Math.min(8, col));
+                    
+                    // Convert piece type to character
+                    char pieceChar = ChessBoardManager.getPieceChar(info.pieceType, info.color.equals("red"));
+                    board[row][col] = pieceChar;
+                }
+            }
+        }
+        
+        return board;
+    }
+    
+    /**
+     * Check game end conditions after a move
+     * @param captured Whether a piece was captured in this move
+     */
+    private void checkGameEndAfterMove(boolean captured) {
+        if (gameEndChecker == null || piecesContainer == null) {
+            return;
+        }
+        
+        // Get current board state
+        char[][] board = getCurrentBoardState();
+        
+        // Record move in history
+        gameEndChecker.recordMove(board, captured);
+        
+        // Check game end conditions
+        boolean isRedTurn = currentTurn.equals("red");
+        application.game.GameEndChecker.GameEndResult result = gameEndChecker.checkGameEnd(board, isRedTurn);
+        
+        if (result.isGameOver) {
+            System.out.println("[GamePanel] Game Over: " + result.result + " - " + result.termination + " - " + result.message);
+            
+            // Determine if player wins/loses/draws
+            boolean playerIsRed = state.isPlayerRed();
+            String playerResult;
+            
+            if ("draw".equals(result.result)) {
+                playerResult = "draw";
+            } else if ((playerIsRed && "red".equals(result.result)) || 
+                       (!playerIsRed && "black".equals(result.result))) {
+                playerResult = "win";
+            } else {
+                playerResult = "lose";
+            }
+            
+            // Send game end to server
+            try {
+                application.network.NetworkManager networkManager = 
+                    application.network.NetworkManager.getInstance();
+                if (networkManager != null) {
+                    // Determine win_side for server
+                    String winSide = "draw";
+                    if ("red".equals(result.result)) {
+                        winSide = state.isPlayerRed() ? state.getUsername() : state.getOpponentUsername();
+                    } else if ("black".equals(result.result)) {
+                        winSide = state.isPlayerRed() ? state.getOpponentUsername() : state.getUsername();
+                    }
+                    
+                    // Send GAME_END message
+                    networkManager.game().sendGameEnd(winSide);
+                    System.out.println("[GamePanel] Game ended - result: " + result.result + 
+                        ", termination: " + result.termination + ", winSide: " + winSide);
+                }
+            } catch (Exception e) {
+                System.err.println("[GamePanel] Error sending game end: " + e.getMessage());
+                e.printStackTrace();
+            }
+            
+            // Show result dialog
+            Platform.runLater(() -> {
+                if ("draw".equals(playerResult)) {
+                    dialogManager.showGameResultDraw();
+                } else if ("win".equals(playerResult)) {
+                    dialogManager.showGameResult(true);
+                } else {
+                    dialogManager.showGameResult(false);
+                }
+            });
+        } else {
+            // Check if king is in check (for UI indication)
+            boolean redInCheck = application.game.GameEndChecker.isKingInCheck(board, true);
+            boolean blackInCheck = application.game.GameEndChecker.isKingInCheck(board, false);
+            
+            if (redInCheck || blackInCheck) {
+                System.out.println("[GamePanel] Check! Red: " + redInCheck + ", Black: " + blackInCheck);
+                // TODO: Show "Check!" indicator in UI
+            }
+        }
     }
 }

@@ -221,9 +221,10 @@ public class ClassicModePanel extends StackPane {
         mainPanel.getChildren().addAll(bg, contentPane);
         StackPane.setAlignment(mainPanel, Pos.CENTER);
 
-        // Overlay layer for social icons & bottom bar with absolute positions
+        // Overlay layer for social icons & bottom bar (riêng cho ClassicMode)
         HBox socialIcons = createSocialIcons();
-        socialIcons.setLayoutX(1920 - 350);
+        // 4 icons (80px) + 3 spacing (15px) + padding (50px) = 365px
+        socialIcons.setLayoutX(1920 - 365);
         socialIcons.setLayoutY(50);
 
         StackPane bottomBar = createBottomBar();
@@ -413,16 +414,26 @@ public class ClassicModePanel extends StackPane {
         HBox icons = new HBox(15);
         icons.setAlignment(Pos.CENTER);
 
+        // Ranking icon với hover effect và click handler
+        StackPane rankingContainer = createIconWithHover(AssetHelper.image("icon_ranking.png"), 80);
+        rankingContainer.setOnMouseClicked(e -> {
+            state.openRanking();
+            e.consume();
+        });
+        
         StackPane fbContainer = createIconWithHover(AssetHelper.image("icon_fb.png"), 80);
         StackPane igContainer = createIconWithHover(AssetHelper.image("icon_ig.png"), 80);
         StackPane helpContainer = createIconWithHover(AssetHelper.image("icon_rule.png"), 80);
 
-        icons.getChildren().addAll(fbContainer, igContainer, helpContainer);
+        icons.getChildren().addAll(rankingContainer, fbContainer, igContainer, helpContainer);
         return icons;
     }
 
     private StackPane createIconWithHover(javafx.scene.image.Image image, double size) {
         StackPane container = new StackPane();
+        container.setPrefSize(size, size);
+        container.setMinSize(size, size);
+        container.setMaxSize(size, size);
 
         ImageView icon = new ImageView(image);
         icon.setFitWidth(size);

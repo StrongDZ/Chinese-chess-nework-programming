@@ -84,9 +84,10 @@ public class GameModePanel extends StackPane {
         mainPane.setPrefSize(1920, 1080);
         // Không set pickOnBounds và mouseTransparent - giống InventoryPanel
         
-        // Top-right: Social icons - add lại với cùng chức năng
+        // Top-right: Social icons - đồng bộ với MainMenuPanel (có ranking)
         HBox socialIcons = createSocialIcons();
-        socialIcons.setLayoutX(1920 - 350);
+        double iconsTotalWidth = 4 * 80 + 3 * 15 + 50; // 4 icons, spacing 15, padding 50
+        socialIcons.setLayoutX(1920 - iconsTotalWidth); // 1920 - 365 = 1555
         socialIcons.setLayoutY(50);
         
         // Bottom-right: Bottom bar icons - add lại với cùng chức năng
@@ -249,6 +250,13 @@ public class GameModePanel extends StackPane {
         HBox icons = new HBox(15);
         icons.setAlignment(Pos.CENTER);
 
+        // Ranking icon (khớp MainMenuPanel)
+        StackPane rankingContainer = createIconWithHover(AssetHelper.image("icon_ranking.png"), 80);
+        rankingContainer.setOnMouseClicked(e -> {
+            state.openRanking();
+            e.consume();
+        });
+
         // Facebook icon với hover effect
         StackPane fbContainer = createIconWithHover(AssetHelper.image("icon_fb.png"), 80);
         
@@ -258,7 +266,7 @@ public class GameModePanel extends StackPane {
         // Help icon với hover effect
         StackPane helpContainer = createIconWithHover(AssetHelper.image("icon_rule.png"), 80);
 
-        icons.getChildren().addAll(fbContainer, igContainer, helpContainer);
+        icons.getChildren().addAll(rankingContainer, fbContainer, igContainer, helpContainer);
         return icons;
     }
 
@@ -269,6 +277,11 @@ public class GameModePanel extends StackPane {
         icon.setFitWidth(size);
         icon.setFitHeight(size);
         icon.setPreserveRatio(true);
+        
+        // Đặt kích thước cho container để HBox layout chính xác (tránh đè lên nhau)
+        container.setPrefSize(size, size);
+        container.setMinSize(size, size);
+        container.setMaxSize(size, size);
         
         container.getChildren().add(icon);
         container.setCursor(Cursor.HAND);

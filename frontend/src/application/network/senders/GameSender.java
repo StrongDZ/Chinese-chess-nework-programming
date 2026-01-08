@@ -171,4 +171,14 @@ public class GameSender {
         payload.addProperty("message", message);
         socketClient.send(MessageType.MESSAGE, gson.toJson(payload));
     }
+    
+    /**
+     * Send game end notification.
+     * @param winSide Username of winner, "draw" for draw, or "red"/"black" for side
+     */
+    public void sendGameEnd(String winSide) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("win_side", winSide);
+        socketClient.send(MessageType.GAME_END, gson.toJson(payload));
+    }
 }

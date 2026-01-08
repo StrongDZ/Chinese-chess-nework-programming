@@ -108,6 +108,13 @@ public class MoveValidator {
             return false; // Move would result in illegal king position
         }
         
+        // IMPORTANT: Check if move leaves own king in check
+        // This is a critical rule - cannot make a move that leaves own king in check
+        boolean ownKingIsRed = isRed;
+        if (GameEndChecker.isKingInCheck(tempBoard, ownKingIsRed)) {
+            return false; // Move would leave own king in check (illegal)
+        }
+        
         return true;
     }
     
@@ -167,7 +174,10 @@ public class MoveValidator {
         return count;
     }
     
-    private static boolean kingsFaceEachOther(char[][] board) {
+    /**
+     * Check if kings face each other (public for GameEndChecker)
+     */
+    public static boolean kingsFaceEachOther(char[][] board) {
         // Find red king (K) and black king (k)
         int redKingRow = -1;
         int redKingCol = -1;
@@ -204,7 +214,10 @@ public class MoveValidator {
     
     // Piece-specific move validators
     
-    private static boolean isValidKingMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if king move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidKingMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // King must stay in palace
         if (!isInPalace(toRow, toCol)) {
             return false;
@@ -217,7 +230,10 @@ public class MoveValidator {
         return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1);
     }
     
-    private static boolean isValidAdvisorMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if advisor move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidAdvisorMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // Advisor must stay in palace
         if (!isInPalace(toRow, toCol)) {
             return false;
@@ -230,7 +246,10 @@ public class MoveValidator {
         return rowDiff == 1 && colDiff == 1;
     }
     
-    private static boolean isValidElephantMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if elephant move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidElephantMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // Elephant cannot cross the river
         if (isRed && toRow > 4) {
             return false; // red elephant cannot cross river
@@ -258,7 +277,10 @@ public class MoveValidator {
         return false;
     }
     
-    private static boolean isValidKnightMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if knight move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidKnightMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // Knight moves in L-shape: 2 squares in one direction, then 1 square perpendicular
         int rowDiff = Math.abs(toRow - fromRow);
         int colDiff = Math.abs(toCol - fromCol);
@@ -287,7 +309,10 @@ public class MoveValidator {
         return true;
     }
     
-    private static boolean isValidRookMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if rook move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidRookMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // Rook moves horizontally or vertically
         if (fromRow != toRow && fromCol != toCol) {
             return false; // Not horizontal or vertical
@@ -298,7 +323,10 @@ public class MoveValidator {
         return piecesBetween == 0; // Path must be clear
     }
     
-    private static boolean isValidCannonMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if cannon move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidCannonMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         // Cannon moves horizontally or vertically
         if (fromRow != toRow && fromCol != toCol) {
             return false; // Not horizontal or vertical
@@ -316,7 +344,10 @@ public class MoveValidator {
         }
     }
     
-    private static boolean isValidPawnMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
+    /**
+     * Check if pawn move is valid (public for GameEndChecker)
+     */
+    public static boolean isValidPawnMove(char[][] board, int fromRow, int fromCol, int toRow, int toCol, boolean isRed) {
         int rowDiff = toRow - fromRow;
         int colDiff = Math.abs(toCol - fromCol);
         
