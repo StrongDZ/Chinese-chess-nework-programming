@@ -30,7 +30,6 @@ public class CustomModePanel extends StackPane {
     
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
-    private StackPane selectedSideOption = null; // Track side được chọn (White/red)
     private StackPane selectedLevelOption = null; // Track level được chọn (Easy/Medium/Hard)
     private int gameTimerValue = 5; // Default 5
     private int moveTimerValue = 2; // Default 2
@@ -255,30 +254,6 @@ public class CustomModePanel extends StackPane {
         
         levelContainer.getChildren().addAll(easyButton, mediumButton, hardButton);
         
-        // Side selection section
-        Label sideLabel = new Label("Side:");
-        sideLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 80px; " +
-            "-fx-font-weight: bold; " +
-            "-fx-text-fill: black; " +
-            "-fx-background-color: transparent;"
-        );
-        sideLabel.setLayoutX(480);
-        sideLabel.setLayoutY(635);
-        
-        // Side buttons
-        HBox sideContainer = new HBox(15);
-        sideContainer.setLayoutX(640);
-        sideContainer.setLayoutY(675);
-        sideContainer.setAlignment(Pos.CENTER_LEFT);
-        
-        StackPane whiteButton = createSideButton("White");
-        StackPane redButton = createSideButton("Red");
-        selectSideOption(whiteButton); // Set White làm mặc định
-        
-        sideContainer.getChildren().addAll(whiteButton, redButton);
-        
         // Custom Board Setup button
         StackPane customizeBoardButton = createCustomizeBoardButton();
         customizeBoardButton.setLayoutX(480);
@@ -291,7 +266,7 @@ public class CustomModePanel extends StackPane {
         
         contentPane.getChildren().addAll(title, backButtonContainer, gameTimerLabel, gameTimerValueLabel, 
             gameTimerContainer, moveTimerLabel, moveTimerValueLabel, moveTimerContainer, 
-            levelLabel, levelContainer, sideLabel, sideContainer, customizeBoardButton, playButton);
+            levelLabel, levelContainer, customizeBoardButton, playButton);
         mainPanel.getChildren().addAll(bg, contentPane);
         StackPane.setAlignment(mainPanel, Pos.CENTER);
 
@@ -495,59 +470,6 @@ public class CustomModePanel extends StackPane {
         bg.setFill(Color.color(0.85, 0.75, 0.6));
     }
     
-    private StackPane createSideButton(String text) {
-        Rectangle bg = new Rectangle(150, 60);
-        bg.setFill(Color.TRANSPARENT);
-        bg.setStroke(Color.color(0.6, 0.4, 0.3));
-        bg.setStrokeWidth(2);
-        bg.setArcWidth(20);
-        bg.setArcHeight(20);
-        
-        Label textLabel = new Label(text);
-        textLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 45px; " +
-            "-fx-text-fill: black; " +
-            "-fx-background-color: transparent; " +
-            "-fx-alignment: center;"
-        );
-        textLabel.setAlignment(Pos.CENTER);
-        
-        StackPane button = new StackPane();
-        button.setPrefSize(150, 60);
-        button.setAlignment(Pos.CENTER);
-        button.getChildren().addAll(bg, textLabel);
-        button.setCursor(Cursor.HAND);
-        button.setMouseTransparent(false);
-        button.setPickOnBounds(true);
-        
-        button.setOnMouseEntered(e -> {
-            if (button != selectedSideOption) {
-                bg.setFill(Color.color(0.9, 0.9, 0.9, 0.5));
-            }
-        });
-        
-        button.setOnMouseExited(e -> {
-            if (button != selectedSideOption) {
-                bg.setFill(Color.TRANSPARENT);
-            }
-        });
-        
-        button.setOnMouseClicked(e -> selectSideOption(button));
-        
-        return button;
-    }
-    
-    private void selectSideOption(StackPane button) {
-        if (selectedSideOption != null) {
-            Rectangle oldBg = (Rectangle) selectedSideOption.getChildren().get(0);
-            oldBg.setFill(Color.TRANSPARENT);
-        }
-        selectedSideOption = button;
-        Rectangle bg = (Rectangle) button.getChildren().get(0);
-        bg.setFill(Color.color(0.85, 0.75, 0.6));
-    }
-    
     private StackPane createPlayButton() {
         Rectangle bg = new Rectangle(220, 85);
         bg.setFill(Color.web("#A8A4A4"));
@@ -602,6 +524,9 @@ public class CustomModePanel extends StackPane {
             state.setTimer2Value(gameTimerText);
             state.setTimer3Value(gameTimerText);
             state.setTimer4Value(moveTimerText);
+            
+            // Player luôn là red (AI sẽ là black nếu chơi với AI)
+            state.setPlayerIsRed(true);
             
             state.closeCustomMode();
             state.openGame("custom"); // Set mode là "custom" để load custom board
