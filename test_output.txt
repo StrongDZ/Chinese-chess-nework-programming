@@ -1,0 +1,216 @@
+========================================
+=== GAME LAYERED TEST (MongoDB)     ===
+=== Repository -> Service -> Controller ===
+========================================
+ MongoDB connected: chess_server_game
+MongoDB connected: chess_server_game
+Redis: NOT USED (removed)
+
+Layers initialized: Repository -> Service -> Controller
+
+--- Setup: Ensure test users exist ---
+User exists: game_test_user1
+User exists: game_test_user2
+
+========================================
+TEST 1: Create Game
+========================================
+Response: success
+Game ID: 695fa56b4d248ea8b903b2b1
+Red: game_test_user1, Black: game_test_user2
+TEST 1 PASSED
+
+========================================
+TEST 2: Get Game
+========================================
+Status: in_progress
+Current Turn: red
+TEST 2 PASSED
+
+========================================
+TEST 3: Make Move (Red's Turn)
+========================================
+Next Turn: black
+New XFEN: rnbakabnr/9/4c2c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 2
+Move xfen_after: rnbakabnr/9/4c2c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 2
+XFEN correctly updated!
+TEST 3 PASSED
+
+========================================
+TEST 4: Wrong Turn
+========================================
+Correctly rejected: Not your turn
+TEST 4 PASSED
+
+========================================
+TEST 5: List Games
+========================================
+Count: 9
+TEST 5 PASSED
+
+========================================
+TEST 6: Resign
+========================================
+Result: red_win
+Winner: game_test_user1
+TEST 6 PASSED
+
+========================================
+TEST 7: Create Game for Draw Tests
+========================================
+Draw Test Game ID: 695fa56f4d248ea8b903b2b3
+Red: game_test_user2, Black: game_test_user1
+TEST 7 PASSED
+
+========================================
+TEST 8: Offer Draw
+========================================
+Draw offered by: game_test_user2
+TEST 8 PASSED
+
+========================================
+TEST 9: Offer Draw Again (Should Fail)
+========================================
+Correctly rejected: You have already offered a draw
+TEST 9 PASSED
+
+========================================
+TEST 10: Respond to Own Draw (Should Fail)
+========================================
+Correctly rejected: You cannot respond to your own draw offer
+TEST 10 PASSED
+
+========================================
+TEST 11: Decline Draw
+========================================
+Draw declined: Draw declined
+TEST 11 PASSED
+
+========================================
+TEST 12: Offer Draw Again After Decline
+========================================
+Draw offered by: game_test_user1
+TEST 12 PASSED
+
+========================================
+TEST 13: Accept Draw
+========================================
+Draw accepted!
+Game status: completed
+Result: draw
+TEST 13 PASSED
+
+========================================
+TEST 14: Offer Draw on Completed Game (Should Fail)
+========================================
+Correctly rejected: Game not found
+TEST 14 PASSED
+
+========================================
+TEST 15: Request Rematch
+========================================
+Rematch requested by: game_test_user2
+TEST 15 PASSED
+
+========================================
+TEST 16: Duplicate Rematch Request (Should Fail)
+========================================
+Correctly rejected: You have already requested a rematch
+TEST 16 PASSED
+
+========================================
+TEST 17: Self-Respond to Rematch (Should Fail)
+========================================
+Correctly rejected: You cannot respond to your own rematch request
+TEST 17 PASSED
+
+========================================
+TEST 18: Accept Rematch (Swapped Colors)
+========================================
+New game created: 695fa5764d248ea8b903b2b5
+Original red (game_test_user2) is now: BLACK
+Original black (game_test_user1) is now: RED
+Colors correctly swapped!
+TEST 18 PASSED
+
+========================================
+TEST 19: Rematch After Already Accepted (Should Fail)
+========================================
+Correctly rejected: Rematch has already been accepted for this game
+TEST 19 PASSED
+
+========================================
+TEST 20: Get Game History (GET_GAME_HISTORY)
+========================================
+Game history count: 6
+First game:
+  Game ID: 695fa5734d248ea8b903b2b4
+  Result: draw
+  Red: game_test_user2 vs Black: game_test_user1
+TEST 20 PASSED
+
+========================================
+TEST 21: Get Game Details (GET_GAME_DETAILS - Archived)
+========================================
+Game type: archived
+Game ID: 695fa5734d248ea8b903b2b4
+Result: draw
+Move count: 0
+Moves loaded: 0 moves
+(Ready for replay!)
+TEST 21 PASSED
+
+========================================
+TEST 22: Get Game Details (GET_GAME_DETAILS - Active)
+========================================
+Game type: active
+Status: in_progress
+TEST 22 PASSED
+
+========================================
+TEST 23: Get Game Details - Invalid ID
+========================================
+Correctly rejected: Game not found
+TEST 23 PASSED
+
+========================================
+TEST 24: Create Custom Game (CUSTOM MODE)
+========================================
+Custom game created!
+Game ID: 695fa57b4d248ea8b903b2b7
+Initial XFEN: 4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1
+Custom mode: true
+Starting color: red
+Rated: false
+Correctly set as unrated!
+TEST 24 PASSED
+
+========================================
+TEST 25: Custom Game - Black Starts First
+========================================
+Custom game with black starting!
+Current turn: black
+TEST 25 PASSED
+
+========================================
+TEST 26: Invalid XFEN (Should Fail)
+========================================
+Correctly rejected: Invalid XFEN format for custom board setup
+TEST 26 PASSED
+
+========================================
+TEST 27: XFEN Missing King (Should Fail)
+========================================
+Correctly rejected: Invalid XFEN format for custom board setup
+TEST 27 PASSED
+
+========================================
+FINAL RESULTS
+========================================
+Tests Passed: 27 / 27
+Tests Failed: 0
+
+Note: Using MongoDB instead of Redis
+Note: Using username-based auth (no tokens)
+
+ALL TESTS PASSED!

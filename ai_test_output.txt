@@ -1,0 +1,76 @@
+==========================================
+   AI Handler Unit Tests
+==========================================
+
+=== Test 1: UCI to AIMove Conversion ===
+✅ PASS: UCI 'a0a1' converts correctly
+✅ PASS: UCI 'e2e4' converts correctly
+✅ PASS: UCI 'i9i8' converts correctly
+
+=== Test 2: AIMove to UCI Conversion ===
+✅ PASS: Move (0,0)->(1,0) converts to 'a0a1'
+✅ PASS: Move (2,4)->(4,4) converts to 'e2e4'
+✅ PASS: Move (9,8)->(8,8) converts to 'i9i8'
+
+=== Test 3: Board to XFEN Conversion ===
+✅ PASS: Board converts to non-empty XFEN
+✅ PASS: XFEN has turn indicator
+  Generated XFEN: rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1
+
+=== Test 4: AI Service Initialization ===
+[AIService] Initialized with AI script: ./AI/ai.py
+✅ PASS: AI Service initializes successfully
+✅ PASS: AI Service reports ready state
+
+=== Test 5: AI Move Prediction ===
+[AIService] Initialized with AI script: ./AI/ai.py
+❌ FAIL: AI prediction failed - Failed to parse AI move:   File "<string>", line 1
+    import sys; sys.path.insert(0, './AI'); from ai import predict_move, AI; move = predict_move('rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w', 'easy'); if move: print(AI.move_to_uci(move)); else: print('error')
+                                                                                                                                                                           ^^
+SyntaxError: invalid syntax
+
+=== Test 6: AI Difficulty Levels ===
+[AIService] Initialized with AI script: ./AI/ai.py
+❌ FAIL: EASY difficulty produces move
+❌ FAIL: MEDIUM difficulty produces move
+❌ FAIL: HARD difficulty produces move
+
+=== Test 7: AI Controller Create Game ===
+ MongoDB connected: chess_server_game
+[AIService] Initialized with AI script: ./AI/ai.py
+✅ PASS: Create AI game response has status
+❌ FAIL: Create AI game succeeded - Challenger not found
+
+=== Test 8: AI Controller Get Move ===
+ MongoDB connected: chess_server_game
+[AIService] Initialized with AI script: ./AI/ai.py
+❌ FAIL: Get AI move - setup failed
+
+=== Test 9: AI Controller Make Move ===
+ MongoDB connected: chess_server_game
+[AIService] Initialized with AI script: ./AI/ai.py
+❌ FAIL: Make move - setup failed
+
+=== Test 10: AI Controller Suggest Move ===
+ MongoDB connected: chess_server_game
+[AIService] Initialized with AI script: ./AI/ai.py
+❌ FAIL: Suggest move - setup failed
+
+=== Test 11: AI Controller Resign ===
+ MongoDB connected: chess_server_game
+[AIService] Initialized with AI script: ./AI/ai.py
+❌ FAIL: Resign - setup failed
+
+=== Test 12: Invalid Request Handling ===
+ MongoDB connected: chess_server_game
+[AIService] Initialized with AI script: ./AI/ai.py
+✅ PASS: Handles missing username
+✅ PASS: Handles invalid difficulty
+✅ PASS: Handles non-existent game_id
+
+==========================================
+   Test Summary
+==========================================
+Passed: 14
+Failed: 9
+Total:  23
