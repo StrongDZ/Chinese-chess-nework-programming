@@ -80,6 +80,16 @@ public class InfoHandler implements MessageHandler {
                 } else if (dataObj instanceof JsonObject) {
                     // Try to handle as nested object
                     JsonObject dataObjJson = response.getAsJsonObject("data");
+                    // Check if it's a logout response
+                    if (dataObjJson.has("logout")) {
+                        String logoutStatus = dataObjJson.get("logout").getAsString();
+                        if ("ok".equals(logoutStatus)) {
+                            // Reset username in UIState
+                            uiState.setUsername("");
+                            System.out.println("[InfoHandler] Logout successful, username reset");
+                        }
+                        return;
+                    }
                     if (dataObjJson.has("stat") || dataObjJson.has("stats")) {
                         System.out.println("[InfoHandler] INFO payload has 'data' field with stats");
                         handleUserStats(dataObjJson.toString());
@@ -98,6 +108,17 @@ public class InfoHandler implements MessageHandler {
             if (response.has("stat") || response.has("stats")) {
                 System.out.println("[InfoHandler] INFO payload has stats field");
                 handleUserStats(payload);
+                return;
+            }
+            
+            // Check if this is a logout response
+            if (response.has("logout")) {
+                String logoutStatus = response.get("logout").getAsString();
+                if ("ok".equals(logoutStatus)) {
+                    // Reset username in UIState
+                    uiState.setUsername("");
+                    System.out.println("[InfoHandler] Logout successful, username reset");
+                }
                 return;
             }
             

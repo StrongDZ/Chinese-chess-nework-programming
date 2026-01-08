@@ -47,18 +47,16 @@ public class AuthSender {
     }
     
     /**
-     * Send logout request and disconnect from server.
-     * This is the only proper way to end a session.
+     * Send logout request.
+     * This resets the user session but keeps the socket connection open
+     * so the user can login again with a different account.
      * 
      * @throws IOException if send fails
      */
     public void logout() throws IOException {
-        try {
-            socketClient.send(MessageType.LOGOUT, "{}");
-        } finally {
-            // Always disconnect after logout, even if send fails
-            socketClient.disconnect();
-        }
+        socketClient.send(MessageType.LOGOUT, "{}");
+        // Reset username context but keep socket connection open
+        socketClient.resetUsername();
     }
 }
 

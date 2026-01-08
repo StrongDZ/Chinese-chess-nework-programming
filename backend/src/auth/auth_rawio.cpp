@@ -151,3 +151,65 @@ void handleRegister(const ParsedMessage &pm, int fd) {
     sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
   }
 }
+
+void handleLogout(const ParsedMessage &pm, int fd) {
+  lock_guard<mutex> lock(g_clients_mutex);
+  if (g_clients.count(fd) == 0) {
+    return;
+  }
+  auto &sender = g_clients[fd];
+  
+  // Check if user is logged in
+  if (sender.username.empty()) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Not logged in"});
+    return;
+  }
+  
+  if (g_auth_controller == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Auth controller not initialized"});
+    return;
+  }
+  
+  try {
+    string username = sender.username;
+    
+    // Convert payload to nlohmann::json for controller
+    nlohmann::json request;
+    request["username"] = username;
+    
+    // Call controller to update online status in database
+    nlohmann::json response = g_auth_controller->handleLogout(request);
+    
+    if (response.contains("success") && response["success"].get<bool>()) {
+      // Remove username from mapping
+      if (g_username_to_fd.count(username)) {
+        g_username_to_fd.erase(username);
+      }
+      
+      // Reset PlayerInfo to unauthenticated state
+      sender.username = "";
+      sender.in_game = false;
+      sender.opponent_fd = -1;
+      sender.avatar_id = 1;
+      sender.is_red = false;
+      
+      // TODO: Cleanup AI game state via Python API if needed
+      // if (g_game_state.hasGame(fd)) {
+      //   g_game_state.endGame(fd);
+      // }
+      
+      // Send success response
+      sendMessage(fd, MessageType::INFO,
+                  InfoPayload{nlohmann::json{{"logout", "ok"}}});
+    } else {
+      string errorMsg = response.contains("error")
+                            ? response["error"].get<string>()
+                            : "Logout failed";
+      sendMessage(fd, MessageType::ERROR, ErrorPayload{errorMsg});
+    }
+  } catch (...) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
+  }
+}
