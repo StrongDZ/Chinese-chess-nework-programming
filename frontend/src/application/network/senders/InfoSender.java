@@ -60,10 +60,17 @@ public class InfoSender {
     
     /**
      * Request game history.
+     * @param limit Maximum number of games to retrieve
      */
     public void requestGameHistory(int limit) throws IOException {
         JsonObject payload = new JsonObject();
+        // Get username from socket client context
+        String username = socketClient.getUsername();
+        if (username != null && !username.isEmpty()) {
+            payload.addProperty("username", username);
+        }
         payload.addProperty("limit", limit);
+        payload.addProperty("offset", 0);  // Start from beginning
         socketClient.send(MessageType.GAME_HISTORY, gson.toJson(payload));
     }
     

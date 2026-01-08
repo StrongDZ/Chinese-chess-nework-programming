@@ -38,7 +38,7 @@
 // - auth/auth_rawio.cpp: handleLogin, handleRegister, handleLogout
 // - friend/friend_rawio.cpp: handleRequestAddFriend, handleResponseAddFriend
 // - game/game_rawio.cpp: handleChallenge, handleChallengeResponse, handleMove,
-// handleMessage
+// handleMessage, handleGameHistory
 // - ai/ai_rawio.cpp: handleAIMatch, handleSuggestMove, handleAIMove
 // These files include their own controller headers as needed.
 
@@ -445,6 +445,8 @@ void processMessage(const ParsedMessage &pm, int fd) {
                 ErrorPayload{"Feature not implemented"});
     break;
   case MessageType::GAME_HISTORY:
+    handleGameHistory(pm, fd);
+    break;
   case MessageType::REPLAY_REQUEST:
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"Feature not implemented"});
@@ -655,5 +657,5 @@ void processMessage(const ParsedMessage &pm, int fd) {
 // - auth/auth_rawio.cpp: handleLogin, handleRegister, handleLogout
 // - friend/friend_rawio.cpp: handleRequestAddFriend, handleResponseAddFriend
 // - game/game_rawio.cpp: handleChallenge, handleChallengeResponse, handleMove,
-// handleMessage
+// handleMessage, handleGameHistory
 // - ai/ai_rawio.cpp: handleAIMatch, handleSuggestMove, handleAIMove

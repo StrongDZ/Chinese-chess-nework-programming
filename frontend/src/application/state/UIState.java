@@ -31,6 +31,8 @@ public class UIState {
     private final BooleanProperty profileVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty waitingVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty gameModeVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
+    private final BooleanProperty replayVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
+    private final StringProperty replayGameId = new SimpleStringProperty("");  // Game ID for replay
     private final BooleanProperty classicModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty blitzModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty customModeVisible = new SimpleBooleanProperty(false);
@@ -251,6 +253,38 @@ public class UIState {
     
     public void closeWaiting() {
         setWaitingVisible(false);
+    }
+
+    public BooleanProperty replayVisibleProperty() {
+        return replayVisible;
+    }
+    
+    public boolean isReplayVisible() {
+        return replayVisible.get();
+    }
+    
+    public void setReplayVisible(boolean value) {
+        replayVisible.set(value);
+    }
+    
+    public void openReplay() {
+        setReplayVisible(true);
+    }
+    
+    public void closeReplay() {
+        setReplayVisible(false);
+    }
+    
+    public StringProperty replayGameIdProperty() {
+        return replayGameId;
+    }
+    
+    public String getReplayGameId() {
+        return replayGameId.get();
+    }
+    
+    public void setReplayGameId(String value) {
+        replayGameId.set(value);
     }
 
     public BooleanProperty gameModeVisibleProperty() {
@@ -781,6 +815,9 @@ public class UIState {
     private java.util.function.Consumer<Integer> friendsBadgeUpdateCallback;
     // Callback for updating friend elo in PlayWithFriendPanel (username, timeControl, elo)
     private TriConsumer<String, String, Integer> friendEloUpdateCallback;
+    // Callback for updating game history (used by InfoHandler)
+    private java.util.function.BiConsumer<java.util.List<application.components.HistoryPanel.HistoryEntry>,
+                                         java.util.List<application.components.HistoryPanel.HistoryEntry>> gameHistoryUpdateCallback;
     
     public void setOnlinePlayersUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
         this.onlinePlayersUpdateCallback = callback;
@@ -806,6 +843,12 @@ public class UIState {
     
     public void setFriendEloUpdateCallback(TriConsumer<String, String, Integer> callback) {
         this.friendEloUpdateCallback = callback;
+    }
+    
+    public void setGameHistoryUpdateCallback(java.util.function.BiConsumer<
+        java.util.List<application.components.HistoryPanel.HistoryEntry>,
+        java.util.List<application.components.HistoryPanel.HistoryEntry>> callback) {
+        this.gameHistoryUpdateCallback = callback;
     }
     
     public void updateOnlinePlayers(java.util.List<String> players) {
@@ -835,6 +878,13 @@ public class UIState {
         // Calculate total for badge: pending + accepted (rejected không đếm vì backend xóa)
         int totalCount = (pending != null ? pending.size() : 0) + (accepted != null ? accepted.size() : 0);
         updateFriendsBadge(totalCount);
+    }
+    
+    public void updateGameHistory(java.util.List<application.components.HistoryPanel.HistoryEntry> peopleHistory,
+                                  java.util.List<application.components.HistoryPanel.HistoryEntry> aiHistory) {
+        if (gameHistoryUpdateCallback != null) {
+            gameHistoryUpdateCallback.accept(peopleHistory, aiHistory);
+        }
     }
     
     public void updateFriendsBadge(int count) {

@@ -138,7 +138,9 @@ struct UserStatsPayload {
 };
 
 struct GameHistoryPayload {
-  string target_username;
+  string username;  // Changed from target_username to match frontend
+  int limit = 50;   // Default limit
+  int offset = 0;   // Default offset
 };
 
 struct ReplayRequestPayload {
@@ -267,7 +269,9 @@ inline void to_json(json &j, const UserStatsPayload &p) {
   }
 }
 inline void to_json(json &j, const GameHistoryPayload &p) {
-  j = json{{"target_username", p.target_username}};
+  j = json{{"username", p.username}};
+  j["limit"] = p.limit;
+  j["offset"] = p.offset;
 }
 inline void to_json(json &j, const ReplayRequestPayload &p) {
   j = json{{"game_id", p.game_id}};
@@ -506,12 +510,18 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::GAME_HISTORY: {
-      if (!doc.HasMember("target_username") ||
-          !doc["target_username"].IsString()) {
+      if (!doc.HasMember("username") || !doc["username"].IsString()) {
         return nullopt;
       }
       GameHistoryPayload p;
-      p.target_username = doc["target_username"].GetString();
+      p.username = doc["username"].GetString();
+      // Parse optional limit and offset
+      if (doc.HasMember("limit") && doc["limit"].IsInt()) {
+        p.limit = doc["limit"].GetInt();
+      }
+      if (doc.HasMember("offset") && doc["offset"].IsInt()) {
+        p.offset = doc["offset"].GetInt();
+      }
       return p;
     }
 

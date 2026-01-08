@@ -20,15 +20,29 @@ import javafx.scene.effect.DropShadow;
  */
 public class MoveHistoryManager {
     
-    private final GamePanel gamePanel;
+    private final IGamePanel gamePanel;
+    private final Pane rootPane;  // Root pane để thêm move panel với absolute positioning
     
     private StackPane movePanel = null;
     private ScrollPane moveHistoryScrollPane = null;
     private VBox moveHistoryContainer = null;
     private final java.util.List<String> moveHistory = new java.util.ArrayList<>();
     
-    public MoveHistoryManager(UIState state, GamePanel gamePanel, Pane rootPane) {
+    // Callback để tạo replay control buttons
+    private java.util.function.Supplier<javafx.scene.Node> replayControlsSupplier = null;
+    
+    public MoveHistoryManager(UIState state, IGamePanel gamePanel, Pane rootPane) {
         this.gamePanel = gamePanel;
+        this.rootPane = rootPane;
+    }
+    
+    /**
+     * Set supplier để tạo replay control buttons
+     * CHỈ được gọi từ ReplayPanel, KHÔNG được gọi từ GamePanel
+     * Nếu supplier là null (như trong GamePanel), các nút sẽ không xuất hiện
+     */
+    public void setReplayControlsSupplier(java.util.function.Supplier<javafx.scene.Node> supplier) {
+        this.replayControlsSupplier = supplier;
     }
     
     /**
@@ -36,13 +50,17 @@ public class MoveHistoryManager {
      */
     public void showMovePanel() {
         // Nếu đã có panel, xóa nó trước
-        if (movePanel != null && gamePanel != null && gamePanel.getChildren().contains(movePanel)) {
-            gamePanel.getChildren().remove(movePanel);
+        if (movePanel != null) {
+            if (rootPane != null && rootPane.getChildren().contains(movePanel)) {
+                rootPane.getChildren().remove(movePanel);
+            } else if (gamePanel != null && gamePanel.getChildren().contains(movePanel)) {
+                gamePanel.getChildren().remove(movePanel);
+            }
         }
         
         // Tạo panel "Move" bên phải - kích thước 450x755
         movePanel = new StackPane();
-        movePanel.setLayoutX(1920 - 450);  // Bên phải, rộng 450px
+        movePanel.setLayoutX(1920 - 450 - 25);  // Bên phải, rộng 450px, dịch sang trái 50px
         movePanel.setLayoutY((1080 - 755) / 2 - 70);  // Dịch lên 100px so với căn giữa
         movePanel.setPrefSize(450, 755);  // Kích thước 450x755
         
@@ -100,8 +118,10 @@ public class MoveHistoryManager {
         panelContainer.getChildren().add(header);
         
         // ScrollPane để hiển thị lịch sử nước đi
+        // Chiều cao sẽ được điều chỉnh nếu có replay controls
+        int scrollPaneHeight = replayControlsSupplier != null ? 575 : 675;  // Giảm 100px nếu có buttons
         moveHistoryScrollPane = new ScrollPane();
-        moveHistoryScrollPane.setPrefSize(450, 675);  // Chiều cao = 755 - 80 (header)
+        moveHistoryScrollPane.setPrefSize(450, scrollPaneHeight);  // Chiều cao = 755 - 80 (header) - 100 (buttons nếu có)
         moveHistoryScrollPane.setStyle(
             "-fx-background: rgba(230, 230, 230, 0.95); " +  // Dùng -fx-background thay vì -fx-background-color
             "-fx-background-color: rgba(230, 230, 230, 0.95); " +
@@ -131,17 +151,37 @@ public class MoveHistoryManager {
         // Thêm ScrollPane vào panel container
         panelContainer.getChildren().add(moveHistoryScrollPane);
         
+        // Thêm replay control buttons CHỈ khi có supplier (chỉ trong ReplayPanel, không có trong GamePanel)
+        // Trong GamePanel, replayControlsSupplier sẽ là null, nên các nút sẽ không xuất hiện
+        if (replayControlsSupplier != null) {
+            javafx.scene.Node replayControls = replayControlsSupplier.get();
+            if (replayControls != null) {
+                // Đặt buttons ở dưới cùng của panel, căn giữa
+                javafx.geometry.Insets margin = new javafx.geometry.Insets(10, 0, 10, 0);
+                if (replayControls instanceof javafx.scene.layout.HBox) {
+                    ((javafx.scene.layout.HBox) replayControls).setAlignment(javafx.geometry.Pos.CENTER);
+                }
+                VBox.setMargin(replayControls, margin);
+                panelContainer.getChildren().add(replayControls);
+            }
+        }
+        
         movePanel.getChildren().addAll(panelBg, panelContainer);
         
         // Đảm bảo panel có thể nhận mouse events
         movePanel.setPickOnBounds(true);
         movePanel.setMouseTransparent(false);
         
-        // Thêm vào GamePanel (StackPane) để đảm bảo panel ở trên cùng
-        gamePanel.getChildren().add(movePanel);
-        
-        // Đưa panel lên trên cùng để không bị che
-        movePanel.toFront();
+        // Thêm vào rootPane (Pane) để sử dụng absolute positioning với setLayoutX/setLayoutY
+        if (rootPane != null) {
+            rootPane.getChildren().add(movePanel);
+            // Đưa panel lên trên cùng để không bị che
+            movePanel.toFront();
+        } else {
+            // Fallback: thêm vào gamePanel nếu rootPane không có
+            gamePanel.getChildren().add(movePanel);
+            movePanel.toFront();
+        }
         
         // Fade in animation
         movePanel.setOpacity(0);
@@ -154,12 +194,14 @@ public class MoveHistoryManager {
      * Ẩn panel lịch sử nước đi
      */
     public void hideMovePanel() {
-        if (movePanel != null && gamePanel != null && gamePanel.getChildren().contains(movePanel)) {
+        if (movePanel != null) {
             // Fade out animation
             FadeTransition fadeOut = new FadeTransition(Duration.millis(300), movePanel);
             fadeOut.setToValue(0.0);
             fadeOut.setOnFinished(event -> {
-                if (gamePanel.getChildren().contains(movePanel)) {
+                if (rootPane != null && rootPane.getChildren().contains(movePanel)) {
+                    rootPane.getChildren().remove(movePanel);
+                } else if (gamePanel != null && gamePanel.getChildren().contains(movePanel)) {
                     gamePanel.getChildren().remove(movePanel);
                 }
             });
@@ -239,7 +281,15 @@ public class MoveHistoryManager {
     }
     
     public boolean isMovePanelVisible() {
-        return movePanel != null && gamePanel != null && gamePanel.getChildren().contains(movePanel);
+        if (movePanel == null) return false;
+        if (rootPane != null) {
+            return rootPane.getChildren().contains(movePanel);
+        }
+        return gamePanel != null && gamePanel.getChildren().contains(movePanel);
+    }
+    
+    public StackPane getMovePanel() {
+        return movePanel;
     }
 }
 
