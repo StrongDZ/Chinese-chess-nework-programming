@@ -31,6 +31,7 @@ public class CustomModePanel extends StackPane {
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
     private StackPane selectedSideOption = null; // Track side được chọn (White/red)
+    private StackPane selectedLevelOption = null; // Track level được chọn (Easy/Medium/Hard)
     private int gameTimerValue = 5; // Default 5
     private int moveTimerValue = 2; // Default 2
 
@@ -173,104 +174,130 @@ public class CustomModePanel extends StackPane {
         Label gameTimerLabel = new Label("Game timer:");
         gameTimerLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 90px; " +
+            "-fx-font-size: 70px; " +
             "-fx-font-weight: bold; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
-        gameTimerLabel.setLayoutX(500);
-        gameTimerLabel.setLayoutY(270);
+        gameTimerLabel.setLayoutX(480);
+        gameTimerLabel.setLayoutY(275);
         
         // Game timer value label (hiển thị giá trị hiện tại)
         Label gameTimerValueLabel = new Label("3 mins");
         gameTimerValueLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 90px; " +
+            "-fx-font-size: 60px; " +
             "-fx-font-weight: bold; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
-        gameTimerValueLabel.setLayoutX(850);
-        gameTimerValueLabel.setLayoutY(270);
+        gameTimerValueLabel.setLayoutX(750);
+        gameTimerValueLabel.setLayoutY(300);
         
         // Game timer slider container (min 3, max 60)
         VBox gameTimerContainer = createTimerSlider(3, 60, 3, gameTimerValueLabel);
-        gameTimerContainer.setLayoutX(550);  // Căn giữa: (1000 - 800) / 2 = 100, nhưng điều chỉnh thành 150
-        gameTimerContainer.setLayoutY(400);  // Lùi xuống từ 370 lên 400
+        gameTimerContainer.setLayoutX(550);  // Di chuyển sang phải 70px: 480 + 70 = 550
+        gameTimerContainer.setLayoutY(380);
+        gameTimerContainer.setPrefWidth(1200);  // Đảm bảo container đủ rộng
         
         // Move timer section
         Label moveTimerLabel = new Label("Move timer:");
         moveTimerLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 90px; " +
+            "-fx-font-size: 70px; " +
             "-fx-font-weight: bold; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
-        moveTimerLabel.setLayoutX(500);
-        moveTimerLabel.setLayoutY(480);
+        moveTimerLabel.setLayoutX(480);
+        moveTimerLabel.setLayoutY(405);
         
         // Move timer value label (hiển thị giá trị hiện tại)
         Label moveTimerValueLabel = new Label("1 min");
         moveTimerValueLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 90px; " +
+            "-fx-font-size: 60px; " +
             "-fx-font-weight: bold; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
-        moveTimerValueLabel.setLayoutX(850);
-        moveTimerValueLabel.setLayoutY(480);
+        moveTimerValueLabel.setLayoutX(750);
+        moveTimerValueLabel.setLayoutY(430);
         
         // Move timer slider container (min 1, max 10)
         VBox moveTimerContainer = createTimerSlider(1, 10, 1, moveTimerValueLabel);
-        moveTimerContainer.setLayoutX(550);  // Căn giữa: (1000 - 800) / 2 = 100, nhưng điều chỉnh thành 150
-        moveTimerContainer.setLayoutY(610);  // Lùi xuống từ 580 lên 610
+        moveTimerContainer.setLayoutX(550);  // Di chuyển sang phải 70px: 480 + 70 = 550
+        moveTimerContainer.setLayoutY(510);
+        moveTimerContainer.setPrefWidth(1200);  // Đảm bảo container đủ rộng
+        
+        // Level selection section
+        Label levelLabel = new Label("Level:");
+        levelLabel.setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 80px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: black; " +
+            "-fx-background-color: transparent;"
+        );
+        levelLabel.setLayoutX(480);
+        levelLabel.setLayoutY(535);
+        
+        // Level buttons
+        HBox levelContainer = new HBox(15);
+        levelContainer.setLayoutX(640);
+        levelContainer.setLayoutY(575);
+        levelContainer.setAlignment(Pos.CENTER_LEFT);
+        
+        StackPane easyButton = createLevelButton("Easy");
+        StackPane mediumButton = createLevelButton("Medium");
+        StackPane hardButton = createLevelButton("Hard");
+        selectLevelOption(easyButton); // Set Easy làm mặc định
+        
+        levelContainer.getChildren().addAll(easyButton, mediumButton, hardButton);
         
         // Side selection section
         Label sideLabel = new Label("Side:");
         sideLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 90px; " +
+            "-fx-font-size: 80px; " +
             "-fx-font-weight: bold; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
-        sideLabel.setLayoutX(500);
-        sideLabel.setLayoutY(680);
+        sideLabel.setLayoutX(480);
+        sideLabel.setLayoutY(635);
         
         // Side buttons
-        HBox sideContainer = new HBox(20);
-        sideContainer.setLayoutX(700);
-        sideContainer.setLayoutY(700);
+        HBox sideContainer = new HBox(15);
+        sideContainer.setLayoutX(640);
+        sideContainer.setLayoutY(675);
         sideContainer.setAlignment(Pos.CENTER_LEFT);
         
         StackPane whiteButton = createSideButton("White");
-        StackPane redButton = createSideButton("red");
+        StackPane redButton = createSideButton("Red");
         selectSideOption(whiteButton); // Set White làm mặc định
         
         sideContainer.getChildren().addAll(whiteButton, redButton);
         
         // Custom Board Setup button
         StackPane customizeBoardButton = createCustomizeBoardButton();
-        customizeBoardButton.setLayoutX(500);
-        customizeBoardButton.setLayoutY(800);
+        customizeBoardButton.setLayoutX(480);
+        customizeBoardButton.setLayoutY(780);
         
         // "Play" button
         StackPane playButton = createPlayButton();
-        playButton.setLayoutX(1250);
+        playButton.setLayoutX(1180);
         playButton.setLayoutY(780);
         
         contentPane.getChildren().addAll(title, backButtonContainer, gameTimerLabel, gameTimerValueLabel, 
             gameTimerContainer, moveTimerLabel, moveTimerValueLabel, moveTimerContainer, 
-            sideLabel, sideContainer, customizeBoardButton, playButton);
+            levelLabel, levelContainer, sideLabel, sideContainer, customizeBoardButton, playButton);
         mainPanel.getChildren().addAll(bg, contentPane);
         StackPane.setAlignment(mainPanel, Pos.CENTER);
 
-        // Overlay layer for social icons & bottom bar (riêng cho CustomMode)
+        // Overlay layer for social icons & bottom bar
         HBox socialIcons = createSocialIcons();
-        // 4 icons (80px) + 3 spacing (15px) + padding (50px) = 365px
-        socialIcons.setLayoutX(1920 - 365);
+        socialIcons.setLayoutX(1920 - 350);
         socialIcons.setLayoutY(50);
 
         StackPane bottomBar = createBottomBar();
@@ -295,15 +322,15 @@ public class CustomModePanel extends StackPane {
         VBox container = new VBox(10);
         container.setAlignment(Pos.CENTER_LEFT);
         
-        // Slider track - kéo dài ra
+        // Slider track - kéo dài hết khung
         Pane trackPane = new Pane();
-        trackPane.setPrefWidth(800);  // Tăng lên 800
-        trackPane.setPrefHeight(30);
+        trackPane.setPrefWidth(800);  // Kéo dài hết khung (1000 - 480 - 120 margin)
+        trackPane.setPrefHeight(20);
         trackPane.setCursor(Cursor.HAND);
         
-        Rectangle track = new Rectangle(800, 4);
+        Rectangle track = new Rectangle(800, 3);
         track.setFill(Color.color(0.6, 0.6, 0.6));
-        track.setLayoutY(13);
+        track.setLayoutY(8.5);
         
         double trackWidth = 800;
         double minValueDouble = minValue;
@@ -312,15 +339,12 @@ public class CustomModePanel extends StackPane {
         // Tính toán vị trí handle dựa trên defaultValue
         double handlePosition = ((defaultValue - minValueDouble) / (maxValueDouble - minValueDouble)) * trackWidth;
         
-        // Handle (circular)
-        javafx.scene.shape.Circle handle = new javafx.scene.shape.Circle(15);
+        // Handle (circular) - nhỏ lại
+        javafx.scene.shape.Circle handle = new javafx.scene.shape.Circle(10);
         handle.setFill(Color.color(0.5, 0.5, 0.5));
         handle.setLayoutX(handlePosition);
-        handle.setLayoutY(15);
+        handle.setLayoutY(10);
         handle.setCursor(Cursor.HAND);
-        
-        // Animation cho handle - mượt mà hơn
-        TranslateTransition transition = new TranslateTransition(Duration.millis(200), handle);
         
         // Function để cập nhật giá trị và label
         java.util.function.Consumer<Integer> updateValue = (value) -> {
@@ -334,56 +358,80 @@ public class CustomModePanel extends StackPane {
             }
         };
         
-        // Function để di chuyển handle đến vị trí mới với animation
-        java.util.function.Consumer<Double> moveHandle = (targetX) -> {
-            double clampedX = Math.max(0, Math.min(trackWidth, targetX));
-            int newValue = (int) Math.round(minValueDouble + (clampedX / trackWidth) * (maxValueDouble - minValueDouble));
-            updateValue.accept(newValue);
-            
-            // Animation mượt mà
-            transition.stop();
-            transition.setFromX(handle.getTranslateX());
-            transition.setToX(clampedX - handle.getLayoutX());
-            transition.play();
-            
-            handle.setLayoutX(clampedX);
-        };
-        
-        // Click vào track để di chuyển handle
+        // Click vào track để di chuyển handle - chính xác và mượt mà
         trackPane.setOnMouseClicked(e -> {
+            // Sử dụng local coordinates của trackPane để chính xác
             double clickX = e.getX();
-            moveHandle.accept(clickX);
+            double clampedX = Math.max(0, Math.min(trackWidth, clickX));
+            
+            // Tính toán giá trị chính xác
+            double valueRatio = clampedX / trackWidth;
+            double exactValue = minValueDouble + valueRatio * (maxValueDouble - minValueDouble);
+            int newValue = (int) Math.round(exactValue);
+            
+            // Snap về vị trí chính xác tương ứng với giá trị
+            double exactX = ((newValue - minValueDouble) / (maxValueDouble - minValueDouble)) * trackWidth;
+            exactX = Math.max(0, Math.min(trackWidth, exactX));  // Đảm bảo trong bounds
+            
+            updateValue.accept(newValue);
+            handle.setLayoutX(exactX);
+            handle.setTranslateX(0);  // Reset translate
         });
         
-        // Drag handle với animation mượt mà
-        final double[] dragStartX = new double[1];
-        final double[] handleStartX = new double[1];
+        // Drag handle - sử dụng scene coordinates để chính xác và mượt mà
+        final double[] dragStartSceneX = new double[1];
+        final double[] handleStartLayoutX = new double[1];
+        final double[] trackPaneStartLayoutX = new double[1];
         
         handle.setOnMousePressed(e -> {
-            transition.stop();
-            dragStartX[0] = e.getSceneX();
-            handleStartX[0] = handle.getLayoutX();
+            // Lưu vị trí ban đầu - sử dụng scene coordinates để chính xác
+            dragStartSceneX[0] = e.getSceneX();
+            handleStartLayoutX[0] = handle.getLayoutX();
+            trackPaneStartLayoutX[0] = trackPane.localToScene(0, 0).getX();
+            handle.setTranslateX(0);  // Reset translate khi bắt đầu drag
             e.consume();
         });
         
         handle.setOnMouseDragged(e -> {
-            // Tính toán vị trí dựa trên offset từ khi bắt đầu drag
-            double deltaX = e.getSceneX() - dragStartX[0];
-            double newX = Math.max(0, Math.min(trackWidth, handleStartX[0] + deltaX));
-            handle.setLayoutX(newX);
+            // Tính toán delta dựa trên scene coordinates để chính xác nhất
+            double deltaSceneX = e.getSceneX() - dragStartSceneX[0];
+            double newX = handleStartLayoutX[0] + deltaSceneX;
             
-            // Cập nhật giá trị và label trong khi drag
-            int newValue = (int) Math.round(minValueDouble + (newX / trackWidth) * (maxValueDouble - minValueDouble));
+            // Clamp vào bounds của track
+            newX = Math.max(0, Math.min(trackWidth, newX));
+            
+            // Cập nhật vị trí handle ngay lập tức - không dùng animation
+            handle.setLayoutX(newX);
+            handle.setTranslateX(0);
+            
+            // Tính toán và cập nhật giá trị chính xác trong khi drag
+            double valueRatio = newX / trackWidth;
+            double exactValue = minValueDouble + valueRatio * (maxValueDouble - minValueDouble);
+            int newValue = (int) Math.round(exactValue);
             updateValue.accept(newValue);
+            
             e.consume();
         });
         
         handle.setOnMouseReleased(e -> {
-            // Khi thả, đảm bảo handle ở vị trí chính xác
+            // Khi thả, snap về vị trí chính xác tương ứng với giá trị hiện tại
             double currentX = handle.getLayoutX();
-            int newValue = (int) Math.round(minValueDouble + (currentX / trackWidth) * (maxValueDouble - minValueDouble));
+            
+            // Tính toán giá trị chính xác từ vị trí hiện tại
+            double valueRatio = currentX / trackWidth;
+            double exactValue = minValueDouble + valueRatio * (maxValueDouble - minValueDouble);
+            int newValue = (int) Math.round(exactValue);
+            
+            // Snap về vị trí chính xác tương ứng với giá trị đã làm tròn
             double exactX = ((newValue - minValueDouble) / (maxValueDouble - minValueDouble)) * trackWidth;
-            moveHandle.accept(exactX);
+            exactX = Math.max(0, Math.min(trackWidth, exactX));  // Đảm bảo trong bounds
+            
+            // Cập nhật giá trị cuối cùng
+            updateValue.accept(newValue);
+            
+            // Di chuyển handle về vị trí chính xác - không dùng animation để mượt mà
+            handle.setLayoutX(exactX);
+            handle.setTranslateX(0);  // Reset translate
             e.consume();
         });
         
@@ -394,18 +442,18 @@ public class CustomModePanel extends StackPane {
         return container;
     }
     
-    private StackPane createSideButton(String text) {
-        Rectangle bg = new Rectangle(200, 80);
+    private StackPane createLevelButton(String text) {
+        Rectangle bg = new Rectangle(150, 60);
         bg.setFill(Color.TRANSPARENT);
         bg.setStroke(Color.color(0.6, 0.4, 0.3));
         bg.setStrokeWidth(2);
-        bg.setArcWidth(30);
-        bg.setArcHeight(30);
+        bg.setArcWidth(20);
+        bg.setArcHeight(20);
         
         Label textLabel = new Label(text);
         textLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 65px; " +
+            "-fx-font-size: 45px; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent; " +
             "-fx-alignment: center;"
@@ -413,7 +461,60 @@ public class CustomModePanel extends StackPane {
         textLabel.setAlignment(Pos.CENTER);
         
         StackPane button = new StackPane();
-        button.setPrefSize(200, 80);
+        button.setPrefSize(150, 60);
+        button.setAlignment(Pos.CENTER);
+        button.getChildren().addAll(bg, textLabel);
+        button.setCursor(Cursor.HAND);
+        button.setMouseTransparent(false);
+        button.setPickOnBounds(true);
+        
+        button.setOnMouseEntered(e -> {
+            if (button != selectedLevelOption) {
+                bg.setFill(Color.color(0.9, 0.9, 0.9, 0.5));
+            }
+        });
+        
+        button.setOnMouseExited(e -> {
+            if (button != selectedLevelOption) {
+                bg.setFill(Color.TRANSPARENT);
+            }
+        });
+        
+        button.setOnMouseClicked(e -> selectLevelOption(button));
+        
+        return button;
+    }
+    
+    private void selectLevelOption(StackPane button) {
+        if (selectedLevelOption != null) {
+            Rectangle oldBg = (Rectangle) selectedLevelOption.getChildren().get(0);
+            oldBg.setFill(Color.TRANSPARENT);
+        }
+        selectedLevelOption = button;
+        Rectangle bg = (Rectangle) button.getChildren().get(0);
+        bg.setFill(Color.color(0.85, 0.75, 0.6));
+    }
+    
+    private StackPane createSideButton(String text) {
+        Rectangle bg = new Rectangle(150, 60);
+        bg.setFill(Color.TRANSPARENT);
+        bg.setStroke(Color.color(0.6, 0.4, 0.3));
+        bg.setStrokeWidth(2);
+        bg.setArcWidth(20);
+        bg.setArcHeight(20);
+        
+        Label textLabel = new Label(text);
+        textLabel.setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 45px; " +
+            "-fx-text-fill: black; " +
+            "-fx-background-color: transparent; " +
+            "-fx-alignment: center;"
+        );
+        textLabel.setAlignment(Pos.CENTER);
+        
+        StackPane button = new StackPane();
+        button.setPrefSize(150, 60);
         button.setAlignment(Pos.CENTER);
         button.getChildren().addAll(bg, textLabel);
         button.setCursor(Cursor.HAND);
@@ -448,7 +549,7 @@ public class CustomModePanel extends StackPane {
     }
     
     private StackPane createPlayButton() {
-        Rectangle bg = new Rectangle(200, 80);
+        Rectangle bg = new Rectangle(220, 85);
         bg.setFill(Color.web("#A8A4A4"));
         bg.setArcWidth(15);
         bg.setArcHeight(15);
@@ -462,7 +563,7 @@ public class CustomModePanel extends StackPane {
         );
         
         StackPane button = new StackPane();
-        button.setPrefSize(200, 80);
+        button.setPrefSize(220, 85);
         button.setAlignment(Pos.CENTER);
         button.getChildren().addAll(bg, textLabel);
         button.setCursor(Cursor.HAND);
@@ -513,26 +614,16 @@ public class CustomModePanel extends StackPane {
         HBox icons = new HBox(15);
         icons.setAlignment(Pos.CENTER);
 
-        // Ranking icon với hover effect và click handler
-        StackPane rankingContainer = createIconWithHover(AssetHelper.image("icon_ranking.png"), 80);
-        rankingContainer.setOnMouseClicked(e -> {
-            state.openRanking();
-            e.consume();
-        });
-        
         StackPane fbContainer = createIconWithHover(AssetHelper.image("icon_fb.png"), 80);
         StackPane igContainer = createIconWithHover(AssetHelper.image("icon_ig.png"), 80);
         StackPane helpContainer = createIconWithHover(AssetHelper.image("icon_rule.png"), 80);
 
-        icons.getChildren().addAll(rankingContainer, fbContainer, igContainer, helpContainer);
+        icons.getChildren().addAll(fbContainer, igContainer, helpContainer);
         return icons;
     }
 
     private StackPane createIconWithHover(javafx.scene.image.Image image, double size) {
         StackPane container = new StackPane();
-        container.setPrefSize(size, size);
-        container.setMinSize(size, size);
-        container.setMaxSize(size, size);
 
         ImageView icon = new ImageView(image);
         icon.setFitWidth(size);
@@ -608,7 +699,7 @@ public class CustomModePanel extends StackPane {
     }
 
     private StackPane createCustomizeBoardButton() {
-        Rectangle bg = new Rectangle(300, 80);
+        Rectangle bg = new Rectangle(300, 75);
         bg.setFill(Color.web("#A8A4A4"));
         bg.setArcWidth(15);
         bg.setArcHeight(15);
@@ -616,13 +707,13 @@ public class CustomModePanel extends StackPane {
         Label textLabel = new Label("Customize Board");
         textLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 45px; " +
+            "-fx-font-size: 40px; " +
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
         
         StackPane button = new StackPane();
-        button.setPrefSize(300, 80);
+        button.setPrefSize(300, 75);
         button.setAlignment(Pos.CENTER);
         button.getChildren().addAll(bg, textLabel);
         button.setCursor(Cursor.HAND);

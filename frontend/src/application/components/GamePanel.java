@@ -163,6 +163,33 @@ public class GamePanel extends StackPane implements IGamePanel {
             }
         });
         
+        // TimerManager timeout callback
+        timerManager.setTimeoutCallback((losingPlayerColor) -> {
+            // losingPlayerColor là "red" hoặc "black" - người chơi hết thời gian
+            System.out.println("[GamePanel] Timeout callback: losingPlayerColor=" + losingPlayerColor);
+            
+            // Xác định người chơi hiện tại
+            boolean currentPlayerIsRed = state.isPlayerRed();
+            String currentPlayerColor = currentPlayerIsRed ? "red" : "black";
+            
+            // Nếu người chơi hiện tại là người hết thời gian → thua
+            // Nếu đối thủ hết thời gian → thắng
+            boolean isCurrentPlayerLosing = losingPlayerColor.equals(currentPlayerColor);
+            
+            if (isCurrentPlayerLosing) {
+                // Người chơi hiện tại hết thời gian → thua
+                System.out.println("[GamePanel] Current player (" + currentPlayerColor + ") ran out of time - LOSE");
+                dialogManager.showGameResult(false);
+            } else {
+                // Đối thủ hết thời gian → thắng
+                System.out.println("[GamePanel] Opponent (" + losingPlayerColor + ") ran out of time - WIN");
+                dialogManager.showGameResult(true);
+            }
+            
+            // TODO: Có thể gửi message đến server để đối thủ cũng nhận được thông báo
+            // networkManager.game().sendTimeoutLoss(losingPlayerColor);
+        });
+        
         // Listen to game action triggers from UIState
         state.gameActionTriggerProperty().addListener((obs, oldVal, newVal) -> {
             System.out.println("[GamePanel] gameActionTrigger changed: oldVal=" + oldVal + ", newVal=" + newVal);

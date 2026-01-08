@@ -40,6 +40,7 @@ void handleCancelQM(const ParsedMessage &pm, int fd);
 void handleRequestAddFriend(const ParsedMessage &pm, int fd);
 void handleResponseAddFriend(const ParsedMessage &pm, int fd);
 void handleGameHistory(const ParsedMessage &pm, int fd);
+void handleReplayRequest(const ParsedMessage &pm, int fd);
 void processMessage(const ParsedMessage &pm, int fd);
 void processAIMatch(const ParsedMessage &pm, int fd);
 void handleAIMatch(const ParsedMessage &pm, int fd);
