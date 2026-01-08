@@ -109,6 +109,16 @@ public class GameHandler implements MessageHandler {
                 }
             }
             
+            // Extract time_limit if available
+            int timeLimit = 0;  // 0 = unlimited
+            if (json.has("time_limit")) {
+                timeLimit = json.get("time_limit").getAsInt();
+            }
+            
+            // Store mode and time limit in UIState
+            uiState.setCurrentGameMode(gameMode);
+            uiState.setCurrentTimeLimit(timeLimit);
+            
             // Extract game_id and player_is_red from opponent_data if available
             if (json.has("opponent_data")) {
                 JsonObject opponentData = json.getAsJsonObject("opponent_data");
@@ -151,7 +161,7 @@ public class GameHandler implements MessageHandler {
             // Open game panel with the game mode
             uiState.openGame(gameMode);
             
-            System.out.println("[GameHandler] Game started - Opponent: " + opponent + ", Mode: " + gameMode);
+            System.out.println("[GameHandler] Game started - Opponent: " + opponent + ", Mode: " + gameMode + ", TimeLimit: " + timeLimit + "s");
         } catch (Exception e) {
             System.err.println("[GameHandler] Error parsing GAME_START: " + e.getMessage());
             e.printStackTrace();
@@ -248,14 +258,17 @@ public class GameHandler implements MessageHandler {
             System.out.println("[GameHandler] Received CHALLENGE_REQUEST, payload: " + payload);
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
             String fromUser = json.has("from_user") ? json.get("from_user").getAsString() : "unknown";
-            System.out.println("[GameHandler] Parsed from_user: " + fromUser);
+            String mode = json.has("mode") ? json.get("mode").getAsString() : "classical";
+            int timeLimit = json.has("time_limit") ? json.get("time_limit").getAsInt() : 0;
+            
+            System.out.println("[GameHandler] Parsed from_user: " + fromUser + ", mode: " + mode + ", timeLimit: " + timeLimit);
             System.out.println("[GameHandler] PlayWithFriendPanel is " + (playWithFriendPanel != null ? "set" : "null"));
             
-            // Show challenge request dialog in PlayWithFriendPanel
+            // Show challenge request dialog in PlayWithFriendPanel with mode and time info
             if (playWithFriendPanel != null) {
                 Platform.runLater(() -> {
-                    System.out.println("[GameHandler] Calling playWithFriendPanel.showChallengeRequest(" + fromUser + ")");
-                    playWithFriendPanel.showChallengeRequest(fromUser);
+                    System.out.println("[GameHandler] Calling playWithFriendPanel.showChallengeRequest(" + fromUser + ", " + mode + ", " + timeLimit + ")");
+                    playWithFriendPanel.showChallengeRequest(fromUser, mode, timeLimit);
                 });
             } else {
                 System.err.println("[GameHandler] PlayWithFriendPanel not set, cannot show challenge request");

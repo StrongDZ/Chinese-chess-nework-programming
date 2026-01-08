@@ -210,8 +210,8 @@ int main(int argc, char **argv) {
 
           {
             lock_guard<mutex> lock(g_clients_mutex);
-            g_clients[client_fd] =
-                PlayerInfo{-1, string(), false, -1, false, 1, "", ""};
+            g_clients[client_fd] = PlayerInfo{-1, string(), false, -1, false, 1,
+                                              "", "",       "",    0,  ""};
           }
           // Initialize read buffer for this connection
           initReadBuffer(client_fd);
@@ -521,8 +521,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
     handleResign(pm, fd);
     break;
   case MessageType::CANCEL_QM:
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"CANCEL_QM not implemented"});
+    handleCancelQM(pm, fd);
     break;
   case MessageType::DRAW_REQUEST:
     handleDrawRequest(pm, fd);

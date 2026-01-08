@@ -65,10 +65,12 @@ void handleRequestAddFriend(const ParsedMessage &pm, int fd) {
     if (it != g_username_to_fd.end()) {
       int target_fd = it->second;
       if (g_clients.count(target_fd)) {
-    // Forward request to target user with from_user field
+    // Forward request to target user with from_user field and mode/time_limit if present
     RequestAddFriendPayload forwardPayload;
     forwardPayload.from_user = sender.username;
     forwardPayload.to_user = "";
+    forwardPayload.mode = p.mode;
+    forwardPayload.time_limit = p.time_limit;
     sendMessage(target_fd, MessageType::REQUEST_ADD_FRIEND, forwardPayload);
       }
     }

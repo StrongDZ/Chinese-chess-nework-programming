@@ -28,6 +28,8 @@ struct QuickMatchRequest {
   int fd;
   string username;
   int elo;
+  string mode;    // "classical" or "blitz"
+  int time_limit; // Time limit in seconds
 };
 
 // Global quick matching queue
@@ -68,10 +70,24 @@ void handleChallenge(const ParsedMessage &pm, int fd) {
                   ErrorPayload{"Cannot challenge yourself"});
       return;
     }
-    // Forward challenge to target with from_user field
+
+    // Store pending challenge info on target (so they can use it when
+    // responding)
+    auto &targetPlayer = g_clients[target_fd];
+    targetPlayer.pending_challenge_mode = p.mode;
+    targetPlayer.pending_challenge_time = p.time_limit;
+    targetPlayer.pending_challenger = sender.username;
+
+    // Forward challenge to target with from_user field and mode/time_limit
     ChallengeRequestPayload forwardPayload;
     forwardPayload.from_user = sender.username;
     forwardPayload.to_user = "";
+    forwardPayload.mode = p.mode;
+    forwardPayload.time_limit = p.time_limit;
+
+    cout << "[CHALLENGE] " << sender.username << " challenges " << target
+         << " with mode=" << p.mode << ", time_limit=" << p.time_limit << endl;
+
     sendMessage(target_fd, MessageType::CHALLENGE_REQUEST, forwardPayload);
     sendMessage(fd, MessageType::INFO,
                 InfoPayload{nlohmann::json{{"challenge_sent", true},
@@ -104,6 +120,16 @@ void handleChallengeResponse(const ParsedMessage &pm, int fd) {
                   ErrorPayload{"CHALLENGE_RESPONSE requires to_user"});
       return;
     }
+
+    // Get mode and time_limit from stored pending challenge info
+    string challengeMode = sender.pending_challenge_mode;
+    int challengeTime = sender.pending_challenge_time;
+
+    // Clear pending challenge info
+    sender.pending_challenge_mode = "";
+    sender.pending_challenge_time = 0;
+    sender.pending_challenger = "";
+
     if (!p.accept) {
       // Decline challenge - forward to challenger
       auto it = g_username_to_fd.find(challengerName);
@@ -112,6 +138,8 @@ void handleChallengeResponse(const ParsedMessage &pm, int fd) {
         forwardPayload.from_user = sender.username;
         forwardPayload.to_user = "";
         forwardPayload.accept = false;
+        forwardPayload.mode = challengeMode;
+        forwardPayload.time_limit = challengeTime;
         sendMessage(it->second, MessageType::CHALLENGE_RESPONSE,
                     forwardPayload);
       }
@@ -132,16 +160,24 @@ void handleChallengeResponse(const ParsedMessage &pm, int fd) {
                   ErrorPayload{"Challenger socket missing"});
       return;
     }
-    // Start game for challenger and accepter
-    handleStartGame(challenger_fd, fd);
+
+    cout << "[CHALLENGE_RESPONSE] " << sender.username
+         << " accepts challenge from " << challengerName
+         << " with mode=" << challengeMode << ", time_limit=" << challengeTime
+         << endl;
+
+    // Start game for challenger and accepter with mode and time
+    handleStartGame(challenger_fd, fd, challengeMode, challengeTime);
   } catch (...) {
     sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid payload"});
   }
 }
 
-void handleStartGame(int player1_fd, int player2_fd) {
+void handleStartGame(int player1_fd, int player2_fd, const string &mode,
+                     int time_limit) {
   cout << "[handleStartGame] Starting game between fd=" << player1_fd
-       << " and fd=" << player2_fd << endl;
+       << " and fd=" << player2_fd << ", mode=" << mode
+       << ", time_limit=" << time_limit << endl;
 
   // NOTE: This function assumes g_clients_mutex is already locked by the caller
   // (handleQuickMatching, handleChallengeResponse, etc.)
@@ -190,8 +226,11 @@ void handleStartGame(int player1_fd, int player2_fd) {
   nlohmann::json createRequest;
   createRequest["username"] = player1.username;
   createRequest["challenged_username"] = player2.username;
-  createRequest["time_control"] = "classical";
+  createRequest["time_control"] = mode.empty() ? "classical" : mode;
   createRequest["rated"] = true;
+  if (time_limit > 0) {
+    createRequest["time_limit"] = time_limit;
+  }
 
   cout << "[handleStartGame] Creating game in database: " << player1.username
        << " vs " << player2.username << endl;
@@ -252,9 +291,11 @@ void handleStartGame(int player1_fd, int player2_fd) {
        << " (red=" << player2.is_red << ")" << endl;
 
   // Send GAME_START to both players
+  string gameMode = mode.empty() ? "classical" : mode;
   GameStartPayload gs1, gs2;
   gs1.opponent = player2.username;
-  gs1.game_mode = "classical";
+  gs1.game_mode = gameMode;
+  gs1.time_limit = time_limit;
   gs1.opponent_data = nlohmann::json();
   gs1.opponent_data["player_is_red"] = player1.is_red;
   gs1.opponent_data["opponent_avatar_id"] = player2.avatar_id;
@@ -262,7 +303,8 @@ void handleStartGame(int player1_fd, int player2_fd) {
     gs1.opponent_data["game_id"] = game_id;
   }
   gs2.opponent = player1.username;
-  gs2.game_mode = "classical";
+  gs2.game_mode = gameMode;
+  gs2.time_limit = time_limit;
   gs2.opponent_data = nlohmann::json();
   gs2.opponent_data["player_is_red"] = player2.is_red;
   gs2.opponent_data["opponent_avatar_id"] = player1.avatar_id;
@@ -661,7 +703,7 @@ void handleResign(const ParsedMessage & /*pm*/, int fd) {
   }
 }
 
-void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
+void handleQuickMatching(const ParsedMessage &pm, int fd) {
   lock_guard<mutex> clients_lock(g_clients_mutex);
   auto &sender = g_clients[fd];
 
@@ -679,14 +721,27 @@ void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
     return;
   }
 
+  // Parse mode and time_limit from payload
+  string matchMode = "classical";
+  int matchTimeLimit = 0;
+
+  if (pm.payload.has_value() &&
+      holds_alternative<QuickMatchingPayload>(*pm.payload)) {
+    const auto &p = get<QuickMatchingPayload>(*pm.payload);
+    matchMode = p.mode.empty() ? "classical" : p.mode;
+    matchTimeLimit = p.time_limit;
+  }
+
+  cout << "[QUICK_MATCH] Request from " << sender.username
+       << " mode=" << matchMode << ", time_limit=" << matchTimeLimit << endl;
+
   // Query ELO from database (default to 1200 if not found)
   int player_elo = 1200;
   if (g_player_stat_controller != nullptr) {
     try {
       nlohmann::json request;
       request["username"] = sender.username;
-      request["time_control"] =
-          "classical"; // Use classical rating for quick matching
+      request["time_control"] = matchMode; // Use matching mode for rating
 
       nlohmann::json response =
           g_player_stat_controller->handleGetStats(request);
@@ -727,11 +782,16 @@ void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
                   }),
         g_quick_match_queue.end());
 
-    // Find matching opponent (within 300 ELO range)
+    // Find matching opponent (within 300 ELO range AND same mode AND same
+    // time_limit)
     for (auto it = g_quick_match_queue.begin(); it != g_quick_match_queue.end();
          ++it) {
       int elo_diff = abs(it->elo - player_elo);
-      if (elo_diff <= 300 && it->fd != fd) {
+      // Match only if same mode AND same time_limit
+      bool sameMode = (it->mode == matchMode);
+      bool sameTime = (it->time_limit == matchTimeLimit);
+
+      if (elo_diff <= 300 && it->fd != fd && sameMode && sameTime) {
         // Check if opponent is still available
         if (g_clients.count(it->fd) > 0 && !g_clients[it->fd].in_game &&
             g_clients[it->fd].username == it->username) {
@@ -739,9 +799,13 @@ void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
           found_match = true;
           g_quick_match_queue.erase(it);
           cout << "[QUICK_MATCH] Found match: " << sender.username
-               << " (fd=" << fd << ", elo=" << player_elo << ") <-> "
-               << matched_opponent.username << " (fd=" << matched_opponent.fd
-               << ", elo=" << matched_opponent.elo << ")" << endl;
+               << " (fd=" << fd << ", elo=" << player_elo
+               << ", mode=" << matchMode << ", time=" << matchTimeLimit
+               << ") <-> " << matched_opponent.username
+               << " (fd=" << matched_opponent.fd
+               << ", elo=" << matched_opponent.elo
+               << ", mode=" << matched_opponent.mode
+               << ", time=" << matched_opponent.time_limit << ")" << endl;
           break;
         }
       }
@@ -753,15 +817,20 @@ void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
       new_request.fd = fd;
       new_request.username = sender.username;
       new_request.elo = player_elo;
+      new_request.mode = matchMode;
+      new_request.time_limit = matchTimeLimit;
       g_quick_match_queue.push_back(new_request);
 
       cout << "[QUICK_MATCH] Added to queue: " << sender.username
-           << " (fd=" << fd << ", elo=" << player_elo
+           << " (fd=" << fd << ", elo=" << player_elo << ", mode=" << matchMode
+           << ", time=" << matchTimeLimit
            << "), queue size=" << g_quick_match_queue.size() << endl;
 
       sendMessage(fd, MessageType::INFO,
                   InfoPayload{nlohmann::json{{"quick_matching", true},
-                                             {"status", "waiting"}}});
+                                             {"status", "waiting"},
+                                             {"mode", matchMode},
+                                             {"time_limit", matchTimeLimit}}});
       return;
     }
   }
@@ -783,18 +852,23 @@ void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
       new_request.fd = fd;
       new_request.username = sender.username;
       new_request.elo = player_elo;
+      new_request.mode = matchMode;
+      new_request.time_limit = matchTimeLimit;
       g_quick_match_queue.push_back(new_request);
 
       sendMessage(fd, MessageType::INFO,
                   InfoPayload{nlohmann::json{{"quick_matching", true},
-                                             {"status", "waiting"}}});
+                                             {"status", "waiting"},
+                                             {"mode", matchMode},
+                                             {"time_limit", matchTimeLimit}}});
       return;
     }
 
-    // Start game for matched players
+    // Start game for matched players with mode and time
     cout << "[QUICK_MATCH] Starting game: " << sender.username << " <-> "
-         << matched_opponent.username << endl;
-    handleStartGame(fd, opponent_fd);
+         << matched_opponent.username << " (mode=" << matchMode
+         << ", time=" << matchTimeLimit << ")" << endl;
+    handleStartGame(fd, opponent_fd, matchMode, matchTimeLimit);
   }
 }
 
@@ -824,9 +898,8 @@ void handleGameHistory(const ParsedMessage &pm, int fd) {
   try {
     const auto &p = get<GameHistoryPayload>(*pm.payload);
 
-    cout << "[GAME_HISTORY] Request from user: " << sender.username 
-         << ", target: " << p.username 
-         << ", limit: " << p.limit 
+    cout << "[GAME_HISTORY] Request from user: " << sender.username
+         << ", target: " << p.username << ", limit: " << p.limit
          << ", offset: " << p.offset << endl;
 
     // Build request JSON for controller
@@ -837,17 +910,21 @@ void handleGameHistory(const ParsedMessage &pm, int fd) {
 
     nlohmann::json response = g_game_controller->handleGetGameHistory(request);
 
-    cout << "[GAME_HISTORY] Response status: " 
-         << (response.contains("status") ? response["status"].get<string>() : "no status")
-         << ", history count: " 
-         << (response.contains("count") ? to_string(response["count"].get<int>()) : "no count")
+    cout << "[GAME_HISTORY] Response status: "
+         << (response.contains("status") ? response["status"].get<string>()
+                                         : "no status")
+         << ", history count: "
+         << (response.contains("count")
+                 ? to_string(response["count"].get<int>())
+                 : "no count")
          << endl;
 
     // Send response via GAME_HISTORY message type
     sendMessage(fd, MessageType::GAME_HISTORY, InfoPayload{response});
   } catch (const exception &e) {
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"Failed to handle GAME_HISTORY: " + string(e.what())});
+    sendMessage(
+        fd, MessageType::ERROR,
+        ErrorPayload{"Failed to handle GAME_HISTORY: " + string(e.what())});
   } catch (...) {
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"Failed to handle GAME_HISTORY"});

@@ -874,18 +874,18 @@ public class PlayWithFriendPanel extends StackPane {
     private void sendChallengeRequest(String targetUsername) {
         try {
             currentChallengedUsername = targetUsername;
-            // Convert game mode to time_control format
-            String timeControl = currentGameMode;
-            if ("classical".equals(currentGameMode)) {
-                timeControl = "classical";
-            } else if ("blitz".equals(currentGameMode)) {
-                timeControl = "blitz";
-            } else {
-                timeControl = "classical";  // Default to classical
+            // Get mode and time limit from UIState
+            String mode = state.getCurrentGameMode();
+            int timeLimit = state.getCurrentTimeLimit();
+            
+            // Fallback to local currentGameMode if UIState mode is empty
+            if (mode == null || mode.isEmpty()) {
+                mode = currentGameMode;
             }
             
-            System.out.println("[PlayWithFriendPanel] Sending challenge request to: " + targetUsername + ", timeControl: " + timeControl);
-            networkManager.game().sendChallenge(targetUsername, timeControl, true);  // rated = true
+            System.out.println("[PlayWithFriendPanel] Sending challenge request to: " + targetUsername 
+                             + ", mode: " + mode + ", timeLimit: " + timeLimit + "s");
+            networkManager.game().sendChallenge(targetUsername, mode, timeLimit);
         } catch (IOException e) {
             System.err.println("[PlayWithFriendPanel] Failed to send challenge request: " + e.getMessage());
             e.printStackTrace();
@@ -931,10 +931,21 @@ public class PlayWithFriendPanel extends StackPane {
     }
     
     /**
-     * Hiển thị panel challenge request nhận được từ đối thủ
+     * Hiển thị panel challenge request nhận được từ đối thủ (backward compatibility)
      */
     public void showChallengeRequest(String challengerUsername) {
-        System.out.println("[PlayWithFriendPanel] showChallengeRequest called for: " + challengerUsername);
+        showChallengeRequest(challengerUsername, "classical", 0);
+    }
+    
+    /**
+     * Hiển thị panel challenge request nhận được từ đối thủ với mode và time
+     * @param challengerUsername Username của người challenge
+     * @param mode Game mode: "classical" hoặc "blitz"
+     * @param timeLimit Time limit in seconds (0 = unlimited)
+     */
+    public void showChallengeRequest(String challengerUsername, String mode, int timeLimit) {
+        System.out.println("[PlayWithFriendPanel] showChallengeRequest called for: " + challengerUsername 
+                         + ", mode: " + mode + ", timeLimit: " + timeLimit);
         System.out.println("[PlayWithFriendPanel] rootPane is " + (rootPane != null ? "set" : "null"));
         System.out.println("[PlayWithFriendPanel] container is " + (container != null ? "set" : "null"));
         
@@ -948,11 +959,11 @@ public class PlayWithFriendPanel extends StackPane {
             }
         }
         
-        // Tạo panel ở giữa màn hình
+        // Tạo panel ở giữa màn hình - tăng chiều cao để chứa thêm thông tin
         challengeRequestPanel = new StackPane();
-        challengeRequestPanel.setLayoutX((1920 - 500) / 2);  // Căn giữa theo chiều ngang
-        challengeRequestPanel.setLayoutY((1080 - 300) / 2);  // Căn giữa theo chiều dọc
-        challengeRequestPanel.setPrefSize(500, 300);
+        challengeRequestPanel.setLayoutX((1920 - 550) / 2);  // Căn giữa theo chiều ngang
+        challengeRequestPanel.setLayoutY((1080 - 350) / 2);  // Căn giữa theo chiều dọc
+        challengeRequestPanel.setPrefSize(550, 350);
         
         // Đảm bảo dialog visible và có thể nhận click events
         challengeRequestPanel.setVisible(true);
@@ -961,17 +972,17 @@ public class PlayWithFriendPanel extends StackPane {
         challengeRequestPanel.setPickOnBounds(true);
         
         // Background xám đậm
-        Rectangle bg = new Rectangle(500, 300);
+        Rectangle bg = new Rectangle(550, 350);
         bg.setFill(Color.color(0.3, 0.3, 0.3, 1));
         bg.setArcWidth(30);
         bg.setArcHeight(30);
         bg.setMouseTransparent(true);  // Background không chặn click events
         
         // Container chính
-        VBox contentContainer = new VBox(30);
+        VBox contentContainer = new VBox(20);
         contentContainer.setAlignment(Pos.CENTER);
-        contentContainer.setPrefSize(500, 300);
-        contentContainer.setPadding(new Insets(40));
+        contentContainer.setPrefSize(550, 350);
+        contentContainer.setPadding(new Insets(30));
         contentContainer.setMouseTransparent(false);  // Container phải nhận click events
         contentContainer.setPickOnBounds(true);
         
@@ -985,6 +996,29 @@ public class PlayWithFriendPanel extends StackPane {
             "-fx-text-alignment: center;"
         );
         messageLabel.setWrapText(true);
+        
+        // Format mode và time để hiển thị
+        String modeDisplay = "classical".equals(mode) ? "Classical" : 
+                           "blitz".equals(mode) ? "Blitz" : mode;
+        String timeDisplay;
+        if (timeLimit <= 0) {
+            timeDisplay = "Unlimited";
+        } else if (timeLimit >= 60) {
+            int minutes = timeLimit / 60;
+            timeDisplay = minutes + " min" + (minutes > 1 ? "s" : "");
+        } else {
+            timeDisplay = timeLimit + " sec";
+        }
+        
+        // Label hiển thị mode và time
+        Label modeTimeLabel = new Label("Mode: " + modeDisplay + " | Time: " + timeDisplay);
+        modeTimeLabel.setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 32px; " +
+            "-fx-text-fill: #FFD700; " +  // Gold color
+            "-fx-background-color: transparent; " +
+            "-fx-text-alignment: center;"
+        );
         
         // Container cho 2 nút
         HBox buttonsContainer = new HBox(20);
@@ -1011,7 +1045,7 @@ public class PlayWithFriendPanel extends StackPane {
         
         buttonsContainer.getChildren().addAll(acceptButton, rejectButton);
         
-        contentContainer.getChildren().addAll(messageLabel, buttonsContainer);
+        contentContainer.getChildren().addAll(messageLabel, modeTimeLabel, buttonsContainer);
         
         challengeRequestPanel.getChildren().addAll(bg, contentContainer);
         

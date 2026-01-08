@@ -22,8 +22,24 @@ public class FriendSender {
      * Send friend request.
      */
     public void sendFriendRequest(String targetUsername) throws IOException {
+        sendFriendRequest(targetUsername, "", 0);
+    }
+    
+    /**
+     * Send friend request with game mode and time limit (for challenge requests).
+     * @param targetUsername Target username
+     * @param mode Game mode: "classical" or "blitz" (optional)
+     * @param timeLimit Time limit in seconds (0 for unlimited, optional)
+     */
+    public void sendFriendRequest(String targetUsername, String mode, int timeLimit) throws IOException {
         JsonObject payload = new JsonObject();
         payload.addProperty("to_user", targetUsername);
+        if (mode != null && !mode.isEmpty()) {
+            payload.addProperty("mode", mode);
+        }
+        if (timeLimit > 0) {
+            payload.addProperty("time_limit", timeLimit);
+        }
         socketClient.send(MessageType.REQUEST_ADD_FRIEND, gson.toJson(payload));
     }
     

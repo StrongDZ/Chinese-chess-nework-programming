@@ -14,6 +14,10 @@ struct PlayerInfo {
   int avatar_id{1};      // Avatar ID (1-10)
   string game_id;        // Current active game ID in database
   string current_turn;   // "red" or "black" - tracks whose turn it is
+  // Pending challenge info (stored when receiving challenge, used when responding)
+  string pending_challenge_mode;    // "classical" or "blitz"
+  int pending_challenge_time{0};    // Time limit in seconds
+  string pending_challenger;        // Username of the challenger
 };
 
 // ===================== Handler Declarations ===================== //
@@ -32,6 +36,7 @@ void handleMessage(const ParsedMessage &pm, int fd);
 void handleDrawRequest(const ParsedMessage &pm, int fd);
 void handleDrawResponse(const ParsedMessage &pm, int fd);
 void handleResign(const ParsedMessage &pm, int fd);
+void handleCancelQM(const ParsedMessage &pm, int fd);
 void handleRequestAddFriend(const ParsedMessage &pm, int fd);
 void handleResponseAddFriend(const ParsedMessage &pm, int fd);
 void handleGameHistory(const ParsedMessage &pm, int fd);
@@ -40,4 +45,4 @@ void processAIMatch(const ParsedMessage &pm, int fd);
 void handleAIMatch(const ParsedMessage &pm, int fd);
 void handleSuggestMove(const ParsedMessage &pm, int fd);
 void handleAIMove(int player_fd);
-void handleStartGame(int player1_fd, int player2_fd);
+void handleStartGame(int player1_fd, int player2_fd, const string& mode = "classical", int time_limit = 0);

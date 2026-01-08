@@ -245,13 +245,19 @@ public class MainMenuPanel extends StackPane {
             if (state.isFriendsVisible()) {
                 state.closeFriends();
             }
- 
+
+            // Auto set classical mode (unlimited) cho quick play
+            String mode = "classical";
+            int timeLimit = 0; // 0 = unlimited
+            state.setCurrentGameMode(mode);
+            state.setCurrentTimeLimit(timeLimit);
+
             // Mở waiting panel ngay lập tức
             state.openWaiting();
             
-            // Gửi QUICK_MATCHING request đến server
+            // Gửi QUICK_MATCHING request đến server với mode và time đã set
             try {
-                application.network.NetworkManager.getInstance().game().requestQuickMatching();
+                application.network.NetworkManager.getInstance().game().requestQuickMatching(mode, timeLimit);
             } catch (java.io.IOException ex) {
                 System.err.println("[MainMenuPanel] Error sending QUICK_MATCHING: " + ex.getMessage());
                 ex.printStackTrace();

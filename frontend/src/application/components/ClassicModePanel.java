@@ -1,6 +1,7 @@
 package application.components;
 
 import application.state.UIState;
+import application.network.NetworkManager;
 import application.util.AssetHelper;
 import javafx.animation.FadeTransition;
 import javafx.animation.ScaleTransition;
@@ -371,15 +372,34 @@ public class ClassicModePanel extends StackPane {
             }
             
             if ("Random".equals(selectedOptionText)) {
+                // Set mode và time limit cho quick matching (classical = unlimited)
+                state.setCurrentGameMode("classical");
+                state.setCurrentTimeLimit(0);  // 0 = unlimited
+
+                // Gửi QUICK_MATCHING tới backend
+                try {
+                    NetworkManager.getInstance().game().requestQuickMatching("classical", 0);
+                } catch (Exception ex) {
+                    System.err.println("[ClassicModePanel] Failed to request quick matching: " + ex.getMessage());
+                    ex.printStackTrace();
+                    // Không mở waiting nếu gửi message lỗi
+                    return;
+                }
+
                 // Mở waiting panel khi chọn Random
                 state.closeClassicMode();
                 state.openWaiting();
             } else if ("Friend".equals(selectedOptionText)) {
+                // Set mode và time limit cho challenge
+                state.setCurrentGameMode("classical");
+                state.setCurrentTimeLimit(0);  // 0 = unlimited
                 // Mở PlayWithFriendPanel khi chọn Friend và bấm Play
                 // Sử dụng openPlayWithFriend() để đánh dấu đang trong play with friend mode
                 state.openPlayWithFriend();
             } else {
                 // Vào game trực tiếp khi chọn AI
+                state.setCurrentGameMode("classical");
+                state.setCurrentTimeLimit(0);
                 state.closeClassicMode();
                 state.openGame("classical");
             }
