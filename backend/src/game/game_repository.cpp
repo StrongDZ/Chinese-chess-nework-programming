@@ -428,10 +428,28 @@ GameRepository::findArchivedGameById(const string &gameId) {
 
         move.move_number = mv["move_number"].get_int32().value;
         move.player = string(mv["player"].get_string().value);
-        move.from_x = mv["from_x"].get_int32().value;
-        move.from_y = mv["from_y"].get_int32().value;
-        move.to_x = mv["to_x"].get_int32().value;
-        move.to_y = mv["to_y"].get_int32().value;
+        
+        // Parse from/to coordinates - support both formats:
+        // Old format: from_x, from_y, to_x, to_y (flat)
+        // New format: from: {x, y}, to: {x, y} (nested)
+        if (mv["from_x"] && mv["from_x"].type() == bsoncxx::type::k_int32) {
+          // Old format (flat)
+          move.from_x = mv["from_x"].get_int32().value;
+          move.from_y = mv["from_y"].get_int32().value;
+          move.to_x = mv["to_x"].get_int32().value;
+          move.to_y = mv["to_y"].get_int32().value;
+        } else if (mv["from"] && mv["from"].type() == bsoncxx::type::k_document) {
+          // New format (nested)
+          auto fromDoc = mv["from"].get_document().value;
+          auto toDoc = mv["to"].get_document().value;
+          move.from_x = fromDoc["x"].get_int32().value;
+          move.from_y = fromDoc["y"].get_int32().value;
+          move.to_x = toDoc["x"].get_int32().value;
+          move.to_y = toDoc["y"].get_int32().value;
+        } else {
+          // Skip move if format is unknown
+          continue;
+        }
 
         if (mv["piece"] && mv["piece"].type() == bsoncxx::type::k_string) {
           move.piece = string(mv["piece"].get_string().value);

@@ -930,3 +930,63 @@ void handleGameHistory(const ParsedMessage &pm, int fd) {
                 ErrorPayload{"Failed to handle GAME_HISTORY"});
   }
 }
+
+void handleReplayRequest(const ParsedMessage &pm, int fd) {
+  lock_guard<mutex> lock(g_clients_mutex);
+  auto &sender = g_clients[fd];
+
+  if (sender.username.empty()) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Please LOGIN before requesting replay"});
+    return;
+  }
+
+  if (!pm.payload.has_value() ||
+      !holds_alternative<ReplayRequestPayload>(*pm.payload)) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"REPLAY_REQUEST requires game_id"});
+    return;
+  }
+
+  if (g_game_controller == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Game controller not initialized"});
+    return;
+  }
+
+  try {
+    const auto &p = get<ReplayRequestPayload>(*pm.payload);
+
+    cout << "[REPLAY_REQUEST] Request from user: " << sender.username 
+         << ", game_id: " << p.game_id << endl;
+
+    // Build request for handleGetGameDetails
+    nlohmann::json request;
+    request["game_id"] = p.game_id;
+
+    // Call game controller to get full game details with moves
+    nlohmann::json response = g_game_controller->handleGetGameDetails(request);
+
+    cout << "[REPLAY_REQUEST] Response status: " << response["status"].get<string>() << endl;
+    if (response.contains("game") && response["game"].contains("moves")) {
+      cout << "[REPLAY_REQUEST] Found " << response["game"]["moves"].size() << " moves" << endl;
+    } else {
+      cout << "[REPLAY_REQUEST] No moves found in response" << endl;
+    }
+
+    // Send response via INFO message type (để InfoHandler có thể xử lý)
+    sendMessage(fd, MessageType::INFO, InfoPayload{response});
+  } catch (const exception &e) {
+    cout << "[REPLAY_REQUEST] Exception: " << e.what() << endl;
+    nlohmann::json errorResponse;
+    errorResponse["status"] = "error";
+    errorResponse["message"] = string("Failed to get replay data: ") + e.what();
+    sendMessage(fd, MessageType::INFO, InfoPayload{errorResponse});
+  } catch (...) {
+    cout << "[REPLAY_REQUEST] Unknown exception" << endl;
+    nlohmann::json errorResponse;
+    errorResponse["status"] = "error";
+    errorResponse["message"] = "Failed to get replay data";
+    sendMessage(fd, MessageType::INFO, InfoPayload{errorResponse});
+  }
+}

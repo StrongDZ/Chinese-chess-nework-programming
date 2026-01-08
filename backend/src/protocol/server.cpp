@@ -538,8 +538,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
     handleGameHistory(pm, fd);
     break;
   case MessageType::REPLAY_REQUEST:
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"Feature not implemented"});
+    handleReplayRequest(pm, fd);
     break;
   case MessageType::REQUEST_ADD_FRIEND:
     handleRequestAddFriend(pm, fd);

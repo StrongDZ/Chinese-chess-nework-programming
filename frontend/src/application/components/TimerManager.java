@@ -1,6 +1,7 @@
 package application.components;
 
 import application.state.UIState;
+import application.game.TimeoutHandler;
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
 import javafx.application.Platform;
@@ -22,14 +23,22 @@ public class TimerManager {
     
     private Timeline[] countdownTimers = new Timeline[4];  // 4 timers
     private int[] remainingSeconds = new int[4];  // Thời gian còn lại (giây)
+    private int[] initialSeconds = new int[4];  // Thời gian ban đầu để reset (giây)
     private boolean isUpdatingFromCountdown = false;  // Flag để tránh vòng lặp
+    
+    // Timer xám (index 1, 2): đếm trước
+    // Timer còn lại (index 0, 3): chỉ chạy khi timer xám hết, reset sau mỗi lượt
     
     // Callback để cập nhật timer khi đổi lượt
     private Runnable onTurnChangeCallback = null;
     
+    // Timeout handler
+    private TimeoutHandler timeoutHandler;
+    
     public TimerManager(UIState state, GamePanel gamePanel) {
         this.state = state;
         this.gamePanel = gamePanel;
+        this.timeoutHandler = new TimeoutHandler();
     }
     
     /**
@@ -83,6 +92,9 @@ public class TimerManager {
      * Bắt đầu countdown cho tất cả timers khi game được mở
      */
     public void initializeTimers() {
+        // Dừng tất cả timers cũ trước (nếu có)
+        stopAllTimers();
+        
         // Sử dụng Platform.runLater để đảm bảo giá trị đã được set
         Platform.runLater(() -> {
             // Force start countdown cho tất cả timers
@@ -112,7 +124,7 @@ public class TimerManager {
                 isUpdatingFromCountdown = false;
             }
             
-            // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt (nếu là blitz/custom mode)
+            // Sau khi khởi tạo tất cả timers, cập nhật để chỉ chạy timer của bên đang đến lượt
             Platform.runLater(() -> {
                 updateTimersOnTurnChange();
             });
@@ -126,17 +138,37 @@ public class TimerManager {
         for (int i = 0; i < 4; i++) {
             if (countdownTimers[i] != null) {
                 countdownTimers[i].stop();
+                // Đảm bảo timer đã dừng hoàn toàn
+                int retryCount = 0;
+                while (countdownTimers[i].getStatus() == Timeline.Status.RUNNING && retryCount < 10) {
+                    countdownTimers[i].stop();
+                    retryCount++;
+                }
             }
         }
+    }
+    
+    /**
+     * Set callback để xử lý khi timeout (timer còn lại hết)
+     */
+    public void setTimeoutCallback(TimeoutHandler.TimeoutCallback callback) {
+        timeoutHandler.setTimeoutCallback(callback);
     }
     
     /**
      * Bắt đầu countdown cho một timer
      */
     private void startCountdown(int timerIndex, String initialValue) {
-        // Dừng timer cũ nếu có
+        // Dừng và xóa timer cũ nếu có
         if (countdownTimers[timerIndex] != null) {
             countdownTimers[timerIndex].stop();
+            // Đảm bảo timer đã dừng hoàn toàn
+            int retryCount = 0;
+            while (countdownTimers[timerIndex].getStatus() == Timeline.Status.RUNNING && retryCount < 10) {
+                countdownTimers[timerIndex].stop();
+                retryCount++;
+            }
+            countdownTimers[timerIndex] = null;  // Xóa reference
         }
         
         // Parse giá trị ban đầu
@@ -148,18 +180,22 @@ public class TimerManager {
         }
         
         remainingSeconds[timerIndex] = seconds;
+        initialSeconds[timerIndex] = seconds;  // Lưu giá trị ban đầu để reset
         
         // Cập nhật label ban đầu (không trigger listener)
         isUpdatingFromCountdown = true;
         updateTimerLabel(timerIndex, seconds);
         isUpdatingFromCountdown = false;
         
-        // ÁP DỤNG CHO TẤT CẢ CÁC MODE: Timer chỉ đếm khi đến lượt của người chơi đó
-        // Xác định timer thuộc bên nào
+        // Xác định timer thuộc bên nào và loại timer
         // Timer 1, 2 (index 0, 1): red player
         // Timer 3, 4 (index 2, 3): black player
+        // Timer xám (index 1, 2): đếm trước
+        // Timer còn lại (index 0, 3): chỉ chạy khi timer xám hết
         boolean isRedTimer = (timerIndex == 0 || timerIndex == 1);
         boolean isBlackTimer = (timerIndex == 2 || timerIndex == 3);
+        boolean isGrayTimer = (timerIndex == 1 || timerIndex == 2);  // Timer xám
+        boolean isRemainingTimer = (timerIndex == 0 || timerIndex == 3);  // Timer còn lại
         
         // Lấy currentTurn từ GamePanel
         String currentTurn = gamePanel.getCurrentTurn();
@@ -170,38 +206,86 @@ public class TimerManager {
                 // Lấy currentTurn mới nhất từ GamePanel
                 String currentTurnNow = gamePanel.getCurrentTurn();
                 
-                // QUAN TRỌNG: Chỉ đếm nếu đến lượt của bên đó (áp dụng cho TẤT CẢ các mode)
+                // Chỉ đếm nếu đến lượt của bên đó
                 if (isRedTimer && !currentTurnNow.equals("red")) {
-                    // Không phải lượt red, dừng timer
                     countdownTimers[timerIndex].stop();
                     return;
                 }
                 if (isBlackTimer && !currentTurnNow.equals("black")) {
-                    // Không phải lượt black, dừng timer
                     countdownTimers[timerIndex].stop();
                     return;
                 }
                 
+                // LOGIC MỚI: Timer còn lại chỉ đếm khi timer xám đã hết
+                if (isRemainingTimer) {
+                    // Timer còn lại: kiểm tra timer xám tương ứng
+                    int grayTimerIndex = (timerIndex == 0) ? 1 : 2;  // Timer 0 -> xám 1, Timer 3 -> xám 2
+                    if (remainingSeconds[grayTimerIndex] > 0) {
+                        // Timer xám chưa hết, timer còn lại không đếm
+                        countdownTimers[timerIndex].stop();
+                        return;
+                    }
+                    // Timer xám đã hết, timer còn lại mới đếm
+                }
+                
+                // Đếm ngược
                 remainingSeconds[timerIndex]--;
                 if (remainingSeconds[timerIndex] >= 0) {
-                    // Update label mà không trigger listener
                     isUpdatingFromCountdown = true;
                     updateTimerLabel(timerIndex, remainingSeconds[timerIndex]);
                     isUpdatingFromCountdown = false;
                 } else {
+                    // Timer hết, dừng lại
                     countdownTimers[timerIndex].stop();
+                    
+                    // Xử lý timeout - nếu timer còn lại hết thì người chơi thua
+                    if (isRemainingTimer) {
+                        // Timer còn lại hết = người chơi thua
+                        timeoutHandler.handleTimeout(timerIndex, currentTurnNow);
+                        return;  // Không xử lý thêm
+                    }
+                    
+                    // Nếu timer xám hết, bắt đầu timer còn lại
+                    if (isGrayTimer) {
+                        int remainingTimerIndex = (timerIndex == 1) ? 0 : 3;  // Timer xám 1 -> còn lại 0, xám 2 -> còn lại 3
+                        if (countdownTimers[remainingTimerIndex] != null && remainingSeconds[remainingTimerIndex] > 0) {
+                            // Kiểm tra turn trước khi start timer còn lại (sử dụng currentTurnNow đã có)
+                            boolean isRemainingTimerForCurrentTurn = 
+                                (remainingTimerIndex == 0 && currentTurnNow.equals("red")) ||
+                                (remainingTimerIndex == 3 && currentTurnNow.equals("black"));
+                            
+                            if (isRemainingTimerForCurrentTurn) {
+                                countdownTimers[remainingTimerIndex].play();
+                                System.out.println("[TimerManager] Gray timer " + timerIndex + " exhausted, started remaining timer " + remainingTimerIndex);
+                            }
+                        }
+                    }
                 }
             })
         );
         countdownTimers[timerIndex].setCycleCount(Timeline.INDEFINITE);
         
         // Chỉ play timer nếu đến lượt của bên đó
+        // Timer còn lại chỉ play nếu timer xám đã hết
+        boolean shouldPlay = false;
         if ((isRedTimer && currentTurn.equals("red")) || 
             (isBlackTimer && currentTurn.equals("black"))) {
-            // Đến lượt của bên này, play timer
-            countdownTimers[timerIndex].play();
+            if (isGrayTimer) {
+                // Timer xám: play nếu đến lượt
+                shouldPlay = true;
+            } else if (isRemainingTimer) {
+                // Timer còn lại: chỉ play nếu timer xám đã hết
+                int grayTimerIndex = (timerIndex == 0) ? 1 : 2;
+                shouldPlay = (remainingSeconds[grayTimerIndex] <= 0);
+            }
         }
-        // Nếu không phải lượt, không play (để updateTimersOnTurnChange() xử lý sau)
+        
+        if (shouldPlay) {
+            countdownTimers[timerIndex].play();
+            System.out.println("[TimerManager] Started timer " + timerIndex + " for " + currentTurn + " player");
+        } else {
+            System.out.println("[TimerManager] Timer " + timerIndex + " NOT started");
+        }
     }
     
     /**
@@ -212,9 +296,16 @@ public class TimerManager {
         for (int i = 0; i < 4; i++) {
             if (countdownTimers[i] != null) {
                 countdownTimers[i].stop();
-                // Đảm bảo status là stopped
-                if (countdownTimers[i].getStatus() == Timeline.Status.RUNNING) {
+                // Đảm bảo status là stopped - thử nhiều lần nếu cần
+                int retryCount = 0;
+                while (countdownTimers[i].getStatus() == Timeline.Status.RUNNING && retryCount < 5) {
                     countdownTimers[i].stop();
+                    retryCount++;
+                    try {
+                        Thread.sleep(10);  // Đợi một chút
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
                 }
             }
         }
@@ -224,42 +315,82 @@ public class TimerManager {
             // Lấy currentTurn từ GamePanel
             String currentTurn = gamePanel.getCurrentTurn();
             
+            System.out.println("[TimerManager] ========================================");
             System.out.println("[TimerManager] updateTimersOnTurnChange: currentTurn=" + currentTurn);
+            
+            // Đảm bảo tất cả timers đã dừng trước khi bắt đầu timer mới
+            for (int i = 0; i < 4; i++) {
+                if (countdownTimers[i] != null && countdownTimers[i].getStatus() == Timeline.Status.RUNNING) {
+                    System.out.println("[TimerManager] WARNING: Timer " + i + " still running, forcing stop");
+                    countdownTimers[i].stop();
+                }
+            }
+            
+            // Reset timer còn lại về giá trị ban đầu sau mỗi lượt
+            // Timer 0 (red còn lại) và Timer 3 (black còn lại)
+            if (currentTurn.equals("red")) {
+                // Reset timer còn lại của red (timer 0) về giá trị ban đầu
+                if (initialSeconds[0] > 0) {
+                    remainingSeconds[0] = initialSeconds[0];
+                    isUpdatingFromCountdown = true;
+                    updateTimerLabel(0, remainingSeconds[0]);
+                    isUpdatingFromCountdown = false;
+                    System.out.println("[TimerManager] Reset red remaining timer (0) to " + remainingSeconds[0] + "s");
+                }
+            } else if (currentTurn.equals("black")) {
+                // Reset timer còn lại của black (timer 3) về giá trị ban đầu
+                if (initialSeconds[3] > 0) {
+                    remainingSeconds[3] = initialSeconds[3];
+                    isUpdatingFromCountdown = true;
+                    updateTimerLabel(3, remainingSeconds[3]);
+                    isUpdatingFromCountdown = false;
+                    System.out.println("[TimerManager] Reset black remaining timer (3) to " + remainingSeconds[3] + "s");
+                }
+            }
             
             // Bắt đầu timer của bên đang đến lượt
             if (currentTurn.equals("red")) {
-                // Bắt đầu timer 1 và 2 (red) - dừng timer 3 và 4 (black) để chắc chắn
+                // Dừng timer 3 và 4 (black) để chắc chắn
                 if (countdownTimers[2] != null) {
                     countdownTimers[2].stop();
                 }
                 if (countdownTimers[3] != null) {
                     countdownTimers[3].stop();
                 }
-                if (countdownTimers[0] != null && remainingSeconds[0] >= 0) {
-                    countdownTimers[0].play();
-                    System.out.println("[TimerManager] Started red timer 1");
-                }
-                if (countdownTimers[1] != null && remainingSeconds[1] >= 0) {
+                
+                // Timer xám của red (timer 1): play nếu còn thời gian
+                if (countdownTimers[1] != null && remainingSeconds[1] > 0) {
                     countdownTimers[1].play();
-                    System.out.println("[TimerManager] Started red timer 2");
+                    System.out.println("[TimerManager] Started red gray timer 1 (remaining: " + remainingSeconds[1] + "s)");
+                }
+                
+                // Timer còn lại của red (timer 0): chỉ play nếu timer xám đã hết
+                if (countdownTimers[0] != null && remainingSeconds[1] <= 0 && remainingSeconds[0] > 0) {
+                    countdownTimers[0].play();
+                    System.out.println("[TimerManager] Started red remaining timer 0 (gray timer 1 exhausted, remaining: " + remainingSeconds[0] + "s)");
                 }
             } else if (currentTurn.equals("black")) {
-                // Bắt đầu timer 3 và 4 (black) - dừng timer 1 và 2 (red) để chắc chắn
+                // Dừng timer 1 và 2 (red) để chắc chắn
                 if (countdownTimers[0] != null) {
                     countdownTimers[0].stop();
                 }
                 if (countdownTimers[1] != null) {
                     countdownTimers[1].stop();
                 }
-                if (countdownTimers[2] != null && remainingSeconds[2] >= 0) {
+                
+                // Timer xám của black (timer 2): play nếu còn thời gian
+                if (countdownTimers[2] != null && remainingSeconds[2] > 0) {
                     countdownTimers[2].play();
-                    System.out.println("[TimerManager] Started black timer 3");
+                    System.out.println("[TimerManager] Started black gray timer 2 (remaining: " + remainingSeconds[2] + "s)");
                 }
-                if (countdownTimers[3] != null && remainingSeconds[3] >= 0) {
+                
+                // Timer còn lại của black (timer 3): chỉ play nếu timer xám đã hết
+                if (countdownTimers[3] != null && remainingSeconds[2] <= 0 && remainingSeconds[3] > 0) {
                     countdownTimers[3].play();
-                    System.out.println("[TimerManager] Started black timer 4");
+                    System.out.println("[TimerManager] Started black remaining timer 3 (gray timer 2 exhausted, remaining: " + remainingSeconds[3] + "s)");
                 }
             }
+            System.out.println("[TimerManager] ========================================");
         });
     }
     
