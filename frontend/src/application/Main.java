@@ -29,6 +29,7 @@ import application.components.CustomModePanel;
 import application.components.GamePanel;
 import application.components.HistoryPanel;
 import application.components.ReplayPanel;
+import application.components.AIDifficultyPanel;
 import application.components.ProfilePanel;
 import application.components.WaitingPanel;
 import application.components.PlayWithFriendPanel;
@@ -112,6 +113,7 @@ public class Main extends Application {
         ReconnectingOverlay reconnectingOverlay = new ReconnectingOverlay(state);
         ReplayPanel replayPanel = new ReplayPanel(state);
         RankingPanel rankingPanel = new RankingPanel(state);
+        AIDifficultyPanel aiDifficultyPanel = new AIDifficultyPanel(state);
         ToastNotification toastNotification = new ToastNotification(state);
 
         stageLayer.getChildren().addAll(
@@ -139,6 +141,7 @@ public class Main extends Application {
                 profilePanel,
                 replayPanel,
                 rankingPanel,
+                aiDifficultyPanel,
                 reconnectingOverlay,  // Reconnecting overlay
                 toastNotification     // Toast notification - add last so it appears on top
         );

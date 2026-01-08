@@ -398,11 +398,11 @@ public class ClassicModePanel extends StackPane {
                 // Sử dụng openPlayWithFriend() để đánh dấu đang trong play with friend mode
                 state.openPlayWithFriend();
             } else {
-                // Vào game trực tiếp khi chọn AI
+                // Chọn AI: mở panel chọn độ khó, không vào game ngay
                 state.setCurrentGameMode("classical");
                 state.setCurrentTimeLimit(0);
                 state.closeClassicMode();
-                state.openGame("classical");
+                state.openAIDifficulty();
             }
         });
         
