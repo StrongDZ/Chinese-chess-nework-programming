@@ -208,6 +208,7 @@ nlohmann::json GameController::handleMakeMove(const nlohmann::json &request) {
         response["next_turn"] = game.current_turn;
         response["red_time_remaining"] = game.red_time_remaining;
         response["black_time_remaining"] = game.black_time_remaining;
+        response["xfen"] = game.xfen; // Include updated x-fen
       }
     } else {
       response["status"] = "error";

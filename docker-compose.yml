@@ -2,8 +2,8 @@ services:
     # Backend C++ Server
     backend:
         build:
-            context: ./backend
-            dockerfile: Dockerfile
+            context: .
+            dockerfile: ./backend/Dockerfile
         container_name: chinese-chess-backend
         restart: unless-stopped
         ports:

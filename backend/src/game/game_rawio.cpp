@@ -1,3 +1,4 @@
+#include "ai/ai_controller.h"
 #include "game/game_controller.h"
 #include "player_stat/player_stat_controller.h"
 #include "protocol/handle_socket.h"
@@ -19,9 +20,10 @@ extern map<string, int> g_username_to_fd;
 extern mutex g_clients_mutex;
 extern PlayerStatController *g_player_stat_controller;
 extern GameController *g_game_controller;
+extern GameService *g_game_service;
+extern AIController *g_ai_controller;
 
 // Forward declaration
-void handleAIMove(int player_fd);
 
 // Quick matching queue structure
 struct QuickMatchRequest {
@@ -292,10 +294,24 @@ void handleStartGame(int player1_fd, int player2_fd, const string &mode,
 
   // Send GAME_START to both players
   string gameMode = mode.empty() ? "classical" : mode;
+
+  // Calculate game_timer based on mode
+  int game_timer = 0;
+  if (gameMode == "classical") {
+    game_timer = 0;
+  } else if (gameMode == "blitz") {
+    game_timer = 600;
+  } else if (gameMode == "custom" && time_limit > 0) {
+    game_timer = time_limit; // Use time_limit for custom mode
+  } else {
+    game_timer = 600; // Default to blitz
+  }
+
   GameStartPayload gs1, gs2;
   gs1.opponent = player2.username;
   gs1.game_mode = gameMode;
   gs1.time_limit = time_limit;
+  gs1.game_timer = game_timer;
   gs1.opponent_data = nlohmann::json();
   gs1.opponent_data["player_is_red"] = player1.is_red;
   gs1.opponent_data["opponent_avatar_id"] = player2.avatar_id;
@@ -305,6 +321,7 @@ void handleStartGame(int player1_fd, int player2_fd, const string &mode,
   gs2.opponent = player1.username;
   gs2.game_mode = gameMode;
   gs2.time_limit = time_limit;
+  gs2.game_timer = game_timer;
   gs2.opponent_data = nlohmann::json();
   gs2.opponent_data["player_is_red"] = player2.is_red;
   gs2.opponent_data["opponent_avatar_id"] = player1.avatar_id;
@@ -391,8 +408,13 @@ void handleMove(const ParsedMessage &pm, int fd) {
   bool is_red_turn = (sender.current_turn == "red");
   bool player_is_red = sender.is_red;
 
+  cout << "[MOVE] Turn check - current_turn: " << sender.current_turn
+       << ", is_red_turn: " << is_red_turn
+       << ", player_is_red: " << player_is_red << endl;
+
   // Check if it's this player's turn
   if ((is_red_turn && !player_is_red) || (!is_red_turn && player_is_red)) {
+    cout << "[MOVE] Turn mismatch - rejecting move" << endl;
     sendMessage(fd, MessageType::INVALID_MOVE,
                 InvalidMovePayload{"Not your turn"});
     return;
@@ -431,27 +453,68 @@ void handleMove(const ParsedMessage &pm, int fd) {
       cout << "[MOVE] Move saved to database: " << sender.username
            << " game_id=" << sender.game_id << endl;
 
+      // Update turn tracking for both players
+      sender.current_turn = nextTurn;
+
+      // NOTE: Do NOT echo MOVE back to sender - they have already moved locally
+      // Only send to opponent to sync their board
+
+      if (is_ai_game) {
+        // Get updated x-fen from response to ensure AI uses latest board state
+        string updatedXfen = moveResponse.value("xfen", "");
+        cout << "[MOVE] AI game - updatedXfen from response: "
+             << (updatedXfen.empty() ? "(empty)" : updatedXfen) << endl;
+        if (updatedXfen.empty()) {
+          cerr << "[MOVE] WARNING: x-fen is empty in move response! AI will "
+                  "use database x-fen (may be stale)"
+               << endl;
+        }
+        // Generate and send AI move with updated x-fen
+        handleAIMove(fd, updatedXfen);
+      } else {
+        // PvP: send move to opponent and update their turn tracking
+        int opp = sender.opponent_fd;
+        if (g_clients.count(opp) > 0) {
+          g_clients[opp].current_turn = nextTurn;
+          sendMessage(opp, MessageType::MOVE, move);
+        }
+      }
+
     } catch (const exception &e) {
       cerr << "[MOVE] Exception saving move: " << e.what() << endl;
       // Continue anyway to not break gameplay
+
+      // Update turn tracking even if database save failed
+      sender.current_turn = nextTurn;
+
+      if (is_ai_game) {
+        // Still try to generate AI move even if database save failed
+        // (will get x-fen from database as fallback)
+        handleAIMove(fd);
+      } else {
+        // PvP: send move to opponent
+        int opp = sender.opponent_fd;
+        if (g_clients.count(opp) > 0) {
+          g_clients[opp].current_turn = nextTurn;
+          sendMessage(opp, MessageType::MOVE, move);
+        }
+      }
     }
-  }
-
-  // Update turn tracking for both players
-  sender.current_turn = nextTurn;
-
-  // NOTE: Do NOT echo MOVE back to sender - they have already moved locally
-  // Only send to opponent to sync their board
-
-  if (is_ai_game) {
-    // Generate and send AI move
-    handleAIMove(fd);
   } else {
-    // PvP: send move to opponent and update their turn tracking
-    int opp = sender.opponent_fd;
-    if (g_clients.count(opp) > 0) {
-      g_clients[opp].current_turn = nextTurn;
-      sendMessage(opp, MessageType::MOVE, move);
+    // No database save (game_controller not available or no game_id)
+    // Update turn tracking for both players
+    sender.current_turn = nextTurn;
+
+    if (is_ai_game) {
+      // Generate and send AI move (will get x-fen from database)
+      handleAIMove(fd);
+    } else {
+      // PvP: send move to opponent and update their turn tracking
+      int opp = sender.opponent_fd;
+      if (g_clients.count(opp) > 0) {
+        g_clients[opp].current_turn = nextTurn;
+        sendMessage(opp, MessageType::MOVE, move);
+      }
     }
   }
 
@@ -691,10 +754,27 @@ void handleResign(const ParsedMessage & /*pm*/, int fd) {
 
     cout << "[RESIGN] Resignation processed successfully" << endl;
   } else {
-    // AI game - just end it
+    // AI game - end it and update database
     GameEndPayload gp;
     gp.win_side = "ai";
     sendMessage(fd, MessageType::GAME_END, gp);
+
+    // Update database with game_id (archive game)
+    if (g_game_controller != nullptr && !game_id.empty()) {
+      try {
+        nlohmann::json resignRequest;
+        resignRequest["username"] = sender.username;
+        resignRequest["game_id"] = game_id;
+        nlohmann::json resignResponse =
+            g_game_controller->handleResign(resignRequest);
+        cout << "[RESIGN] AI game database update result: "
+             << resignResponse.dump() << endl;
+      } catch (const exception &e) {
+        cerr << "[RESIGN] Error updating AI game database: " << e.what()
+             << endl;
+      }
+    }
+
     sender.in_game = false;
     sender.opponent_fd = -1;
     sender.game_id = "";
@@ -957,7 +1037,7 @@ void handleReplayRequest(const ParsedMessage &pm, int fd) {
   try {
     const auto &p = get<ReplayRequestPayload>(*pm.payload);
 
-    cout << "[REPLAY_REQUEST] Request from user: " << sender.username 
+    cout << "[REPLAY_REQUEST] Request from user: " << sender.username
          << ", game_id: " << p.game_id << endl;
 
     // Build request for handleGetGameDetails
@@ -967,9 +1047,11 @@ void handleReplayRequest(const ParsedMessage &pm, int fd) {
     // Call game controller to get full game details with moves
     nlohmann::json response = g_game_controller->handleGetGameDetails(request);
 
-    cout << "[REPLAY_REQUEST] Response status: " << response["status"].get<string>() << endl;
+    cout << "[REPLAY_REQUEST] Response status: "
+         << response["status"].get<string>() << endl;
     if (response.contains("game") && response["game"].contains("moves")) {
-      cout << "[REPLAY_REQUEST] Found " << response["game"]["moves"].size() << " moves" << endl;
+      cout << "[REPLAY_REQUEST] Found " << response["game"]["moves"].size()
+           << " moves" << endl;
     } else {
       cout << "[REPLAY_REQUEST] No moves found in response" << endl;
     }
@@ -988,5 +1070,222 @@ void handleReplayRequest(const ParsedMessage &pm, int fd) {
     errorResponse["status"] = "error";
     errorResponse["message"] = "Failed to get replay data";
     sendMessage(fd, MessageType::INFO, InfoPayload{errorResponse});
+  }
+}
+
+void handleCustomGame(const ParsedMessage &pm, int fd) {
+  lock_guard<mutex> lock(g_clients_mutex);
+  auto &sender = g_clients[fd];
+
+  if (sender.username.empty()) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Please LOGIN before starting custom game"});
+    return;
+  }
+
+  if (sender.in_game) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"You are already in a game"});
+    return;
+  }
+
+  if (!pm.payload.has_value() ||
+      !holds_alternative<CustomGamePayload>(*pm.payload)) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"CUSTOM_GAME requires custom_board_setup"});
+    return;
+  }
+
+  const auto &p = get<CustomGamePayload>(*pm.payload);
+  string game_mode = p.game_mode;
+  string opponent = p.opponent;
+  string ai_mode = p.ai_mode;
+  nlohmann::json customBoardSetup = p.custom_board_setup;
+  int time_limit = p.time_limit;
+  int game_timer = p.game_timer;
+  string playerSide = p.playerSide;
+
+  // Validate game_mode
+  if (game_mode != "custom") {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"CUSTOM_GAME requires game_mode='custom'"});
+    return;
+  }
+
+  // Convert custom board setup to XFEN
+  if (g_game_controller == nullptr || g_game_service == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Game service is not available"});
+    return;
+  }
+
+  string customXfen =
+      g_game_service->customBoardSetupToXfen(customBoardSetup, playerSide);
+  
+  cout << "[handleCustomGame] Converted custom board setup to XFEN: " << customXfen << endl;
+
+  // Validate XFEN
+  if (!g_game_service->isValidXfen(customXfen)) {
+    cout << "[handleCustomGame] ERROR: Invalid XFEN format: " << customXfen << endl;
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Invalid custom board setup"});
+    return;
+  }
+  
+  cout << "[handleCustomGame] XFEN validation passed" << endl;
+
+  // Determine if playing with AI or friend
+  bool isAIGame = !ai_mode.empty();
+
+  if (isAIGame) {
+    // Playing with AI
+    if (g_ai_controller == nullptr) {
+      sendMessage(fd, MessageType::ERROR,
+                  ErrorPayload{"AI service is not available"});
+      return;
+    }
+
+    // Validate ai_mode
+    if (ai_mode != "easy" && ai_mode != "medium" && ai_mode != "hard") {
+      sendMessage(fd, MessageType::ERROR,
+                  ErrorPayload{"Invalid ai_mode. Use: easy, medium, or hard"});
+      return;
+    }
+
+    // Create AI game with custom board
+    nlohmann::json createRequest;
+    createRequest["username"] = sender.username;
+    createRequest["difficulty"] = ai_mode;
+    createRequest["time_control"] = "custom";
+    createRequest["custom_xfen"] = customXfen;
+    createRequest["starting_color"] = playerSide;
+    if (time_limit > 0) {
+      createRequest["time_limit"] = time_limit;
+    }
+
+    // Use AI controller to create game (need to check if it supports custom
+    // board) For now, use game controller to create custom game, then assign AI
+    // as opponent
+    string aiUsername = "AI_" + ai_mode;
+    
+    cout << "[handleCustomGame] Creating custom game: red=" << sender.username 
+         << ", black=" << aiUsername << ", xfen=" << customXfen 
+         << ", time_limit=" << time_limit << endl;
+
+    auto result = g_game_service->createCustomGame(
+        sender.username, aiUsername, customXfen, playerSide, "custom", time_limit);
+
+    if (!result.success) {
+      cout << "[handleCustomGame] ERROR: Failed to create custom game: " << result.message << endl;
+      sendMessage(fd, MessageType::ERROR, ErrorPayload{result.message});
+      return;
+    }
+    
+    cout << "[handleCustomGame] Custom game created successfully, game_id=" 
+         << (result.game.has_value() ? result.game->id : "none") << endl;
+
+    // Update sender state
+    sender.in_game = true;
+    sender.opponent_fd = -1; // AI doesn't have a real FD
+    sender.is_red = (playerSide == "red");
+    sender.current_turn = playerSide;
+
+    if (result.game.has_value()) {
+      sender.game_id = result.game->id;
+    }
+
+    // Send GAME_START to player
+    GameStartPayload gs;
+    gs.opponent = ""; // Empty for AI games
+    gs.game_mode = "custom";
+    gs.time_limit = time_limit;
+    gs.game_timer = game_timer;
+    gs.opponent_data = nlohmann::json();
+    gs.opponent_data["player_is_red"] = (playerSide == "red");
+    gs.opponent_data["is_ai_game"] = true;
+    gs.opponent_data["ai_difficulty"] = ai_mode;
+    gs.opponent_data["custom_xfen"] = customXfen;
+    if (result.game.has_value()) {
+      gs.opponent_data["game_id"] = result.game->id;
+    }
+
+    sendMessage(fd, MessageType::GAME_START, gs);
+
+  } else {
+    // Playing with friend - need opponent username
+    if (opponent.empty()) {
+      sendMessage(fd, MessageType::ERROR,
+                  ErrorPayload{"CUSTOM_GAME requires opponent username when "
+                               "not playing with AI"});
+      return;
+    }
+
+    // Check if opponent is online
+    if (g_username_to_fd.find(opponent) == g_username_to_fd.end()) {
+      sendMessage(fd, MessageType::ERROR,
+                  ErrorPayload{"Opponent is not online"});
+      return;
+    }
+
+    int opponent_fd = g_username_to_fd[opponent];
+    auto &opponentInfo = g_clients[opponent_fd];
+
+    if (opponentInfo.in_game) {
+      sendMessage(fd, MessageType::ERROR,
+                  ErrorPayload{"Opponent is already in a game"});
+      return;
+    }
+
+    // Create custom game
+    auto result = g_game_service->createCustomGame(
+        sender.username, opponent, customXfen, playerSide, "custom", time_limit);
+
+    if (!result.success) {
+      sendMessage(fd, MessageType::ERROR, ErrorPayload{result.message});
+      return;
+    }
+
+    // Update both players' state
+    sender.in_game = true;
+    sender.opponent_fd = opponent_fd;
+    sender.is_red = (playerSide == "red");
+    sender.current_turn = playerSide;
+
+    opponentInfo.in_game = true;
+    opponentInfo.opponent_fd = fd;
+    opponentInfo.is_red = (playerSide != "red");
+    opponentInfo.current_turn = playerSide;
+
+    if (result.game.has_value()) {
+      sender.game_id = result.game->id;
+      opponentInfo.game_id = result.game->id;
+    }
+
+    // Send GAME_START to both players
+    GameStartPayload gs1, gs2;
+    gs1.opponent = opponent;
+    gs1.game_mode = "custom";
+    gs1.time_limit = time_limit;
+    gs1.game_timer = game_timer;
+    gs1.opponent_data = nlohmann::json();
+    gs1.opponent_data["player_is_red"] = (playerSide == "red");
+    gs1.opponent_data["custom_xfen"] = customXfen;
+    if (result.game.has_value()) {
+      gs1.opponent_data["game_id"] = result.game->id;
+    }
+
+    gs2.opponent = sender.username;
+    gs2.game_mode = "custom";
+    gs2.time_limit = time_limit;
+    gs2.game_timer = game_timer;
+    gs2.opponent_data = nlohmann::json();
+    gs2.opponent_data["player_is_red"] = (playerSide != "red");
+    gs2.opponent_data["custom_xfen"] = customXfen;
+    if (result.game.has_value()) {
+      gs2.opponent_data["game_id"] = result.game->id;
+    }
+
+    sendMessage(fd, MessageType::GAME_START, gs1);
+    sendMessage(opponent_fd, MessageType::GAME_START, gs2);
   }
 }

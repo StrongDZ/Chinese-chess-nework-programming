@@ -177,19 +177,23 @@ public class GameHandler implements MessageHandler {
             JsonObject from = json.getAsJsonObject("from");
             JsonObject to = json.getAsJsonObject("to");
             
-            int fromRow = from.get("row").getAsInt();
+            int backendFromRow = from.get("row").getAsInt();
             int fromCol = from.get("col").getAsInt();
-            int toRow = to.get("row").getAsInt();
+            int backendToRow = to.get("row").getAsInt();
             int toCol = to.get("col").getAsInt();
             
             String piece = json.has("piece") ? json.get("piece").getAsString() : "Unknown";
             
-            System.out.println("[GameHandler] Received MOVE: " + piece + " from (row=" + fromRow + ",col=" + fromCol + ") to (row=" + toRow + ",col=" + toCol + ")");
+            System.out.println("[GameHandler] Received MOVE: " + piece + 
+                " from BE(row=" + backendFromRow + ",col=" + fromCol + 
+                ") to BE(row=" + backendToRow + ",col=" + toCol + ")");
             
             // Apply opponent's move to the board
             // IMPORTANT: UIState.applyOpponentMove signature is (fromCol, fromRow, toCol, toRow)
+            // Pass backend coordinates, applyOpponentMove will convert internally
+            // (Backend row 0=top đen → Frontend row 0=top đỏ via formula: frontendRow = 9 - backendRow)
             Platform.runLater(() -> {
-                uiState.applyOpponentMove(fromCol, fromRow, toCol, toRow);
+                uiState.applyOpponentMove(fromCol, backendFromRow, toCol, backendToRow);
             });
         } catch (Exception e) {
             System.err.println("[GameHandler] Error parsing MOVE: " + e.getMessage());

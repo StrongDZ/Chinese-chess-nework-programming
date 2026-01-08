@@ -1,3 +1,6 @@
+#include "ai/ai_controller.h"
+#include "ai/ai_service.h"
+#include "game/game_service.h"
 #include "protocol/handle_socket.h"
 #include "protocol/message_types.h"
 #include "protocol/server.h"
@@ -12,6 +15,25 @@ using namespace std;
 extern map<int, PlayerInfo> g_clients;
 extern map<string, int> g_username_to_fd;
 extern mutex g_clients_mutex;
+extern AIController *g_ai_controller;
+extern GameService *g_game_service;
+extern AIService *g_ai_service;
+
+// Helper function to convert AIMove to MovePayload
+// Note: piece name needs to be extracted from board position
+MovePayload convertAIMoveToMovePayload(const AIMove &aiMove) {
+  MovePayload move;
+  move.from.row = aiMove.fromX;
+  move.from.col = aiMove.fromY;
+  move.to.row = aiMove.toX;
+  move.to.col = aiMove.toY;
+
+  // Extract piece from xfen at from position
+  // For now, use empty string - will be filled by game logic
+  move.piece = ""; // TODO: Extract piece type from xfen at from position
+
+  return move;
+}
 
 void handleAIMatch(const ParsedMessage &pm, int fd) {
   lock_guard<mutex> lock(g_clients_mutex);
@@ -22,18 +44,6 @@ void handleAIMatch(const ParsedMessage &pm, int fd) {
     return;
   }
 
-  // TODO: Check AI engine availability via Python API
-  // if (!g_ai_engine.isReady()) {
-  //   sendMessage(fd, MessageType::ERROR,
-  //               ErrorPayload{"AI engine is not available"});
-  //   return;
-  // }
-
-  // TODO: Cleanup any existing game state via Python API
-  // if (g_game_state.hasGame(fd)) {
-  //   g_game_state.endGame(fd);
-  // }
-
   if (sender.in_game) {
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"You are already in a game"});
@@ -43,37 +53,107 @@ void handleAIMatch(const ParsedMessage &pm, int fd) {
   if (!pm.payload.has_value() ||
       !holds_alternative<AIMatchPayload>(*pm.payload)) {
     sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"AI_MATCH requires gamemode (easy/medium/hard)"});
+                ErrorPayload{"AI_MATCH requires game_mode and ai_mode"});
     return;
   }
 
   const auto &p = get<AIMatchPayload>(*pm.payload);
-  string gamemode = p.gamemode;
+  string game_mode = p.game_mode;
+  string ai_mode = p.ai_mode;
+  int time_limit = p.time_limit;
+  int game_timer = p.game_timer;
+  // AI is always black, player is always red
+  string playerSide = "red";
 
-  // Validate gamemode
-  if (gamemode != "easy" && gamemode != "medium" && gamemode != "hard") {
-    sendMessage(fd, MessageType::ERROR,
-                ErrorPayload{"Invalid gamemode. Use: easy, medium, or hard"});
+  // Validate game_mode
+  if (game_mode != "classical" && game_mode != "blitz" &&
+      game_mode != "custom") {
+    sendMessage(
+        fd, MessageType::ERROR,
+        ErrorPayload{"Invalid game_mode. Use: classical, blitz, or custom"});
     return;
   }
 
-  // TODO: Initialize AI game via Python API
-  int ai_fd = -1; // AI doesn't have a real FD
+  // Validate ai_mode
+  if (ai_mode != "easy" && ai_mode != "medium" && ai_mode != "hard") {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Invalid ai_mode. Use: easy, medium, or hard"});
+    return;
+  }
 
+  // Check if AI controller is available
+  if (g_ai_controller == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"AI service is not available"});
+    return;
+  }
+
+  // Use game_mode directly as time_control
+  string timeControl = game_mode;
+
+  // Create AI game via controller
+  nlohmann::json createRequest;
+  createRequest["username"] = sender.username;
+  createRequest["difficulty"] = ai_mode;       // Use ai_mode for AI difficulty
+  createRequest["time_control"] = timeControl; // Use game_mode as time_control
+  // player_color is not needed - AI is always black, player is always red
+  if (time_limit > 0) {
+    createRequest["time_limit"] = time_limit;
+  }
+
+  auto response = g_ai_controller->handleCreateAIGame(createRequest);
+
+  if (response["status"] != "success") {
+    sendMessage(
+        fd, MessageType::ERROR,
+        ErrorPayload{response.value("message", "Failed to create AI game")});
+    return;
+  }
+
+  // Update sender state
   sender.in_game = true;
-  sender.opponent_fd = ai_fd; // Mark as AI game
-  sender.is_red =
-      true; // Player always plays red (goes first) when playing against AI
+  sender.opponent_fd = -1; // AI doesn't have a real FD
+  sender.is_red = true;    // Player is always red, AI is always black
 
-  // g_game_state.initializeGame(fd, ai_fd, difficulty);
+  if (response.contains("game") && response["game"].contains("game_id")) {
+    sender.game_id = response["game"]["game_id"].get<string>();
+  }
+
+  // Set current_turn based on game state
+  // If game has current_turn, use it (handles case where AI moved first)
+  // Otherwise, set based on player side (red always goes first)
+  string gameCurrentTurn = "red"; // Default
+  if (response.contains("game") && response["game"].contains("current_turn")) {
+    gameCurrentTurn = response["game"]["current_turn"].get<string>();
+    sender.current_turn = gameCurrentTurn;
+    cout << "[handleAIMatch] Set current_turn from game: "
+         << sender.current_turn << " (player is red: " << sender.is_red << ")"
+         << endl;
+  } else {
+    // Default: red always goes first
+    sender.current_turn = "red";
+    cout << "[handleAIMatch] Set current_turn to default: red (player is red: "
+         << sender.is_red << ")" << endl;
+  }
 
   // Send GAME_START to player
   GameStartPayload gs;
-  gs.opponent = ""; // Empty for AI games
-  gs.game_mode = "ai_" + gamemode;
+  gs.opponent = "";                 // Empty for AI games
+  gs.game_mode = "ai_" + game_mode; // Use game_mode (classical/blitz/custom)
+  gs.time_limit = time_limit;
+  gs.game_timer = game_timer;
   gs.opponent_data = nlohmann::json();
+  gs.opponent_data["player_is_red"] = (playerSide == "red");
+  gs.opponent_data["is_ai_game"] = true;
+  gs.opponent_data["ai_difficulty"] = ai_mode; // Use ai_mode (easy/medium/hard)
+  if (response.contains("game") && response["game"].contains("game_id")) {
+    gs.opponent_data["game_id"] = response["game"]["game_id"];
+  }
 
   sendMessage(fd, MessageType::GAME_START, gs);
+
+  // Player (red) always moves first, AI (black) moves second
+  // No need to handle AI's first move here
 }
 
 void handleSuggestMove(const ParsedMessage &pm, int fd) {
@@ -131,32 +211,146 @@ void handleSuggestMove(const ParsedMessage &pm, int fd) {
   // sendMessage(fd, MessageType::SUGGEST_MOVE, suggested_move);
 }
 
-void handleAIMove(int player_fd) {
-  (void)player_fd; // Suppress unused parameter warning
-  // TODO: Implement via Python API
-  // This function will call Python API to get AI move and apply it
-  // For now, this is disabled - will be implemented when Python API is ready
+void handleAIMove(int player_fd, const string &xfen) {
+  // NOTE: This function assumes g_clients_mutex is already locked by the caller
+  // (e.g., handleMove in game_rawio.cpp)
 
-  // TODO: Check if game exists via Python API
-  // if (!g_game_state.hasGame(player_fd)) {
-  //   return; // Not an AI game
-  // }
+  // Check if player is in game
+  if (g_clients.count(player_fd) == 0) {
+    return; // Player not found
+  }
 
-  // TODO: Check AI engine availability via Python API
-  // if (!g_ai_engine.isReady()) {
-  //   return; // AI engine not available
-  // }
+  auto &player = g_clients[player_fd];
 
-  // TODO: Get current game state and difficulty via Python API
-  // string position_str = g_game_state.getPositionString(player_fd);
-  // if (position_str.empty()) {
-  //   return;
-  // }
+  // Check if it's an AI game
+  if (player.opponent_fd != -1) {
+    return; // Not an AI game
+  }
 
-  // TODO: Call Python API to get AI move
-  // AIDifficulty difficulty = g_game_state.getAIDifficulty(player_fd);
-  // string ucci_move = callPythonAPI("get_best_move", position_str,
-  // difficulty); MovePayload ai_move = parseUCIMove(ucci_move);
-  // g_game_state.applyMove(player_fd, ai_move);
-  // pushAIMessage(player_fd, MessageType::MOVE, ai_move);
+  // Check if player has a game_id
+  if (player.game_id.empty()) {
+    cerr << "[handleAIMove] No game_id for player " << player.username << endl;
+    return;
+  }
+
+  // Check if AI controller and services are available
+  if (g_ai_controller == nullptr || g_game_service == nullptr ||
+      g_ai_service == nullptr) {
+    cerr << "[handleAIMove] AI services not available" << endl;
+    return;
+  }
+
+  // Check if AI service is ready
+  if (!g_ai_service->isReady()) {
+    cerr << "[handleAIMove] AI service not ready" << endl;
+    return;
+  }
+
+  // Get current game state (to check status and get AI player info)
+  auto gameResult = g_game_service->getGame(player.game_id);
+  if (!gameResult.success || !gameResult.game.has_value()) {
+    cerr << "[handleAIMove] Game not found: " << player.game_id << endl;
+    return;
+  }
+
+  const auto &game = gameResult.game.value();
+
+  // Check if game is still in progress
+  if (game.status != "in_progress") {
+    cout << "[handleAIMove] Game already ended: " << game.status << endl;
+    return;
+  }
+
+  // Determine AI player and difficulty
+  string aiPlayer = "";
+  AIDifficulty difficulty = AIDifficulty::MEDIUM;
+
+  if (game.red_player.find("AI_") == 0) {
+    aiPlayer = game.red_player;
+  } else if (game.black_player.find("AI_") == 0) {
+    aiPlayer = game.black_player;
+  } else {
+    cerr << "[handleAIMove] Not an AI game" << endl;
+    return;
+  }
+
+  // Parse difficulty from AI player name
+  if (aiPlayer.find("easy") != string::npos) {
+    difficulty = AIDifficulty::EASY;
+  } else if (aiPlayer.find("hard") != string::npos) {
+    difficulty = AIDifficulty::HARD;
+  }
+
+  // Use provided x-fen if available, otherwise fallback to game.xfen from
+  // database
+  string currentXfen = xfen.empty() ? game.xfen : xfen;
+
+  if (!xfen.empty()) {
+    cout << "[handleAIMove] Using provided x-fen (from move response)" << endl;
+  } else {
+    cout << "[handleAIMove] Using x-fen from database (fallback)" << endl;
+  }
+
+  // Get AI move prediction
+  cout << "[handleAIMove] Calculating AI move for " << aiPlayer
+       << " (difficulty="
+       << (difficulty == AIDifficulty::EASY   ? "easy"
+           : difficulty == AIDifficulty::HARD ? "hard"
+                                              : "medium")
+       << ")..." << endl;
+  cout << "[handleAIMove] X-fen: " << currentXfen << endl;
+
+  auto aiMoveResult = g_ai_service->predictMove(currentXfen, difficulty);
+
+  if (!aiMoveResult.success || !aiMoveResult.move.has_value()) {
+    cerr << "[handleAIMove] AI failed to calculate move: "
+         << aiMoveResult.message << endl;
+    return;
+  }
+
+  cout << "[handleAIMove] AI move calculated successfully" << endl;
+
+  // Apply AI move to game
+  // NOTE: AIMove uses: fromX=row, fromY=col
+  // But makeMove expects: fromX=col, fromY=row
+  // So we need to swap: makeMove(..., fromY, fromX, toY, toX, ...)
+  auto moveResult = g_game_service->makeMove(
+      aiPlayer, player.game_id, aiMoveResult.move->fromY,  // col
+      aiMoveResult.move->fromX,                             // row
+      aiMoveResult.move->toY,                               // col
+      aiMoveResult.move->toX,                               // row
+      "", "", "", "", 0);
+
+  if (!moveResult.success) {
+    cerr << "[handleAIMove] Failed to apply AI move: " << moveResult.message
+         << endl;
+    return;
+  }
+
+  // Convert AI move to MovePayload
+  MovePayload aiMove = convertAIMoveToMovePayload(aiMoveResult.move.value());
+
+  // Update player's turn tracking
+  if (moveResult.game.has_value()) {
+    player.current_turn = moveResult.game->current_turn;
+  } else {
+    // Game ended, set turn to empty
+    player.current_turn = "";
+  }
+
+  // Send AI move to player
+  sendMessage(player_fd, MessageType::MOVE, aiMove);
+
+  cout << "[handleAIMove] AI move sent: " << aiPlayer << " from=("
+       << aiMove.from.row << "," << aiMove.from.col << ")"
+       << " to=(" << aiMove.to.row << "," << aiMove.to.col << ")"
+       << " next_turn=" << player.current_turn << endl;
+
+  // Check if game ended after AI move
+  if (moveResult.game.has_value() && moveResult.game->status != "in_progress") {
+    // Game ended - send game result
+    // TODO: Send GAME_END message if needed
+    cout << "[handleAIMove] Game ended: " << moveResult.game->status
+         << " result=" << moveResult.game->result << endl;
+  }
 }

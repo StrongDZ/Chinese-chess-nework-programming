@@ -29,6 +29,7 @@ public class DialogManager {
     private StackPane gameResultOverlay = null;
     private StackPane drawRequestDialog = null;
     private StackPane drawReceivedDialog = null;
+    private StackPane quitDialog = null;
     
     private int eloChange = 10;  // Điểm thay đổi khi win/lose (có thể thay đổi được)
     
@@ -400,6 +401,120 @@ public class DialogManager {
     }
     
     /**
+     * Hiển thị dialog xác nhận quit game (cho custom mode)
+     */
+    public void showQuitConfirmation() {
+        // Nếu đã có dialog, xóa nó trước
+        if (quitDialog != null && gamePanel != null && gamePanel.getChildren().contains(quitDialog)) {
+            gamePanel.getChildren().remove(quitDialog);
+        }
+        
+        // Tạo dialog panel ở giữa màn hình
+        quitDialog = new StackPane();
+        quitDialog.setLayoutX((1920 - 500) / 2);  // Căn giữa theo chiều ngang
+        quitDialog.setLayoutY((1080 - 300) / 2);  // Căn giữa theo chiều dọc
+        quitDialog.setPrefSize(500, 300);
+        quitDialog.setPickOnBounds(true);
+        quitDialog.setMouseTransparent(false);
+        
+        // Background cho dialog
+        Rectangle dialogBg = new Rectangle(500, 300);
+        dialogBg.setFill(Color.WHITE);
+        dialogBg.setStroke(Color.color(0.3, 0.3, 0.3));
+        dialogBg.setStrokeWidth(2);
+        dialogBg.setArcWidth(20);
+        dialogBg.setArcHeight(20);
+        
+        // Thêm shadow cho dialog
+        DropShadow dialogShadow = new DropShadow();
+        dialogShadow.setColor(Color.color(0, 0, 0, 0.5));
+        dialogShadow.setRadius(20);
+        dialogShadow.setOffsetX(5);
+        dialogShadow.setOffsetY(5);
+        dialogBg.setEffect(dialogShadow);
+        
+        // Container chính cho nội dung
+        VBox contentContainer = new VBox(30);
+        contentContainer.setPrefSize(500, 300);
+        contentContainer.setAlignment(Pos.CENTER);
+        contentContainer.setStyle("-fx-padding: 20 40 40 40;");
+        contentContainer.setPickOnBounds(true);
+        contentContainer.setMouseTransparent(false);
+        
+        // Label câu hỏi
+        Label questionLabel = new Label("Are you sure you want to quit?");
+        questionLabel.setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 48px; " +
+            "-fx-text-fill: black; " +
+            "-fx-background-color: transparent; " +
+            "-fx-wrap-text: true;"
+        );
+        questionLabel.setAlignment(Pos.CENTER);
+        questionLabel.setPrefWidth(420);
+        questionLabel.setTranslateY(-20);
+        
+        // Container cho 2 nút
+        HBox buttonsContainer = new HBox(30);
+        buttonsContainer.setAlignment(Pos.CENTER);
+        
+        // Nút Yes
+        StackPane yesButton = createDialogButton("Yes", true);
+        yesButton.setOnMouseClicked(e -> {
+            // Xử lý khi bấm Yes (quit)
+            hideQuitConfirmation();
+            
+            // Đóng game và quay về main menu
+            state.closeGame();
+            state.navigateToMainMenu();
+            
+            e.consume();
+        });
+        
+        // Nút No
+        StackPane noButton = createDialogButton("No", false);
+        noButton.setOnMouseClicked(e -> {
+            // Đóng dialog khi bấm No
+            hideQuitConfirmation();
+            e.consume();
+        });
+        
+        buttonsContainer.getChildren().addAll(yesButton, noButton);
+        contentContainer.getChildren().addAll(questionLabel, buttonsContainer);
+        
+        quitDialog.getChildren().addAll(dialogBg, contentContainer);
+        
+        // Thêm vào GamePanel (StackPane) để đảm bảo dialog ở trên cùng
+        gamePanel.getChildren().add(quitDialog);
+        
+        // Đưa dialog lên trên cùng để không bị che
+        quitDialog.toFront();
+        
+        // Fade in animation
+        quitDialog.setOpacity(0);
+        FadeTransition fadeIn = new FadeTransition(Duration.millis(300), quitDialog);
+        fadeIn.setToValue(1.0);
+        fadeIn.play();
+    }
+    
+    /**
+     * Ẩn dialog xác nhận quit
+     */
+    public void hideQuitConfirmation() {
+        if (quitDialog != null && gamePanel != null && gamePanel.getChildren().contains(quitDialog)) {
+            // Fade out animation
+            FadeTransition fadeOut = new FadeTransition(Duration.millis(300), quitDialog);
+            fadeOut.setToValue(0.0);
+            fadeOut.setOnFinished(event -> {
+                if (gamePanel.getChildren().contains(quitDialog)) {
+                    gamePanel.getChildren().remove(quitDialog);
+                }
+            });
+            fadeOut.play();
+        }
+    }
+    
+    /**
      * Hiển thị kết quả game
      */
     public void showGameResult(boolean isWinner) {
@@ -620,6 +735,12 @@ public class DialogManager {
                 gamePanel.getChildren().remove(drawReceivedDialog);
             }
             drawReceivedDialog = null;
+        }
+        if (quitDialog != null) {
+            if (gamePanel != null && gamePanel.getChildren().contains(quitDialog)) {
+                gamePanel.getChildren().remove(quitDialog);
+            }
+            quitDialog = null;
         }
         
         // Reset elo change về giá trị mặc định

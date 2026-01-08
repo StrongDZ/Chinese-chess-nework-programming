@@ -50,6 +50,7 @@ public class GamePanel extends StackPane implements IGamePanel {
     private ImageView boardImage = null;  // Reference đến board image để xoay riêng
     private String currentTurn = "red";  // Lượt hiện tại: "red" đi trước, sau đó "black"
     private boolean isBoardFlipped = false;  // True nếu player là black (board cần flip)
+    private VBox leftIcons = null;  // Lưu reference đến left icons container để cập nhật khi game mode thay đổi
 
     public GamePanel(UIState state) {
         this.state = state;
@@ -87,6 +88,16 @@ public class GamePanel extends StackPane implements IGamePanel {
         
         // Khởi tạo GameEndChecker
         this.gameEndChecker = new application.game.GameEndChecker();
+        
+        // Listener để cập nhật leftIcons khi game mode thay đổi (sau khi dialogManager được khởi tạo)
+        state.currentGameModeProperty().addListener((obs, oldVal, newVal) -> {
+            updateLeftIcons();
+        });
+        
+        // Cập nhật leftIcons lần đầu để đảm bảo UI đúng khi game được mở
+        Platform.runLater(() -> {
+            updateLeftIcons();
+        });
         
         // Thiết lập callbacks giữa các Manager
         setupManagerCallbacks();
@@ -145,21 +156,25 @@ public class GamePanel extends StackPane implements IGamePanel {
         
         chessBoardManager.setOnMoveAddedWithDetails((moveDetails) -> {
             // Parse moveDetails: "color|pieceType|fromRow|fromCol|toRow|toCol|capturedInfo"
+            // capturedInfo có thể rỗng nếu không có captured piece
             String[] parts = moveDetails.split("\\|");
-            if (parts.length >= 7) {
+            if (parts.length >= 6) {
                 String color = parts[0];
                 String pieceType = parts[1];
                 int fromRow = Integer.parseInt(parts[2]);
                 int fromCol = Integer.parseInt(parts[3]);
                 int toRow = Integer.parseInt(parts[4]);
                 int toCol = Integer.parseInt(parts[5]);
-                String capturedInfo = parts[6];
+                // capturedInfo có thể là phần thứ 7 hoặc rỗng nếu không có
+                String capturedInfo = (parts.length >= 7) ? parts[6] : "";
                 moveHistoryManager.addMove(color, pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
                 
                 // Check game end after move
                 Platform.runLater(() -> {
                     checkGameEndAfterMove(capturedInfo.contains("captured"));
                 });
+            } else {
+                System.err.println("[GamePanel] Invalid moveDetails format: " + moveDetails + " (expected at least 6 parts, got " + parts.length + ")");
             }
         });
         
@@ -247,10 +262,19 @@ public class GamePanel extends StackPane implements IGamePanel {
         chessBoardManager.setOnMoveMade((fromRow, fromCol, toRow, toCol, piece, captured) -> {
             try {
                 // Gửi MOVE message đến server
+                // Convert: Frontend row (0=top đỏ) → Backend row (0=top đen)
+                // Frontend: row 0 = top (đỏ), row 9 = bottom (đen)
+                // Backend: row 0 = top (đen), row 9 = bottom (đỏ)
+                // Công thức: backendRow = 9 - frontendRow
+                int backendFromRow = 9 - fromRow;
+                int backendToRow = 9 - toRow;
+                
                 application.network.NetworkManager networkManager = application.network.NetworkManager.getInstance();
                 if (networkManager != null) {
-                    networkManager.game().sendMove(fromCol, fromRow, toCol, toRow, piece, captured, null);
-                    System.out.println("[GamePanel] Sent MOVE to server: " + piece + " from (" + fromRow + "," + fromCol + ") to (" + toRow + "," + toCol + ")");
+                    networkManager.game().sendMove(fromCol, backendFromRow, toCol, backendToRow, piece, captured, null);
+                    System.out.println("[GamePanel] Sent MOVE to server: " + piece + 
+                        " from FE(" + fromRow + "," + fromCol + ") BE(" + backendFromRow + "," + fromCol + 
+                        ") to FE(" + toRow + "," + toCol + ") BE(" + backendToRow + "," + toCol + ")");
                 }
             } catch (Exception e) {
                 System.err.println("[GamePanel] Error sending MOVE: " + e.getMessage());
@@ -306,10 +330,10 @@ public class GamePanel extends StackPane implements IGamePanel {
         timersContainer.setLayoutX(boardX - 125);  // Đặt bên trái khung đen, cách 150px
         timersContainer.setLayoutY((1080 - 923) / 2 + 350);  // Tăng từ 50 lên 150 (lùi xuống 100px)
         
-        // Left side: Icons (resign, draw) - đặt dưới timers, cạnh khung đen
-        VBox leftIcons = createLeftIcons();
-        leftIcons.setLayoutX(boardX - 65);  // Cùng vị trí X với timers
-        leftIcons.setLayoutY((1080 - 923) / 2 + 750);  // Đặt dưới timers
+        // Left side: Icons (resign, draw hoặc quit) - đặt dưới timers, cạnh khung đen
+        this.leftIcons = createLeftIcons();
+        this.leftIcons.setLayoutX(boardX - 65);  // Cùng vị trí X với timers
+        this.leftIcons.setLayoutY((1080 - 923) / 2 + 750);  // Đặt dưới timers
         
         // Top right: Chat and token icons
         HBox topRightIcons = createTopRightIcons();
@@ -555,86 +579,7 @@ public class GamePanel extends StackPane implements IGamePanel {
     private VBox createLeftIcons() {
         VBox container = new VBox(15);
         container.setAlignment(Pos.TOP_LEFT);
-        
-        // Flag icon (ic_signup.png - có thể là resign/surrender) - wrap trong StackPane
-        StackPane resignContainer = new StackPane();
-        ImageView resignIcon = new ImageView(AssetHelper.image("ic_signup.png"));
-        resignIcon.setFitWidth(60);
-        resignIcon.setFitHeight(60);
-        resignIcon.setPreserveRatio(true);
-        resignContainer.getChildren().add(resignIcon);
-        resignContainer.setCursor(Cursor.HAND);
-        resignContainer.setMouseTransparent(false);
-        resignContainer.setPickOnBounds(true);
-        
-        // Draw icon (ic_draw.png - đề nghị hòa) - wrap trong StackPane
-        StackPane drawContainer = new StackPane();
-        ImageView drawIcon = new ImageView(AssetHelper.image("ic_draw.png"));
-        drawIcon.setFitWidth(60);
-        drawIcon.setFitHeight(60);
-        drawIcon.setPreserveRatio(true);
-        drawContainer.getChildren().add(drawIcon);
-        drawContainer.setCursor(Cursor.HAND);
-        drawContainer.setMouseTransparent(false);
-        drawContainer.setPickOnBounds(true);
-        
-        // Hover effects cho các icon - scale StackPane thay vì ImageView
-        ScaleTransition resignScaleIn = new ScaleTransition(Duration.millis(200), resignContainer);
-        resignScaleIn.setToX(1.1);
-        resignScaleIn.setToY(1.1);
-        
-        ScaleTransition resignScaleOut = new ScaleTransition(Duration.millis(200), resignContainer);
-        resignScaleOut.setToX(1.0);
-        resignScaleOut.setToY(1.0);
-        
-        resignContainer.setOnMouseEntered(e -> {
-            resignScaleOut.stop();
-            resignScaleIn.setFromX(resignContainer.getScaleX());
-            resignScaleIn.setFromY(resignContainer.getScaleY());
-            resignScaleIn.play();
-        });
-        resignContainer.setOnMouseExited(e -> {
-            resignScaleIn.stop();
-            resignScaleOut.setFromX(resignContainer.getScaleX());
-            resignScaleOut.setFromY(resignContainer.getScaleY());
-            resignScaleOut.play();
-        });
-        
-        // Click handler để hiển thị confirmation dialog
-        resignContainer.setOnMouseClicked(e -> {
-            dialogManager.showSurrenderConfirmation();
-            e.consume();
-        });
-        
-        ScaleTransition drawScaleIn = new ScaleTransition(Duration.millis(200), drawContainer);
-        drawScaleIn.setToX(1.1);
-        drawScaleIn.setToY(1.1);
-        
-        ScaleTransition drawScaleOut = new ScaleTransition(Duration.millis(200), drawContainer);
-        drawScaleOut.setToX(1.0);
-        drawScaleOut.setToY(1.0);
-        
-        drawContainer.setOnMouseEntered(e -> {
-            drawScaleOut.stop();
-            drawScaleIn.setFromX(drawContainer.getScaleX());
-            drawScaleIn.setFromY(drawContainer.getScaleY());
-            drawScaleIn.play();
-        });
-        drawContainer.setOnMouseExited(e -> {
-            drawScaleIn.stop();
-            drawScaleOut.setFromX(drawContainer.getScaleX());
-            drawScaleOut.setFromY(drawContainer.getScaleY());
-            drawScaleOut.play();
-        });
-        
-        // Click handler để hiển thị draw request confirmation
-        drawContainer.setOnMouseClicked(e -> {
-            dialogManager.showDrawRequestConfirmation();
-            e.consume();
-        });
-        
-        container.getChildren().addAll(resignContainer, drawContainer);
-        
+        // Children sẽ được thêm trong updateLeftIcons()
         return container;
     }
     
@@ -752,10 +697,10 @@ public class GamePanel extends StackPane implements IGamePanel {
     
     /**
      * Apply opponent's move from server
-     * @param fromCol Column of piece to move (0-8)
-     * @param fromRow Row of piece to move (0-9)
-     * @param toCol Target column (0-8)
-     * @param toRow Target row (0-9)
+     * @param fromCol Column of piece to move (0-8) - Backend coordinates
+     * @param fromRow Row of piece to move (0-9) - Backend coordinates
+     * @param toCol Target column (0-8) - Backend coordinates
+     * @param toRow Target row (0-9) - Backend coordinates
      */
     public void applyOpponentMove(int fromCol, int fromRow, int toCol, int toRow) {
         Platform.runLater(() -> {
@@ -764,27 +709,32 @@ public class GamePanel extends StackPane implements IGamePanel {
                 return;
             }
             
-            double boardSize = 923.0;
-            double cellWidth = boardSize / 9.0;
-            double cellHeight = boardSize / 10.0;
+            // Convert: Backend row (0=top đen) → Frontend row (0=top đỏ)
+            // Backend: row 0 = top (đen), row 9 = bottom (đỏ)
+            // Frontend: row 0 = top (đỏ), row 9 = bottom (đen)
+            // Công thức: frontendRow = 9 - backendRow
+            int frontendFromRow = 9 - fromRow;
+            int frontendToRow = 9 - toRow;
             
-            // Tìm quân cờ tại vị trí from
+            // Tìm quân cờ tại vị trí from (dùng row/col từ PieceInfo - không dùng pixel)
             ImageView pieceToMove = null;
             ImageView capturedPiece = null;
+            
+            System.out.println("[GamePanel] Looking for piece at FE(" + frontendFromRow + "," + fromCol + ") BE(" + fromRow + "," + fromCol + ")");
             
             for (javafx.scene.Node node : piecesContainer.getChildren()) {
                 if (node instanceof ImageView) {
                     ImageView imgView = (ImageView) node;
                     if (imgView.getUserData() instanceof ChessBoardManager.PieceInfo) {
-                        int pieceRow = (int) Math.round(imgView.getLayoutY() / cellHeight);
-                        int pieceCol = (int) Math.round(imgView.getLayoutX() / cellWidth);
-                        pieceRow = Math.max(0, Math.min(9, pieceRow));
-                        pieceCol = Math.max(0, Math.min(8, pieceCol));
+                        ChessBoardManager.PieceInfo info = (ChessBoardManager.PieceInfo) imgView.getUserData();
                         
-                        if (pieceRow == fromRow && pieceCol == fromCol) {
+                        // So sánh bằng row/col từ PieceInfo (vị trí lưới)
+                        if (info.row == frontendFromRow && info.col == fromCol) {
                             pieceToMove = imgView;
+                            System.out.println("[GamePanel] Found piece to move: " + info.color + " " + info.pieceType +
+                                " at grid position (" + info.row + "," + info.col + ")");
                         }
-                        if (pieceRow == toRow && pieceCol == toCol) {
+                        if (info.row == frontendToRow && info.col == toCol) {
                             capturedPiece = imgView;
                         }
                     }
@@ -792,7 +742,19 @@ public class GamePanel extends StackPane implements IGamePanel {
             }
             
             if (pieceToMove == null) {
-                System.err.println("[GamePanel] Could not find piece at (" + fromRow + "," + fromCol + ")");
+                System.err.println("[GamePanel] Could not find piece at FE(" + frontendFromRow + "," + fromCol + ") BE(" + fromRow + "," + fromCol + ")");
+                // Debug: in ra tất cả pieces với row/col
+                System.err.println("[GamePanel] Available pieces:");
+                for (javafx.scene.Node node : piecesContainer.getChildren()) {
+                    if (node instanceof ImageView) {
+                        ImageView imgView = (ImageView) node;
+                        if (imgView.getUserData() instanceof ChessBoardManager.PieceInfo) {
+                            ChessBoardManager.PieceInfo info = (ChessBoardManager.PieceInfo) imgView.getUserData();
+                            System.err.println("  - " + info.color + " " + info.pieceType +
+                                " at grid (" + info.row + "," + info.col + ")");
+                        }
+                    }
+                }
                 return;
             }
             
@@ -806,14 +768,55 @@ public class GamePanel extends StackPane implements IGamePanel {
                 piecesContainer.getChildren().remove(capturedPiece);
             }
             
-            // Di chuyển quân cờ đến vị trí mới
-            double newX = toCol * cellWidth + (cellWidth - pieceToMove.getFitWidth()) / 2;
-            double newY = toRow * cellHeight + (cellHeight - pieceToMove.getFitHeight()) / 2;
+            // Di chuyển quân cờ đến vị trí mới (dùng công thức đặt quân cờ với offset)
+            ChessBoardManager.PieceInfo pieceInfo = (ChessBoardManager.PieceInfo) pieceToMove.getUserData();
+            
+            // Tính toán vị trí giao điểm dựa trên công thức đặt quân cờ trong ChessBoardManager
+            double boardSize = 923.0;
+            double startX = 45.0;
+            double startY = 45.0;
+            double endX = boardSize - 45.0;
+            double endY = boardSize - 45.0;
+            double intersectionSpacingX = (endX - startX) / 8.0;
+            double intersectionSpacingY = (endY - startY) / 9.0;
+            double pieceWidth = intersectionSpacingX * 0.8;
+            double pieceHeight = intersectionSpacingY * 0.8;
+            
+            // Tính vị trí giao điểm cho to (dùng frontend coordinates)
+            double toIntersectionX = startX + toCol * intersectionSpacingX;
+            double toIntersectionY = startY + frontendToRow * intersectionSpacingY;
+            
+            // Tính offset dựa trên màu quân cờ (giống như trong ChessBoardManager)
+            double offsetX = 0;
+            double offsetY = 0;
+            if (pieceInfo != null) {
+                if ("red".equals(pieceInfo.color)) {
+                    offsetY = -10;  // Dịch lên trên 10px
+                    if (toCol >= 5) {  // Cột 5, 6, 7, 8
+                        offsetX = 5;  // Dịch sang phải thêm 5px
+                    } else {
+                        offsetX = -4;
+                    }
+                } else if ("black".equals(pieceInfo.color)) {
+                    if (toCol < 5) {
+                        offsetX = -5;
+                    } else {
+                        offsetX = 9;
+                    }
+                }
+            }
+            
+            // Đặt tâm quân cờ tại giao điểm (trừ đi một nửa kích thước) + offset
+            double newX = toIntersectionX - pieceWidth / 2.0 + offsetX;
+            double newY = toIntersectionY - pieceHeight / 2.0 + offsetY;
             pieceToMove.setLayoutX(newX);
             pieceToMove.setLayoutY(newY);
             
+            // CẬP NHẬT row/col trong PieceInfo (quan trọng!)
+            pieceInfo.row = frontendToRow;
+            pieceInfo.col = toCol;
+            
             // Lấy thông tin để thêm vào move history
-            ChessBoardManager.PieceInfo pieceInfo = (ChessBoardManager.PieceInfo) pieceToMove.getUserData();
             if (pieceInfo != null) {
                 String capturedInfo = "";
                 if (capturedPiece != null && capturedPiece != pieceToMove) {
@@ -822,7 +825,7 @@ public class GamePanel extends StackPane implements IGamePanel {
                         capturedInfo = String.format(" (captured %s %s)", capInfo.color, capInfo.pieceType);
                     }
                 }
-                moveHistoryManager.addMove(pieceInfo.color, pieceInfo.pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
+                moveHistoryManager.addMove(pieceInfo.color, pieceInfo.pieceType, frontendFromRow, fromCol, frontendToRow, toCol, capturedInfo);
             }
             
             // Đổi lượt
@@ -831,7 +834,9 @@ public class GamePanel extends StackPane implements IGamePanel {
             // Cập nhật timer
             timerManager.updateTimersOnTurnChange();
             
-            System.out.println("[GamePanel] Applied opponent move: (" + fromRow + "," + fromCol + ") -> (" + toRow + "," + toCol + ")");
+            System.out.println("[GamePanel] Applied opponent move: FE(" + frontendFromRow + "," + fromCol + 
+                ") -> FE(" + frontendToRow + "," + toCol + ") BE(" + fromRow + "," + fromCol + 
+                ") -> BE(" + toRow + "," + toCol + ")");
             
             // Check game end after opponent move
             Platform.runLater(() -> {
@@ -985,27 +990,23 @@ public class GamePanel extends StackPane implements IGamePanel {
             return board;
         }
         
-        // Calculate cell dimensions
-        double boardSize = 923.0;
-        double cellWidth = boardSize / 9.0;
-        double cellHeight = boardSize / 10.0;
-        
-        // Extract piece positions from piecesContainer
+        // Extract piece positions from piecesContainer (dùng row/col từ PieceInfo)
         for (javafx.scene.Node node : piecesContainer.getChildren()) {
             if (node instanceof ImageView) {
                 ImageView piece = (ImageView) node;
                 if (piece.getUserData() instanceof ChessBoardManager.PieceInfo) {
                     ChessBoardManager.PieceInfo info = (ChessBoardManager.PieceInfo) piece.getUserData();
                     
-                    // Calculate row and col from layout position
-                    int row = (int) Math.round(piece.getLayoutY() / cellHeight);
-                    int col = (int) Math.round(piece.getLayoutX() / cellWidth);
-                    row = Math.max(0, Math.min(9, row));
-                    col = Math.max(0, Math.min(8, col));
+                    // Dùng row/col từ PieceInfo thay vì tính từ pixel
+                    int row = info.row;
+                    int col = info.col;
                     
-                    // Convert piece type to character
-                    char pieceChar = ChessBoardManager.getPieceChar(info.pieceType, info.color.equals("red"));
-                    board[row][col] = pieceChar;
+                    // Chỉ thêm vào board nếu row/col hợp lệ
+                    if (row >= 0 && row < 10 && col >= 0 && col < 9) {
+                        // Convert piece type to character
+                        char pieceChar = ChessBoardManager.getPieceChar(info.pieceType, info.color.equals("red"));
+                        board[row][col] = pieceChar;
+                    }
                 }
             }
         }
@@ -1090,6 +1091,144 @@ public class GamePanel extends StackPane implements IGamePanel {
                 System.out.println("[GamePanel] Check! Red: " + redInCheck + ", Black: " + blackInCheck);
                 // TODO: Show "Check!" indicator in UI
             }
+        }
+    }
+    
+    /**
+     * Cập nhật leftIcons dựa trên currentGameMode
+     */
+    private void updateLeftIcons() {
+        if (leftIcons == null || dialogManager == null) {
+            return;
+        }
+        
+        // Xóa tất cả children cũ
+        leftIcons.getChildren().clear();
+        
+        // Kiểm tra xem có đang ở custom mode không
+        boolean isCustomMode = "custom".equals(state.getCurrentGameMode());
+        
+        if (isCustomMode) {
+            // Custom mode: chỉ hiển thị quit button
+            StackPane quitContainer = new StackPane();
+            ImageView quitIcon = new ImageView(AssetHelper.image("ic_quit.png"));
+            quitIcon.setFitWidth(60);
+            quitIcon.setFitHeight(60);
+            quitIcon.setPreserveRatio(true);
+            quitContainer.getChildren().add(quitIcon);
+            quitContainer.setCursor(Cursor.HAND);
+            quitContainer.setMouseTransparent(false);
+            quitContainer.setPickOnBounds(true);
+            
+            // Hover effects cho quit icon
+            ScaleTransition quitScaleIn = new ScaleTransition(Duration.millis(200), quitContainer);
+            quitScaleIn.setToX(1.1);
+            quitScaleIn.setToY(1.1);
+            
+            ScaleTransition quitScaleOut = new ScaleTransition(Duration.millis(200), quitContainer);
+            quitScaleOut.setToX(1.0);
+            quitScaleOut.setToY(1.0);
+            
+            quitContainer.setOnMouseEntered(e -> {
+                quitScaleOut.stop();
+                quitScaleIn.setFromX(quitContainer.getScaleX());
+                quitScaleIn.setFromY(quitContainer.getScaleY());
+                quitScaleIn.play();
+            });
+            quitContainer.setOnMouseExited(e -> {
+                quitScaleIn.stop();
+                quitScaleOut.setFromX(quitContainer.getScaleX());
+                quitScaleOut.setFromY(quitContainer.getScaleY());
+                quitScaleOut.play();
+            });
+            
+            // Click handler để hiển thị quit confirmation dialog
+            quitContainer.setOnMouseClicked(e -> {
+                dialogManager.showQuitConfirmation();
+                e.consume();
+            });
+            
+            leftIcons.getChildren().add(quitContainer);
+        } else {
+            // Normal mode: hiển thị resign và draw buttons
+            // Flag icon (ic_signup.png - có thể là resign/surrender) - wrap trong StackPane
+            StackPane resignContainer = new StackPane();
+            ImageView resignIcon = new ImageView(AssetHelper.image("ic_signup.png"));
+            resignIcon.setFitWidth(60);
+            resignIcon.setFitHeight(60);
+            resignIcon.setPreserveRatio(true);
+            resignContainer.getChildren().add(resignIcon);
+            resignContainer.setCursor(Cursor.HAND);
+            resignContainer.setMouseTransparent(false);
+            resignContainer.setPickOnBounds(true);
+            
+            // Draw icon (ic_draw.png - đề nghị hòa) - wrap trong StackPane
+            StackPane drawContainer = new StackPane();
+            ImageView drawIcon = new ImageView(AssetHelper.image("ic_draw.png"));
+            drawIcon.setFitWidth(60);
+            drawIcon.setFitHeight(60);
+            drawIcon.setPreserveRatio(true);
+            drawContainer.getChildren().add(drawIcon);
+            drawContainer.setCursor(Cursor.HAND);
+            drawContainer.setMouseTransparent(false);
+            drawContainer.setPickOnBounds(true);
+            
+            // Hover effects cho các icon - scale StackPane thay vì ImageView
+            ScaleTransition resignScaleIn = new ScaleTransition(Duration.millis(200), resignContainer);
+            resignScaleIn.setToX(1.1);
+            resignScaleIn.setToY(1.1);
+            
+            ScaleTransition resignScaleOut = new ScaleTransition(Duration.millis(200), resignContainer);
+            resignScaleOut.setToX(1.0);
+            resignScaleOut.setToY(1.0);
+            
+            resignContainer.setOnMouseEntered(e -> {
+                resignScaleOut.stop();
+                resignScaleIn.setFromX(resignContainer.getScaleX());
+                resignScaleIn.setFromY(resignContainer.getScaleY());
+                resignScaleIn.play();
+            });
+            resignContainer.setOnMouseExited(e -> {
+                resignScaleIn.stop();
+                resignScaleOut.setFromX(resignContainer.getScaleX());
+                resignScaleOut.setFromY(resignContainer.getScaleY());
+                resignScaleOut.play();
+            });
+            
+            // Click handler để hiển thị confirmation dialog
+            resignContainer.setOnMouseClicked(e -> {
+                dialogManager.showSurrenderConfirmation();
+                e.consume();
+            });
+            
+            ScaleTransition drawScaleIn = new ScaleTransition(Duration.millis(200), drawContainer);
+            drawScaleIn.setToX(1.1);
+            drawScaleIn.setToY(1.1);
+            
+            ScaleTransition drawScaleOut = new ScaleTransition(Duration.millis(200), drawContainer);
+            drawScaleOut.setToX(1.0);
+            drawScaleOut.setToY(1.0);
+            
+            drawContainer.setOnMouseEntered(e -> {
+                drawScaleOut.stop();
+                drawScaleIn.setFromX(drawContainer.getScaleX());
+                drawScaleIn.setFromY(drawContainer.getScaleY());
+                drawScaleIn.play();
+            });
+            drawContainer.setOnMouseExited(e -> {
+                drawScaleIn.stop();
+                drawScaleOut.setFromX(drawContainer.getScaleX());
+                drawScaleOut.setFromY(drawContainer.getScaleY());
+                drawScaleOut.play();
+            });
+            
+            // Click handler để hiển thị draw request confirmation
+            drawContainer.setOnMouseClicked(e -> {
+                dialogManager.showDrawRequestConfirmation();
+                e.consume();
+            });
+            
+            leftIcons.getChildren().addAll(resignContainer, drawContainer);
         }
     }
 }

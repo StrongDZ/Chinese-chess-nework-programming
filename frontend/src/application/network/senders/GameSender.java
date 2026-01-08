@@ -122,12 +122,75 @@ public class GameSender {
     }
     
     /**
-     * Request AI match.
+     * Request AI match with full parameters.
+     * @param gameMode Game mode: "classical", "blitz", or "custom"
+     * @param aiMode AI difficulty: "easy", "medium", or "hard"
+     * @param timeLimit Time limit in seconds (0 for unlimited)
+     * @param gameTimer Game timer in seconds (0 for classical, 600 for blitz, custom value for custom)
+     * @param playerSide Player side: "red" or "black" (default: "red")
+     */
+    public void requestAIMatch(String gameMode, String aiMode, int timeLimit, int gameTimer, String playerSide) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("game_mode", gameMode != null ? gameMode : "classical");
+        payload.addProperty("ai_mode", aiMode != null ? aiMode : "medium");
+        payload.addProperty("time_limit", timeLimit);
+        payload.addProperty("game_timer", gameTimer);
+        payload.addProperty("playerSide", playerSide != null ? playerSide : "red");
+        System.out.println("[GameSender] Sending AI_MATCH request: game_mode=" + gameMode + ", ai_mode=" + aiMode + ", time_limit=" + timeLimit + ", game_timer=" + gameTimer + ", playerSide=" + playerSide);
+        socketClient.send(MessageType.AI_MATCH, gson.toJson(payload));
+    }
+    
+    /**
+     * Request AI match with default parameters (backward compatibility).
+     * @param difficulty AI difficulty: 0=easy, 1=medium, 2=hard
      */
     public void requestAIMatch(int difficulty) throws IOException {
+        String aiMode = "medium";
+        if (difficulty == 0) aiMode = "easy";
+        else if (difficulty == 1) aiMode = "medium";
+        else if (difficulty == 2) aiMode = "hard";
+        requestAIMatch("classical", aiMode, 0, 0, "red");
+    }
+    
+    /**
+     * Request custom game with custom board setup.
+     * @param customBoardSetup Map of "row_col" -> "color_pieceType" (e.g., "0_0" -> "red_Rook")
+     * @param opponent Opponent username (empty if playing with AI)
+     * @param aiMode AI difficulty: "easy", "medium", or "hard" (if playing with AI)
+     * @param timeLimit Time limit in seconds (0 for unlimited)
+     * @param gameTimer Game timer in seconds
+     * @param playerSide Player side: "red" or "black" (default: "red")
+     */
+    public void requestCustomGame(java.util.Map<String, String> customBoardSetup, 
+                                  String opponent, String aiMode, 
+                                  int timeLimit, int gameTimer, String playerSide) throws IOException {
         JsonObject payload = new JsonObject();
-        payload.addProperty("difficulty", difficulty);
-        socketClient.send(MessageType.AI_MATCH, gson.toJson(payload));
+        payload.addProperty("game_mode", "custom");
+        payload.addProperty("time_limit", timeLimit);
+        payload.addProperty("game_timer", gameTimer);
+        payload.addProperty("playerSide", playerSide != null ? playerSide : "red");
+        
+        // Convert custom board setup map to JSON object
+        JsonObject boardSetupJson = new JsonObject();
+        if (customBoardSetup != null) {
+            for (java.util.Map.Entry<String, String> entry : customBoardSetup.entrySet()) {
+                boardSetupJson.addProperty(entry.getKey(), entry.getValue());
+            }
+        }
+        payload.add("custom_board_setup", boardSetupJson);
+        
+        if (opponent != null && !opponent.isEmpty()) {
+            payload.addProperty("opponent", opponent);
+        }
+        if (aiMode != null && !aiMode.isEmpty()) {
+            payload.addProperty("ai_mode", aiMode);
+        }
+        
+        System.out.println("[GameSender] Sending CUSTOM_GAME request: opponent=" + opponent + 
+                          ", ai_mode=" + aiMode + ", time_limit=" + timeLimit + 
+                          ", game_timer=" + gameTimer + ", playerSide=" + playerSide +
+                          ", board_setup_size=" + (customBoardSetup != null ? customBoardSetup.size() : 0));
+        socketClient.send(MessageType.CUSTOM_GAME, gson.toJson(payload));
     }
     
     /**
