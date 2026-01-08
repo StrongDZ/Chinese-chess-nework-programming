@@ -67,6 +67,8 @@ public class NetworkManager {
         setupMessageListener();
     }
     
+    private FriendHandler friendHandler; // Store reference for setting root pane
+    
     private void initializeHandlers() {
         // Auth handler
         authHandler = new AuthHandler(uiState);
@@ -77,10 +79,20 @@ public class NetworkManager {
         handlers.add(new GameHandler(uiState));
         
         // Friend handler
-        handlers.add(new FriendHandler(uiState));
+        friendHandler = new FriendHandler(uiState);
+        handlers.add(friendHandler);
         
         // Info handler
         handlers.add(new InfoHandler(uiState));
+    }
+    
+    /**
+     * Set root pane for friend handler to show notification dialogs.
+     */
+    public void setFriendHandlerRootPane(javafx.scene.layout.Pane rootPane) {
+        if (friendHandler != null) {
+            friendHandler.setRootPane(rootPane);
+        }
     }
     
     private void initializeSenders() {

@@ -22,6 +22,7 @@ public:
   nlohmann::json handleListSentRequests(const nlohmann::json &request);
   nlohmann::json handleListBlockedUsers(const nlohmann::json &request);
   nlohmann::json handleSearchFriends(const nlohmann::json &request);
+  nlohmann::json handleListAllReceivedRequests(const nlohmann::json &request);
 };
 
 #endif

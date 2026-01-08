@@ -78,6 +78,10 @@ public class UIState {
     // Opponent profile (for game panel)
     private final StringProperty opponentUsername = new SimpleStringProperty("");
     private final javafx.beans.property.IntegerProperty opponentElo = new javafx.beans.property.SimpleIntegerProperty(100);
+    
+    // Friend list management
+    private final javafx.collections.ObservableList<String> friendsList = javafx.collections.FXCollections.observableArrayList();
+    private final javafx.collections.ObservableList<String> pendingFriendRequests = javafx.collections.FXCollections.observableArrayList();
 
     public ObjectProperty<BoardState> boardStateProperty() {
         return boardState;
@@ -723,6 +727,103 @@ public class UIState {
     
     public void setPlayerIsRed(boolean value) {
         playerIsRed.set(value);
+    }
+    
+    // Friend list getters/setters
+    public javafx.collections.ObservableList<String> getFriendsList() {
+        return friendsList;
+    }
+    
+    public void addFriend(String username) {
+        if (username != null && !username.isEmpty() && !friendsList.contains(username)) {
+            friendsList.add(username);
+        }
+    }
+    
+    public void removeFriend(String username) {
+        if (username != null) {
+            friendsList.remove(username);
+        }
+    }
+    
+    public void clearFriends() {
+        friendsList.clear();
+    }
+    
+    // Pending friend requests getters/setters
+    public javafx.collections.ObservableList<String> getPendingFriendRequests() {
+        return pendingFriendRequests;
+    }
+    
+    public void addPendingFriendRequest(String fromUser) {
+        if (fromUser != null && !fromUser.isEmpty() && !pendingFriendRequests.contains(fromUser)) {
+            pendingFriendRequests.add(fromUser);
+        }
+    }
+    
+    public void removePendingFriendRequest(String fromUser) {
+        if (fromUser != null) {
+            pendingFriendRequests.remove(fromUser);
+        }
+    }
+    
+    public void clearPendingFriendRequests() {
+        pendingFriendRequests.clear();
+    }
+    
+    // Callback for updating online players list (used by InfoHandler)
+    private java.util.function.Consumer<java.util.List<String>> onlinePlayersUpdateCallback;
+    private java.util.function.Consumer<java.util.List<String>> searchResultsUpdateCallback;
+    private java.util.function.BiConsumer<java.util.List<application.components.FriendsPanel.FriendRequestInfo>, 
+                                         java.util.List<application.components.FriendsPanel.FriendRequestInfo>> friendRequestsUpdateCallback;
+    // Callback for updating badge on bottom menu Friends icon
+    private java.util.function.Consumer<Integer> friendsBadgeUpdateCallback;
+    
+    public void setOnlinePlayersUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
+        this.onlinePlayersUpdateCallback = callback;
+    }
+    
+    public void setSearchResultsUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
+        this.searchResultsUpdateCallback = callback;
+    }
+    
+    public void setFriendRequestsUpdateCallback(java.util.function.BiConsumer<
+        java.util.List<application.components.FriendsPanel.FriendRequestInfo>,
+        java.util.List<application.components.FriendsPanel.FriendRequestInfo>> callback) {
+        this.friendRequestsUpdateCallback = callback;
+    }
+    
+    public void setFriendsBadgeUpdateCallback(java.util.function.Consumer<Integer> callback) {
+        this.friendsBadgeUpdateCallback = callback;
+    }
+    
+    public void updateOnlinePlayers(java.util.List<String> players) {
+        if (onlinePlayersUpdateCallback != null) {
+            onlinePlayersUpdateCallback.accept(players);
+        }
+    }
+    
+    public void updateSearchResults(java.util.List<String> results) {
+        if (searchResultsUpdateCallback != null) {
+            searchResultsUpdateCallback.accept(results);
+        }
+    }
+    
+    public void updateFriendRequests(java.util.List<application.components.FriendsPanel.FriendRequestInfo> pending,
+                                     java.util.List<application.components.FriendsPanel.FriendRequestInfo> accepted) {
+        if (friendRequestsUpdateCallback != null) {
+            friendRequestsUpdateCallback.accept(pending, accepted);
+        }
+        
+        // Calculate total for badge: pending + accepted (rejected không đếm vì backend xóa)
+        int totalCount = (pending != null ? pending.size() : 0) + (accepted != null ? accepted.size() : 0);
+        updateFriendsBadge(totalCount);
+    }
+    
+    public void updateFriendsBadge(int count) {
+        if (friendsBadgeUpdateCallback != null) {
+            friendsBadgeUpdateCallback.accept(count);
+        }
     }
 }
 

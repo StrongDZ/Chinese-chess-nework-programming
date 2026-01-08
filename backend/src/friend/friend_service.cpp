@@ -206,3 +206,9 @@ FriendResult FriendService::searchFriends(const string& username, const string& 
     return res;
 }
 
+FriendResult FriendService::listAllReceivedRequests(const string& username) {
+    FriendResult res{true, "All received requests retrieved", nullopt, {}};
+    res.relations = repository.findAllReceivedRequests(username);
+    return res;
+}
+

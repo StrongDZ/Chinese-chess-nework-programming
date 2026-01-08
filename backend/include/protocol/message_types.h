@@ -649,9 +649,13 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::INFO: {
-      // We do not attempt to convert rapidjson::Value to nlohmann::json here.
-      // Inbound INFO will be treated as EmptyPayload by default.
-      return EmptyPayload{};
+      // Convert rapidjson::Value to nlohmann::json for INFO payload
+      rapidjson::StringBuffer buffer;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      doc.Accept(writer);
+      InfoPayload p;
+      p.data = nlohmann::json::parse(buffer.GetString());
+      return p;
     }
 
     default:

@@ -66,4 +66,15 @@ public class InfoSender {
         payload.addProperty("limit", limit);
         socketClient.send(MessageType.GAME_HISTORY, gson.toJson(payload));
     }
+    
+    /**
+     * Search users by username prefix.
+     * @param searchQuery Username prefix to search for
+     */
+    public void searchUsers(String searchQuery) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("action", "search_users");
+        payload.addProperty("search_query", searchQuery);
+        socketClient.send(MessageType.INFO, gson.toJson(payload));
+    }
 }

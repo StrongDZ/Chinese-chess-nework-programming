@@ -43,6 +43,9 @@ public:
     // Update last login (by username)
     bool updateLastLogin(const std::string& username);
     
+    // Search users by username prefix (for friend search)
+    std::vector<std::string> searchUsers(const std::string& searchQuery, int limit = 20);
+    
     // === Player Stats (MongoDB) ===
     
     // Tạo stats mặc định cho user mới (3 time controls)
