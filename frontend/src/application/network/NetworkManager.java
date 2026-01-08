@@ -68,6 +68,7 @@ public class NetworkManager {
     }
     
     private FriendHandler friendHandler; // Store reference for setting root pane
+    private GameHandler gameHandler; // Store reference for setting PlayWithFriendPanel
     
     private void initializeHandlers() {
         // Auth handler
@@ -76,7 +77,8 @@ public class NetworkManager {
         handlers.add(authHandler);
         
         // Game handler
-        handlers.add(new GameHandler(uiState));
+        gameHandler = new GameHandler(uiState);
+        handlers.add(gameHandler);
         
         // Friend handler
         friendHandler = new FriendHandler(uiState);
@@ -92,6 +94,15 @@ public class NetworkManager {
     public void setFriendHandlerRootPane(javafx.scene.layout.Pane rootPane) {
         if (friendHandler != null) {
             friendHandler.setRootPane(rootPane);
+        }
+    }
+    
+    /**
+     * Set PlayWithFriendPanel for game handler to handle challenge requests/responses.
+     */
+    public void setGameHandlerPlayWithFriendPanel(application.components.PlayWithFriendPanel panel) {
+        if (gameHandler != null) {
+            gameHandler.setPlayWithFriendPanel(panel);
         }
     }
     

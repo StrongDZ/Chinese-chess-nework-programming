@@ -345,7 +345,11 @@ void processMessage(const ParsedMessage &pm, int fd) {
     nlohmann::json arr = nlohmann::json::array();
     for (auto &p : g_clients) {
       if (!p.second.username.empty()) {
-        arr.push_back(p.second.username);
+        // Return player info with in_game status
+        nlohmann::json playerInfo;
+        playerInfo["username"] = p.second.username;
+        playerInfo["in_game"] = p.second.in_game;
+        arr.push_back(playerInfo);
       }
     }
     sendMessage(fd, MessageType::INFO, InfoPayload{arr});

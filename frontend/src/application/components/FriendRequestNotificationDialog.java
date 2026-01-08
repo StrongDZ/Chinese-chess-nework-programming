@@ -16,22 +16,29 @@ import javafx.scene.effect.DropShadow;
 import javafx.util.Duration;
 import java.io.IOException;
 
-/**
- * Dialog to show when receiving a friend request from another user.
- */
 public class FriendRequestNotificationDialog extends StackPane {
     
     private final NetworkManager networkManager = NetworkManager.getInstance();
     private final String fromUser;
     private Runnable onClose;
+    private Runnable onHide;
     
     public FriendRequestNotificationDialog(String fromUser, Runnable onClose) {
         this.fromUser = fromUser;
         this.onClose = onClose;
+        this.onHide = null;
         
         setPrefSize(600, 350);
         setLayoutX((1920 - 600) / 2);
         setLayoutY((1080 - 350) / 2);
+        
+        setVisible(true);
+        setManaged(true);
+        setMouseTransparent(false);
+        setPickOnBounds(true);
+        setFocusTraversable(true);
+        setViewOrder(-2000); // Đảm bảo luôn nằm trên Overlay
+        setDisable(false);
         
         // Background
         Rectangle bg = new Rectangle(600, 350);
@@ -40,6 +47,10 @@ public class FriendRequestNotificationDialog extends StackPane {
         bg.setStrokeWidth(2);
         bg.setArcWidth(20);
         bg.setArcHeight(20);
+        
+        // Background phải mouseTransparent(true) để không chặn clicks vào buttons
+        // Dialog container (StackPane) sẽ chặn clicks phía sau, không cần background chặn
+        bg.setMouseTransparent(true); 
         
         DropShadow shadow = new DropShadow();
         shadow.setColor(Color.color(0, 0, 0, 0.5));
@@ -53,6 +64,8 @@ public class FriendRequestNotificationDialog extends StackPane {
         content.setPrefSize(600, 350);
         content.setAlignment(Pos.CENTER);
         content.setPadding(new Insets(40));
+        content.setMouseTransparent(false);
+        content.setPickOnBounds(true);
         
         // Message
         Label messageLabel = new Label(fromUser + " wants to be your friend");
@@ -65,19 +78,23 @@ public class FriendRequestNotificationDialog extends StackPane {
         );
         messageLabel.setAlignment(Pos.CENTER);
         messageLabel.setPrefWidth(520);
+        messageLabel.setMouseTransparent(true);
         
-        // Buttons
+        // Buttons Container
         HBox buttonsContainer = new HBox(20);
         buttonsContainer.setAlignment(Pos.CENTER);
+        buttonsContainer.setMouseTransparent(false);
+        buttonsContainer.setPickOnBounds(true);
         
         // Accept button
         StackPane acceptButton = createDialogButton("Accept", true);
         acceptButton.setOnMouseClicked(e -> {
+            System.out.println("[Dialog] Accept clicked"); // Debug log
             try {
                 networkManager.friend().respondFriendRequest(fromUser, true);
-                hide();
+                hide(true);
             } catch (IOException ex) {
-                System.err.println("[FriendRequestNotificationDialog] Failed to accept friend request: " + ex.getMessage());
+                ex.printStackTrace();
             }
             e.consume();
         });
@@ -85,26 +102,88 @@ public class FriendRequestNotificationDialog extends StackPane {
         // Decline button
         StackPane declineButton = createDialogButton("Decline", false);
         declineButton.setOnMouseClicked(e -> {
+            System.out.println("[Dialog] Decline clicked"); // Debug log
             try {
                 networkManager.friend().respondFriendRequest(fromUser, false);
-                hide();
+                hide(true);
             } catch (IOException ex) {
-                System.err.println("[FriendRequestNotificationDialog] Failed to decline friend request: " + ex.getMessage());
+                ex.printStackTrace();
             }
             e.consume();
         });
         
         buttonsContainer.getChildren().addAll(acceptButton, declineButton);
-        
         content.getChildren().addAll(messageLabel, buttonsContainer);
         
-        getChildren().addAll(bg, content);
+        // Close button (X)
+        StackPane closeButton = createCloseButton();
+        closeButton.setOnMouseClicked(e -> {
+            System.out.println("[Dialog] Close (X) clicked"); // Debug log
+            hide();
+            e.consume();
+        });
         
-        // Fade in animation
+        javafx.scene.layout.AnchorPane closeButtonContainer = new javafx.scene.layout.AnchorPane();
+        closeButtonContainer.setPrefSize(600, 350);
+        // QUAN TRỌNG: pickOnBounds = FALSE để clicks vùng trống đi xuyên qua đến content (Accept/Decline buttons)
+        // Chỉ close button mới nhận clicks, không phải toàn bộ AnchorPane
+        closeButtonContainer.setMouseTransparent(false);
+        closeButtonContainer.setPickOnBounds(false);
+        
+        javafx.scene.layout.AnchorPane.setTopAnchor(closeButton, 15.0);
+        javafx.scene.layout.AnchorPane.setRightAnchor(closeButton, 15.0);
+        closeButtonContainer.getChildren().add(closeButton);
+        
+        getChildren().addAll(bg, content, closeButtonContainer);
+        
         setOpacity(0);
         FadeTransition fadeIn = new FadeTransition(Duration.millis(300), this);
         fadeIn.setToValue(1.0);
+        fadeIn.setOnFinished(e -> javafx.application.Platform.runLater(this::toFront));
         fadeIn.play();
+    }
+    
+    private StackPane createCloseButton() {
+        StackPane button = new StackPane();
+        button.setPrefSize(40, 40);
+        
+        javafx.scene.shape.Circle circleBg = new javafx.scene.shape.Circle(20);
+        circleBg.setFill(Color.color(0.8, 0.8, 0.8));
+        circleBg.setStroke(Color.color(0.5, 0.5, 0.5));
+        
+        javafx.scene.shape.Line line1 = new javafx.scene.shape.Line(12, 12, 28, 28);
+        line1.setStroke(Color.color(0.3, 0.3, 0.3));
+        line1.setStrokeWidth(3);
+        
+        javafx.scene.shape.Line line2 = new javafx.scene.shape.Line(28, 12, 12, 28);
+        line2.setStroke(Color.color(0.3, 0.3, 0.3));
+        line2.setStrokeWidth(3);
+        
+        // --- 2. Button Children: ĐỔI VỀ TRUE ---
+        // Cho phép click đi xuyên qua hình vẽ để chạm vào StackPane (button)
+        circleBg.setMouseTransparent(true); 
+        line1.setMouseTransparent(true);
+        line2.setMouseTransparent(true);
+        
+        button.getChildren().addAll(circleBg, line1, line2);
+        button.setCursor(Cursor.HAND);
+        
+        // --- 3. StackPane Container: Đón nhận click ---
+        button.setMouseTransparent(false);
+        button.setPickOnBounds(true); // Bắt click trong toàn bộ vùng 40x40
+        
+        button.setOnMouseEntered(e -> {
+            circleBg.setFill(Color.color(0.9, 0.9, 0.9));
+            ScaleTransition st = new ScaleTransition(Duration.millis(200), button);
+            st.setToX(1.1); st.setToY(1.1); st.play();
+        });
+        button.setOnMouseExited(e -> {
+            circleBg.setFill(Color.color(0.8, 0.8, 0.8));
+            ScaleTransition st = new ScaleTransition(Duration.millis(200), button);
+            st.setToX(1.0); st.setToY(1.0); st.play();
+        });
+        
+        return button;
     }
     
     private StackPane createDialogButton(String text, boolean isPrimary) {
@@ -112,55 +191,51 @@ public class FriendRequestNotificationDialog extends StackPane {
         button.setPrefSize(180, 60);
         
         Rectangle buttonBg = new Rectangle(180, 60);
-        if (isPrimary) {
-            buttonBg.setFill(Color.web("#A65252"));
-        } else {
-            buttonBg.setFill(Color.color(0.7, 0.7, 0.7));
-        }
+        if (isPrimary) buttonBg.setFill(Color.web("#A65252"));
+        else buttonBg.setFill(Color.color(0.7, 0.7, 0.7));
         buttonBg.setArcWidth(15);
         buttonBg.setArcHeight(15);
         
+        // --- 2. Button Children: ĐỔI VỀ TRUE ---
+        // Cho phép click đi xuyên qua hình nền và chữ
+        buttonBg.setMouseTransparent(true); 
+        
         Label buttonLabel = new Label(text);
-        buttonLabel.setStyle(
-            "-fx-font-family: 'Kolker Brush'; " +
-            "-fx-font-size: 32px; " +
-            "-fx-text-fill: white; " +
-            "-fx-background-color: transparent;"
-        );
+        buttonLabel.setStyle("-fx-font-family: 'Kolker Brush'; -fx-font-size: 32px; -fx-text-fill: white; -fx-background-color: transparent;");
+        buttonLabel.setMouseTransparent(true); 
         
         button.getChildren().addAll(buttonBg, buttonLabel);
         button.setCursor(Cursor.HAND);
         
-        // Hover effect
+        // --- 3. StackPane Container: Đón nhận click ---
+        button.setMouseTransparent(false);
+        button.setPickOnBounds(true); // Bắt click trong toàn bộ vùng 180x60
+        
         button.setOnMouseEntered(e -> {
-            ScaleTransition scaleIn = new ScaleTransition(Duration.millis(200), button);
-            scaleIn.setToX(1.05);
-            scaleIn.setToY(1.05);
-            scaleIn.play();
+            ScaleTransition st = new ScaleTransition(Duration.millis(200), button);
+            st.setToX(1.05); st.setToY(1.05); st.play();
         });
         button.setOnMouseExited(e -> {
-            ScaleTransition scaleOut = new ScaleTransition(Duration.millis(200), button);
-            scaleOut.setToX(1.0);
-            scaleOut.setToY(1.0);
-            scaleOut.play();
+            ScaleTransition st = new ScaleTransition(Duration.millis(200), button);
+            st.setToX(1.0); st.setToY(1.0); st.play();
         });
         
         return button;
     }
     
-    public void hide() {
+    public void hide() { hide(false); }
+    public void setOnHide(Runnable onHide) { this.onHide = onHide; }
+    
+    public void hide(boolean removeFromPending) {
         FadeTransition fadeOut = new FadeTransition(Duration.millis(300), this);
         fadeOut.setToValue(0.0);
         fadeOut.setOnFinished(event -> {
-            if (getParent() != null && getParent() instanceof javafx.scene.layout.Pane) {
+            if (getParent() instanceof javafx.scene.layout.Pane) {
                 ((javafx.scene.layout.Pane) getParent()).getChildren().remove(this);
             }
-            if (onClose != null) {
-                onClose.run();
-            }
+            if (onHide != null) onHide.run();
+            if (removeFromPending && onClose != null) onClose.run();
         });
         fadeOut.play();
     }
 }
-
-

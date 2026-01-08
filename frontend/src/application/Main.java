@@ -139,6 +139,30 @@ public class Main extends Application {
         // Set root pane for friend handler and friends panel to show dialogs
         networkManager.setFriendHandlerRootPane(stageLayer);
         friendsPanel.setRootPane(stageLayer);
+        
+        // Set root pane for PlayWithFriendPanel to show challenge request dialogs
+        playWithFriendPanel.setRootPane(stageLayer);
+        
+        // Set PlayWithFriendPanel for game handler to handle challenge requests/responses
+        networkManager.setGameHandlerPlayWithFriendPanel(playWithFriendPanel);
+        
+        // Create callback chain for online players updates so both FriendsPanel and PlayWithFriendPanel receive updates
+        state.setOnlinePlayersUpdateCallback(players -> {
+            // Call FriendsPanel's update method
+            friendsPanel.updateOnlinePlayers(players);
+            // Call PlayWithFriendPanel's update method
+            playWithFriendPanel.updateOnlinePlayers(players);
+        });
+        
+        // Register callback for online players not in game updates
+        state.setOnlinePlayersNotInGameUpdateCallback(players -> {
+            playWithFriendPanel.updateOnlinePlayersNotInGame(players);
+        });
+        
+        // Register callback for friend elo updates
+        state.setFriendEloUpdateCallback((username, timeControl, elo) -> {
+            playWithFriendPanel.updateFriendElo(username, timeControl, elo);
+        });
 
         Scene scene = new Scene(root, 1920, 1080);
         Path cssPath = Path.of(System.getProperty("user.dir"),
