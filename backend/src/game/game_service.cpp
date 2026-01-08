@@ -1,6 +1,8 @@
 #include "game/game_service.h"
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <sstream>
 
@@ -182,29 +184,90 @@ string GameService::calculateNewXfen(const string &currentXfen, int fromX,
   char board[10][9];
   parseXfenToBoard(currentXfen, board);
 
+  // Validate positions
+  // NOTE: fromX/toX are COLUMNS (0-8), fromY/toY are ROWS (0-9)
+  // board[10][9] = board[row][col] = board[y][x]
+  if (fromX < 0 || fromX >= 9 || fromY < 0 || fromY >= 10 || toX < 0 ||
+      toX >= 9 || toY < 0 || toY >= 10) {
+    cerr << "[calculateNewXfen] Invalid coordinates: from=(col=" << fromX
+         << ",row=" << fromY << ") to=(col=" << toX << ",row=" << toY << ")"
+         << endl;
+    return currentXfen; // Return unchanged if invalid
+  }
+
   // Get the piece at from position
+  // board[row][col] = board[fromY][fromX] where fromY=row, fromX=col
   char piece = board[fromY][fromX];
 
-  // Move the piece
+  // Check if there's a piece at destination (capture)
+  bool isCapture = (board[toY][toX] != '.');
+
+  if (piece == '.') {
+    cerr << "[calculateNewXfen] No piece at from position (col=" << fromX
+         << ",row=" << fromY << ")" << endl;
+    return currentXfen; // Return unchanged if no piece to move
+  }
+
+  // Move the piece (this automatically handles capture by overwriting)
+  // board[row][col] = board[toY][toX] where toY=row, toX=col
   board[toY][toX] = piece;
   board[fromY][fromX] = '.';
 
   // Extract move count from current xfen
+  // X-fen format: "... w - - 0 3" (last number is full move count)
   int moveCount = 1;
   size_t lastSpace = currentXfen.rfind(' ');
   if (lastSpace != string::npos) {
     try {
-      moveCount = stoi(currentXfen.substr(lastSpace + 1));
+      string lastPart = currentXfen.substr(lastSpace + 1);
+      moveCount = stoi(lastPart);
     } catch (...) {
-      moveCount = 1;
+      // If parsing fails, try to extract from second-to-last number
+      size_t secondLastSpace = currentXfen.rfind(' ', lastSpace - 1);
+      if (secondLastSpace != string::npos) {
+        try {
+          string secondLastPart = currentXfen.substr(
+              secondLastSpace + 1, lastSpace - secondLastSpace - 1);
+          // Remove non-digit characters
+          secondLastPart.erase(remove_if(secondLastPart.begin(),
+                                         secondLastPart.end(),
+                                         [](char c) { return !isdigit(c); }),
+                               secondLastPart.end());
+          if (!secondLastPart.empty()) {
+            moveCount = stoi(secondLastPart);
+          }
+        } catch (...) {
+          moveCount = 1;
+        }
+      }
     }
   }
 
+  // Increment move count (each move increases the full move count)
+  // boardToXfen expects: moveCount * 2 for half-moves, but we want full moves
+  // So we pass the incremented full move count
+  int newMoveCount = moveCount + 1;
+
   // Generate new XFEN
-  return boardToXfen(board, nextTurn, moveCount * 2);
+  string newXfen = boardToXfen(board, nextTurn, newMoveCount * 2);
+
+  if (isCapture) {
+    char capturedPiece = board[toY][toX]; // Get before overwrite
+    cout << "[calculateNewXfen] Capture detected: piece '" << capturedPiece
+         << "' at (col=" << toX << ",row=" << toY << ") was captured" << endl;
+  }
+
+  cout << "[calculateNewXfen] Move: (col=" << fromX << ",row=" << fromY
+       << ") -> (col=" << toX << ",row=" << toY << "), piece='" << piece
+       << "', moveCount: " << moveCount << " -> " << newMoveCount << endl;
+  cout << "[calculateNewXfen] Old x-fen: " << currentXfen << endl;
+  cout << "[calculateNewXfen] New x-fen: " << newXfen << endl;
+
+  return newXfen;
 }
 
-// Helper: map piece char to human-readable name (uppercase=red, lowercase=black)
+// Helper: map piece char to human-readable name (uppercase=red,
+// lowercase=black)
 static string charToPieceName(char c) {
   switch (toupper(c)) {
   case 'K':
@@ -384,17 +447,22 @@ GameResult GameService::createCustomGame(const string &redPlayer,
                                          const string &blackPlayer,
                                          const string &customXfen,
                                          const string &startingColor,
-                                         const string &timeControl) {
+                                         const string &timeControl,
+                                         int timeLimit) {
   GameResult result;
   result.success = false;
 
-  // 1. Validate users exist
-  if (!repository.userExists(redPlayer)) {
+  // 1. Validate users exist (skip validation for AI users - username starts
+  // with "AI_")
+  bool redPlayerIsAI = (redPlayer.find("AI_") == 0);
+  bool blackPlayerIsAI = (blackPlayer.find("AI_") == 0);
+
+  if (!redPlayerIsAI && !repository.userExists(redPlayer)) {
     result.message = "red player not found";
     return result;
   }
 
-  if (!repository.userExists(blackPlayer)) {
+  if (!blackPlayerIsAI && !repository.userExists(blackPlayer)) {
     result.message = "black player not found";
     return result;
   }
@@ -421,19 +489,34 @@ GameResult GameService::createCustomGame(const string &redPlayer,
   game.current_turn = turn; // Use specified starting color
   game.move_count = 0;
   game.time_control = timeControl;
-  game.time_limit = getTimeLimitSeconds(timeControl);
+  // Use provided timeLimit if > 0, otherwise use default from timeControl
+  if (timeLimit > 0) {
+    game.time_limit = timeLimit;
+  } else if (timeControl == "custom") {
+    game.time_limit = 0; // Default to unlimited for custom mode
+  } else {
+    game.time_limit = getTimeLimitSeconds(timeControl);
+  }
   game.red_time_remaining = game.time_limit;
   game.black_time_remaining = game.time_limit;
   game.increment = getIncrementSeconds(timeControl);
   game.rated = false; // Custom games are always unrated
 
   // 5. Save to database
+  cout << "[createCustomGame] Saving game to database: red=" << redPlayer
+       << ", black=" << blackPlayer << ", xfen=" << customXfen << endl;
   string gameId = repository.createGame(game);
 
   if (gameId.empty()) {
+    cerr << "[createCustomGame] ERROR: repository.createGame returned empty "
+            "gameId"
+         << endl;
     result.message = "Failed to create custom game";
     return result;
   }
+
+  cout << "[createCustomGame] Game saved successfully, game_id=" << gameId
+       << endl;
 
   game.id = gameId;
 
@@ -472,8 +555,8 @@ GameResult GameService::makeMove(const string &username, const string &gameId,
   char board[10][9];
   parseXfenToBoard(game.xfen, board);
   char capturedChar = board[toY][toX];
-  string detectedCaptured = (capturedChar != '.') ? charToPieceName(capturedChar)
-                                                  : "";
+  string detectedCaptured =
+      (capturedChar != '.') ? charToPieceName(capturedChar) : "";
 
   // 3. Check game is in progress
   if (game.status != "in_progress") {
@@ -485,9 +568,36 @@ GameResult GameService::makeMove(const string &username, const string &gameId,
   bool isRedTurn = (game.current_turn == "red");
   string currentPlayerName = isRedTurn ? game.red_player : game.black_player;
 
-  if (currentPlayerName != username) {
-    result.message = "Not your turn";
-    return result;
+  // For AI games, check if current player is AI (starts with "AI_")
+  // In AI game, we need to allow both AI and human to move when it's their turn
+  bool isAIGame =
+      (game.red_player.find("AI_") == 0 || game.black_player.find("AI_") == 0);
+
+  if (isAIGame) {
+    // In AI game: check if current player matches the username
+    // - If current player is AI and username is AI → allow
+    // - If current player is human and username is human → allow
+    // - Otherwise → reject
+    bool currentPlayerIsAI = (currentPlayerName.find("AI_") == 0);
+    bool usernameIsAI = (username.find("AI_") == 0);
+
+    if (currentPlayerIsAI != usernameIsAI) {
+      // Mismatch: current player is AI but username is human, or vice versa
+      result.message = "Not your turn";
+      return result;
+    }
+
+    // Both are AI or both are human - check if they match
+    if (currentPlayerName != username) {
+      result.message = "Not your turn";
+      return result;
+    }
+  } else {
+    // Normal PvP game: current player must match username
+    if (currentPlayerName != username) {
+      result.message = "Not your turn";
+      return result;
+    }
   }
 
   // 5. Calculate next turn
@@ -497,8 +607,16 @@ GameResult GameService::makeMove(const string &username, const string &gameId,
   // If xfenAfter is provided by client, use it; otherwise calculate it
   string calculatedXfen = xfenAfter;
   if (calculatedXfen.empty()) {
+    cout << "[makeMove] Calculating new x-fen from current: " << game.xfen
+         << endl;
+    cout << "[makeMove] Move: (" << fromX << "," << fromY << ") -> (" << toX
+         << "," << toY << ")" << endl;
     calculatedXfen =
         calculateNewXfen(game.xfen, fromX, fromY, toX, toY, nextTurn);
+    cout << "[makeMove] Calculated x-fen: " << calculatedXfen << endl;
+  } else {
+    cout << "[makeMove] Using client-provided x-fen: " << calculatedXfen
+         << endl;
   }
 
   // 7. Build move
@@ -528,13 +646,17 @@ GameResult GameService::makeMove(const string &username, const string &gameId,
   }
 
   // 9. Update game with new XFEN
+  cout << "[makeMove] Updating database with new x-fen: " << calculatedXfen
+       << endl;
   bool updated = repository.updateAfterMove(gameId, move, nextTurn, redTime,
                                             blackTime, calculatedXfen);
 
   if (!updated) {
+    cerr << "[makeMove] ERROR: Failed to update game in database" << endl;
     result.message = "Failed to update game";
     return result;
   }
+  cout << "[makeMove] Database updated successfully" << endl;
 
   // 8. Reload game for response
   auto updatedGame = repository.findById(gameId);
@@ -971,4 +1093,86 @@ GameResult GameService::getGameDetails(const string &gameId) {
 
   result.message = "Game not found";
   return result;
+}
+
+// Convert custom board setup (JSON map) to XFEN string
+// customBoardSetup: JSON object with keys "row_col" -> "color_pieceType"
+// Example: {"0_0": "red_Rook", "9_0": "black_Rook"}
+string
+GameService::customBoardSetupToXfen(const nlohmann::json &customBoardSetup,
+                                    const string &startingColor) {
+  // Initialize empty board
+  char board[10][9];
+  for (int y = 0; y < 10; y++) {
+    for (int x = 0; x < 9; x++) {
+      board[y][x] = '.';
+    }
+  }
+
+  // Map piece types to XFEN characters
+  map<string, char> pieceMap = {// Red pieces (uppercase)
+                                {"red_King", 'K'},
+                                {"red_Advisor", 'A'},
+                                {"red_Elephant", 'B'},
+                                {"red_Horse", 'N'},
+                                {"red_Rook", 'R'},
+                                {"red_Cannon", 'C'},
+                                {"red_Pawn", 'P'},
+                                // Black pieces (lowercase)
+                                {"black_King", 'k'},
+                                {"black_Advisor", 'a'},
+                                {"black_Elephant", 'b'},
+                                {"black_Horse", 'n'},
+                                {"black_Rook", 'r'},
+                                {"black_Cannon", 'c'},
+                                {"black_Pawn", 'p'}};
+
+  // Parse custom board setup
+  if (customBoardSetup.is_object()) {
+    cout << "[customBoardSetupToXfen] Parsing " << customBoardSetup.size()
+         << " pieces" << endl;
+    for (auto &[key, value] : customBoardSetup.items()) {
+      if (value.is_string()) {
+        string posKey = key;
+        string pieceInfo = value.get<string>();
+
+        // Parse position: "row_col"
+        size_t underscorePos = posKey.find('_');
+        if (underscorePos != string::npos) {
+          try {
+            int row = stoi(posKey.substr(0, underscorePos));
+            int col = stoi(posKey.substr(underscorePos + 1));
+
+            // Validate coordinates
+            if (row >= 0 && row < 10 && col >= 0 && col < 9) {
+              // Get piece character
+              if (pieceMap.find(pieceInfo) != pieceMap.end()) {
+                board[row][col] = pieceMap[pieceInfo];
+                cout << "[customBoardSetupToXfen] Placed " << pieceInfo
+                     << " at (" << row << "," << col << ")" << endl;
+              } else {
+                cerr << "[customBoardSetupToXfen] WARNING: Unknown piece type: "
+                     << pieceInfo << endl;
+              }
+            } else {
+              cerr << "[customBoardSetupToXfen] WARNING: Invalid coordinates: ("
+                   << row << "," << col << ")" << endl;
+            }
+          } catch (const exception &e) {
+            cerr << "[customBoardSetupToXfen] ERROR parsing position " << posKey
+                 << ": " << e.what() << endl;
+            continue;
+          }
+        }
+      }
+    }
+  } else {
+    cerr << "[customBoardSetupToXfen] ERROR: customBoardSetup is not an object"
+         << endl;
+  }
+
+  // Convert to XFEN
+  string xfen = boardToXfen(board, startingColor, 1);
+  cout << "[customBoardSetupToXfen] Generated XFEN: " << xfen << endl;
+  return xfen;
 }

@@ -472,6 +472,10 @@ public class BlitzModePanel extends StackPane {
                 int timeSeconds = getSelectedTimeInSeconds();
                 state.setCurrentGameMode("blitz");
                 state.setCurrentTimeLimit(timeSeconds);
+                
+                // KHÔNG gửi AI_MATCH ở đây - sẽ gửi sau khi chọn độ khó trong AIDifficultyPanel
+                
+                // Đóng blitz mode và mở AI difficulty panel
                 state.closeBlitzMode();
                 state.openAIDifficulty();
             }

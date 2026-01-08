@@ -17,6 +17,7 @@ public enum MessageType {
     CHALLENGE_REQUEST,
     CHALLENGE_RESPONSE,
     AI_MATCH,
+    CUSTOM_GAME,
 
     // Game Flow
     GAME_START,

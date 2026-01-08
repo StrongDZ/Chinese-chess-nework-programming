@@ -1,6 +1,7 @@
 package application.components;
 
 import application.state.UIState;
+import application.network.NetworkManager;
 import application.util.AssetHelper;
 import javafx.animation.FadeTransition;
 import javafx.animation.ScaleTransition;
@@ -198,6 +199,30 @@ public class AIDifficultyPanel extends StackPane {
             if (mode == null || mode.isEmpty()) {
                 mode = "classical";
             }
+            
+            // Lấy time limit từ state
+            int timeLimit = state.getCurrentTimeLimit();
+            
+            // Tính game timer dựa trên mode
+            int gameTimer = 0; // Default cho classical
+            if ("blitz".equals(mode)) {
+                gameTimer = 600; // 10 phút cho blitz mode
+            } else if ("custom".equals(mode)) {
+                // Custom mode: cần tính từ timer values nếu có
+                // Tạm thời dùng 0, có thể cải thiện sau
+                gameTimer = 0;
+            }
+            
+            // Gửi AI_MATCH request với độ khó đã chọn
+            try {
+                NetworkManager.getInstance().game().requestAIMatch(mode, difficulty, timeLimit, gameTimer, "red");
+                System.out.println("[AIDifficultyPanel] Sent AI_MATCH: mode=" + mode + ", difficulty=" + difficulty + ", timeLimit=" + timeLimit + ", gameTimer=" + gameTimer);
+            } catch (Exception ex) {
+                System.err.println("[AIDifficultyPanel] Failed to request AI match: " + ex.getMessage());
+                ex.printStackTrace();
+                // Vẫn mở game để không block UI, nhưng có thể sẽ lỗi khi backend không nhận được request
+            }
+            
             state.closeAIDifficulty();
             state.openGame(mode);
         });

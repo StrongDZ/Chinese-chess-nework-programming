@@ -401,6 +401,10 @@ public class ClassicModePanel extends StackPane {
                 // Chọn AI: mở panel chọn độ khó, không vào game ngay
                 state.setCurrentGameMode("classical");
                 state.setCurrentTimeLimit(0);
+                
+                // KHÔNG gửi AI_MATCH ở đây - sẽ gửi sau khi chọn độ khó trong AIDifficultyPanel
+                
+                // Đóng classic mode và mở AI difficulty panel
                 state.closeClassicMode();
                 state.openAIDifficulty();
             }

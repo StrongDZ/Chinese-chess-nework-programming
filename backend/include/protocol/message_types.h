@@ -29,6 +29,7 @@ enum class MessageType {
   CHALLENGE_REQUEST,
   CHALLENGE_RESPONSE,
   AI_MATCH,
+  CUSTOM_GAME,
 
   // === Game Flow ===
   GAME_START,
@@ -108,7 +109,24 @@ struct ChallengeResponsePayload {
 };
 
 struct AIMatchPayload {
-  string gamemode;
+  string game_mode;  // Game mode: "classical", "blitz", or "custom"
+  string ai_mode;    // AI difficulty level: "easy", "medium", or "hard"
+  int time_limit{0}; // Time limit in seconds (0 for unlimited)
+  int game_timer{0}; // Game timer in seconds (0 for classical, 600 for blitz,
+                     // custom value for custom mode)
+  string playerSide{"red"}; // Player side: "red" or "black" (default: "red")
+};
+
+struct CustomGamePayload {
+  string game_mode{"custom"}; // Always "custom"
+  string opponent;            // Opponent username (empty if playing with AI)
+  string ai_mode; // AI difficulty: "easy", "medium", or "hard" (if playing with
+                  // AI)
+  nlohmann::json custom_board_setup; // Custom board setup: Map of "row_col" ->
+                                     // "color_pieceType"
+  int time_limit{0};                 // Time limit in seconds (0 for unlimited)
+  int game_timer{0};                 // Game timer in seconds
+  string playerSide{"red"}; // Player side: "red" or "black" (default: "red")
 };
 
 // Game payloads
@@ -123,6 +141,8 @@ struct GameStartPayload {
   nlohmann::json opponent_data; // Optional opponent data
   string game_mode;
   int time_limit{0}; // Time limit in seconds (0 for unlimited)
+  int game_timer{0}; // Game timer in seconds (0 for classical, 600 for blitz,
+                     // custom value for custom mode)
 };
 
 struct GameEndPayload {
@@ -213,13 +233,13 @@ struct EmptyPayload {};
 using Payload =
     variant<EmptyPayload, LoginPayload, RegisterPayload, LogoutPayload,
             ChallengeRequestPayload, ChallengeCancelPayload,
-            ChallengeResponsePayload, AIMatchPayload, GameStartPayload,
-            MovePayload, InvalidMovePayload, MessagePayload, GameEndPayload,
-            UserStatsPayload, GameHistoryPayload, ReplayRequestPayload,
-            RequestAddFriendPayload, ResponseAddFriendPayload, UnfriendPayload,
-            DrawRequestPayload, DrawResponsePayload, RematchRequestPayload,
-            RematchResponsePayload, QuickMatchingPayload, CancelQMPayload,
-            ErrorPayload, InfoPayload>;
+            ChallengeResponsePayload, AIMatchPayload, CustomGamePayload,
+            GameStartPayload, MovePayload, InvalidMovePayload, MessagePayload,
+            GameEndPayload, UserStatsPayload, GameHistoryPayload,
+            ReplayRequestPayload, RequestAddFriendPayload,
+            ResponseAddFriendPayload, UnfriendPayload, DrawRequestPayload,
+            DrawResponsePayload, RematchRequestPayload, RematchResponsePayload,
+            QuickMatchingPayload, CancelQMPayload, ErrorPayload, InfoPayload>;
 
 // ============= nlohmann::json converters ============= //
 using nlohmann::json;
@@ -271,12 +291,30 @@ inline void to_json(json &j, const ChallengeResponsePayload &p) {
   }
 }
 inline void to_json(json &j, const AIMatchPayload &p) {
-  j = json{{"gamemode", p.gamemode}};
+  j = json{{"game_mode", p.game_mode},
+           {"ai_mode", p.ai_mode},
+           {"time_limit", p.time_limit},
+           {"game_timer", p.game_timer},
+           {"playerSide", p.playerSide}};
+}
+inline void to_json(json &j, const CustomGamePayload &p) {
+  j = json{{"game_mode", p.game_mode},
+           {"time_limit", p.time_limit},
+           {"game_timer", p.game_timer},
+           {"playerSide", p.playerSide},
+           {"custom_board_setup", p.custom_board_setup}};
+  if (!p.opponent.empty()) {
+    j["opponent"] = p.opponent;
+  }
+  if (!p.ai_mode.empty()) {
+    j["ai_mode"] = p.ai_mode;
+  }
 }
 inline void to_json(json &j, const GameStartPayload &p) {
   j = json{{"opponent", p.opponent},
            {"game_mode", p.game_mode},
-           {"time_limit", p.time_limit}};
+           {"time_limit", p.time_limit},
+           {"game_timer", p.game_timer}};
   if (!p.opponent_data.is_null()) {
     j["opponent_data"] = p.opponent_data;
   }
@@ -500,11 +538,55 @@ inline optional<Payload> parsePayload(MessageType type,
     }
 
     case MessageType::AI_MATCH: {
-      if (!doc.HasMember("gamemode") || !doc["gamemode"].IsString()) {
+      if (!doc.HasMember("game_mode") || !doc["game_mode"].IsString() ||
+          !doc.HasMember("ai_mode") || !doc["ai_mode"].IsString()) {
         return nullopt;
       }
       AIMatchPayload p;
-      p.gamemode = doc["gamemode"].GetString();
+      p.game_mode = doc["game_mode"].GetString();
+      p.ai_mode = doc["ai_mode"].GetString();
+      if (doc.HasMember("time_limit") && doc["time_limit"].IsInt()) {
+        p.time_limit = doc["time_limit"].GetInt();
+      }
+      if (doc.HasMember("game_timer") && doc["game_timer"].IsInt()) {
+        p.game_timer = doc["game_timer"].GetInt();
+      }
+      if (doc.HasMember("playerSide") && doc["playerSide"].IsString()) {
+        p.playerSide = doc["playerSide"].GetString();
+      }
+      return p;
+    }
+
+    case MessageType::CUSTOM_GAME: {
+      if (!doc.HasMember("custom_board_setup") ||
+          !doc["custom_board_setup"].IsObject()) {
+        return nullopt;
+      }
+      CustomGamePayload p;
+      p.game_mode = doc.HasMember("game_mode") && doc["game_mode"].IsString()
+                        ? doc["game_mode"].GetString()
+                        : "custom";
+      // Convert custom_board_setup from rapidjson to nlohmann::json
+      rapidjson::StringBuffer buffer;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+      doc["custom_board_setup"].Accept(writer);
+      p.custom_board_setup = nlohmann::json::parse(buffer.GetString());
+
+      if (doc.HasMember("opponent") && doc["opponent"].IsString()) {
+        p.opponent = doc["opponent"].GetString();
+      }
+      if (doc.HasMember("ai_mode") && doc["ai_mode"].IsString()) {
+        p.ai_mode = doc["ai_mode"].GetString();
+      }
+      if (doc.HasMember("time_limit") && doc["time_limit"].IsInt()) {
+        p.time_limit = doc["time_limit"].GetInt();
+      }
+      if (doc.HasMember("game_timer") && doc["game_timer"].IsInt()) {
+        p.game_timer = doc["game_timer"].GetInt();
+      }
+      if (doc.HasMember("playerSide") && doc["playerSide"].IsString()) {
+        p.playerSide = doc["playerSide"].GetString();
+      }
       return p;
     }
 
@@ -525,6 +607,14 @@ inline optional<Payload> parsePayload(MessageType type,
         p.opponent_data = nlohmann::json::parse(buffer.GetString());
       } else {
         p.opponent_data = nlohmann::json();
+      }
+      // Optional time_limit field
+      if (doc.HasMember("time_limit") && doc["time_limit"].IsInt()) {
+        p.time_limit = doc["time_limit"].GetInt();
+      }
+      // Optional game_timer field
+      if (doc.HasMember("game_timer") && doc["game_timer"].IsInt()) {
+        p.game_timer = doc["game_timer"].GetInt();
       }
       return p;
     }
@@ -767,6 +857,7 @@ static const unordered_map<string, MessageType> commandMap = {
     {"CHALLENGE_REQUEST", MessageType::CHALLENGE_REQUEST},
     {"CHALLENGE_RESPONSE", MessageType::CHALLENGE_RESPONSE},
     {"AI_MATCH", MessageType::AI_MATCH},
+    {"CUSTOM_GAME", MessageType::CUSTOM_GAME},
     {"GAME_START", MessageType::GAME_START},
     {"MOVE", MessageType::MOVE},
     {"INVALID_MOVE", MessageType::INVALID_MOVE},
@@ -825,6 +916,7 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::CHALLENGE_REQUEST, "CHALLENGE_REQUEST"},
     {MessageType::CHALLENGE_RESPONSE, "CHALLENGE_RESPONSE"},
     {MessageType::AI_MATCH, "AI_MATCH"},
+    {MessageType::CUSTOM_GAME, "CUSTOM_GAME"},
     {MessageType::GAME_START, "GAME_START"},
     {MessageType::MOVE, "MOVE"},
     {MessageType::INVALID_MOVE, "INVALID_MOVE"},

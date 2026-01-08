@@ -528,8 +528,65 @@ public class CustomModePanel extends StackPane {
             // Player luôn là red (AI sẽ là black nếu chơi với AI)
             state.setPlayerIsRed(true);
             
+            // Lấy độ khó AI đã chọn (Easy/Medium/Hard)
+            String aiMode = null;
+            if (selectedLevelOption != null) {
+                for (javafx.scene.Node node : selectedLevelOption.getChildren()) {
+                    if (node instanceof Label) {
+                        Label label = (Label) node;
+                        String text = label.getText();
+                        if ("Easy".equals(text)) {
+                            aiMode = "easy";
+                        } else if ("Medium".equals(text)) {
+                            aiMode = "medium";
+                        } else if ("Hard".equals(text)) {
+                            aiMode = "hard";
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Lấy custom board setup từ state
+            java.util.Map<String, String> customBoardSetup = state.getCustomBoardSetup();
+            boolean useCustomBoard = state.isUseCustomBoard();
+            
+            // Convert game timer và move timer sang seconds
+            int gameTimerSeconds = gameTimerValue * 60; // Convert minutes to seconds
+            int moveTimerSeconds = moveTimerValue * 60; // Convert minutes to seconds
+            // time_limit = move timer, game_timer = game timer
+            int timeLimit = moveTimerSeconds;
+            int gameTimer = gameTimerSeconds;
+            
+            // Gửi CUSTOM_GAME message nếu có custom board setup
+            if (useCustomBoard && customBoardSetup != null && !customBoardSetup.isEmpty()) {
+                try {
+                    application.network.NetworkManager.getInstance().game().requestCustomGame(
+                        customBoardSetup,
+                        "", // opponent (empty for AI)
+                        aiMode != null ? aiMode : "medium", // AI mode
+                        timeLimit,
+                        gameTimer,
+                        "red" // player side
+                    );
+                    System.out.println("[CustomModePanel] Sent CUSTOM_GAME: ai_mode=" + aiMode + 
+                                     ", time_limit=" + timeLimit + ", game_timer=" + gameTimer +
+                                     ", board_setup_size=" + customBoardSetup.size());
+                } catch (Exception ex) {
+                    System.err.println("[CustomModePanel] Failed to send CUSTOM_GAME: " + ex.getMessage());
+                    ex.printStackTrace();
+                    // Vẫn mở game để không block UI
+                }
+            } else {
+                // Không có custom board setup, mở PlayWithFriend như cũ
+                state.closeCustomMode();
+                state.openPlayWithFriend();
+                return;
+            }
+            
+            // Đóng custom mode và chờ GAME_START từ backend
             state.closeCustomMode();
-            state.openGame("custom"); // Set mode là "custom" để load custom board
+            // Backend sẽ gửi GAME_START, không cần mở PlayWithFriend nữa
         });
         
         return button;
@@ -879,9 +936,10 @@ public class CustomModePanel extends StackPane {
         StackPane entry = new StackPane();
         entry.setPrefWidth(150);
         entry.setPrefHeight(60);
-        
+
+        String capitalizedColor = color.substring(0, 1).toUpperCase() + color.substring(1);
         // Quân cờ
-        String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + color + ".png";
+        String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + capitalizedColor + ".png";
         ImageView piece = new ImageView(AssetHelper.image(imagePath));
         piece.setFitWidth(50);
         piece.setFitHeight(50);
@@ -1104,7 +1162,8 @@ public class CustomModePanel extends StackPane {
                 double y = row * cellHeight + (cellHeight - piece.getFitHeight()) / 2;
                 piece.setLayoutX(x);
                 piece.setLayoutY(y);
-                piece.setUserData(new PieceInfo(color, pieceType, "pieces/" + color + "/Chinese-" + pieceType + "-" + color + ".png"));
+                String capitalizedColor = color.substring(0, 1).toUpperCase() + color.substring(1);
+                piece.setUserData(new PieceInfo(color, pieceType, "pieces/" + color + "/Chinese-" + pieceType + "-" + capitalizedColor + ".png"));
                 container.getChildren().add(piece);
                 System.out.println("[CustomModePanel] Loaded piece: " + color + " " + pieceType + " at (" + row + "," + col + ")");
             }
@@ -1134,7 +1193,8 @@ public class CustomModePanel extends StackPane {
     }
     
     private ImageView createBoardPiece(String color, String pieceType, double cellWidth, double cellHeight) {
-        String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + color + ".png";
+        String capitalizedColor = color.substring(0, 1).toUpperCase() + color.substring(1);
+        String imagePath = "pieces/" + color + "/Chinese-" + pieceType + "-" + capitalizedColor + ".png";
         ImageView piece = new ImageView(AssetHelper.image(imagePath));
         piece.setFitWidth(cellWidth * 0.7);
         piece.setFitHeight(cellHeight * 0.7);

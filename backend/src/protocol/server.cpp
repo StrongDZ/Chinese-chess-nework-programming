@@ -27,6 +27,8 @@
 #include "database/mongodb_client.h"
 
 // ===================== Controller Layer ===================== //
+#include "ai/ai_controller.h"
+#include "ai/ai_service.h"
 #include "auth/auth_controller.h"
 #include "auth/auth_repository.h"
 #include "friend/friend_controller.h"
@@ -49,6 +51,11 @@ AuthController *g_auth_controller = nullptr;
 FriendController *g_friend_controller = nullptr;
 GameController *g_game_controller = nullptr;
 PlayerStatController *g_player_stat_controller = nullptr;
+AIController *g_ai_controller = nullptr;
+
+// Global services (for AI controller)
+GameService *g_game_service = nullptr;
+AIService *g_ai_service = nullptr;
 
 // Global repositories
 AuthRepository *g_auth_repo = nullptr;
@@ -121,18 +128,34 @@ int main(int argc, char **argv) {
   FriendService friendService(friendRepo);
   GameService gameService(gameRepo);
   PlayerStatService playerStatService(playerStatRepo);
+  AIService aiService;
+
+  // Initialize AI service
+  bool aiInitialized = aiService.initialize();
+  if (!aiInitialized) {
+    cerr << "[Server] Warning: AI service initialization failed. AI features "
+            "will be unavailable."
+         << endl;
+    cerr << "[Server] Make sure AI/ai.py and pikafish are available." << endl;
+  } else {
+    cout << "[Server] AI service initialized successfully." << endl;
+  }
 
   // Initialize Controllers (as global variables)
   AuthController authController(authService);
   FriendController friendController(friendService);
   GameController gameController(gameService);
   PlayerStatController playerStatController(playerStatService);
+  AIController aiController(aiService, gameService);
 
   // Set global pointers
   g_auth_controller = &authController;
   g_friend_controller = &friendController;
   g_game_controller = &gameController;
   g_player_stat_controller = &playerStatController;
+  g_ai_controller = &aiController;
+  g_game_service = &gameService;
+  g_ai_service = &aiService;
   g_auth_repo = &authRepo;
 
   // TODO: Initialize Python AI service via HTTP API
@@ -415,6 +438,9 @@ void processMessage(const ParsedMessage &pm, int fd) {
   case MessageType::AI_MATCH:
     // This should be handled in thread pool, but if called directly:
     handleAIMatch(pm, fd);
+    break;
+  case MessageType::CUSTOM_GAME:
+    handleCustomGame(pm, fd);
     break;
   case MessageType::USER_STATS:
     handleUserStats(pm, fd);

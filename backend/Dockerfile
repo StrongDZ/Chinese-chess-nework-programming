@@ -73,17 +73,52 @@ RUN mkdir -p /usr/include/rapidjson && \
     cp -r rapidjson/include/rapidjson/* /usr/include/rapidjson/ && \
     rm -rf /tmp/rapidjson
 
+# Build Pikafish from source (to match Ubuntu 22.04 GLIBC version)
+# Pikafish uses Makefile-based build system
+# Using 'build' target (faster) instead of 'profile-build' (slower but optimized)
+RUN cd /tmp && \
+    git clone https://github.com/official-pikafish/Pikafish.git --depth 1 && \
+    cd Pikafish/src && \
+    make -j$(nproc) build ARCH=x86-64-sse41-popcnt COMP=gcc && \
+    ls -la && \
+    if [ -f pikafish ]; then \
+        mkdir -p /opt/pikafish && \
+        cp pikafish /opt/pikafish/pikafish && \
+        chmod +x /opt/pikafish/pikafish && \
+        echo "Pikafish built and copied successfully"; \
+    else \
+        echo "ERROR: pikafish binary not found after build" && \
+        find . -name "pikafish" -type f && \
+        exit 1; \
+    fi && \
+    cd / && \
+    rm -rf /tmp/Pikafish && \
+    echo "Pikafish build completed"
+
 # Set working directory
 WORKDIR /app
 
-# Copy source code
-COPY . .
+# Copy backend source code
+COPY backend .
+
+# Copy AI folder (needed for AI service)
+COPY AI ./AI
 
 # Build the project to /opt/app (outside volume mount)
 RUN rm -rf /opt/app && \
     mkdir -p /opt/app/build && \
     cd /opt/app && \
     cp -r /app/* . && \
+    rm -rf /opt/app/build && \
+    mkdir -p /opt/app/build && \
+    # Copy built pikafish to AI folder (replace incompatible binary)
+    if [ -f /opt/pikafish/pikafish ]; then \
+        cp /opt/pikafish/pikafish /opt/app/AI/pikafish && \
+        chmod +x /opt/app/AI/pikafish && \
+        echo "Pikafish copied to AI folder"; \
+    else \
+        chmod +x /opt/app/AI/pikafish 2>/dev/null || true; \
+    fi && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && \
     cmake --build . -j$(nproc)

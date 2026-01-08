@@ -848,9 +848,14 @@ public class InfoHandler implements MessageHandler {
                     
                     // Backend format: from_x (col), from_y (row), to_x (col), to_y (row), player (username), piece, captured
                     int fromCol = moveObj.has("from_x") ? moveObj.get("from_x").getAsInt() : -1;
-                    int fromRow = moveObj.has("from_y") ? moveObj.get("from_y").getAsInt() : -1;
+                    int backendFromRow = moveObj.has("from_y") ? moveObj.get("from_y").getAsInt() : -1;
                     int toCol = moveObj.has("to_x") ? moveObj.get("to_x").getAsInt() : -1;
-                    int toRow = moveObj.has("to_y") ? moveObj.get("to_y").getAsInt() : -1;
+                    int backendToRow = moveObj.has("to_y") ? moveObj.get("to_y").getAsInt() : -1;
+                    
+                    // Convert: Backend row (0=top đen) → Frontend row (0=top đỏ)
+                    // Công thức: frontendRow = 9 - backendRow
+                    int frontendFromRow = 9 - backendFromRow;
+                    int frontendToRow = 9 - backendToRow;
                     
                     // player field chứa username, cần convert sang color
                     String color = "red";
@@ -880,13 +885,14 @@ public class InfoHandler implements MessageHandler {
                     }
                     
                     System.out.println("[InfoHandler] Move " + moveIdx + ": " + color + " " + pieceType + 
-                        " from (" + fromRow + "," + fromCol + ") to (" + toRow + "," + toCol + ")" +
+                        " from FE(" + frontendFromRow + "," + fromCol + ") BE(" + backendFromRow + "," + fromCol + 
+                        ") to FE(" + frontendToRow + "," + toCol + ") BE(" + backendToRow + "," + toCol + ")" +
                         (capturedPieceType != null ? " captured " + capturedPieceType : ""));
                     
-                    if (fromRow >= 0 && fromCol >= 0 && toRow >= 0 && toCol >= 0) {
+                    if (frontendFromRow >= 0 && fromCol >= 0 && frontendToRow >= 0 && toCol >= 0) {
                         application.components.ReplayPanel.ReplayMove replayMove = 
                             new application.components.ReplayPanel.ReplayMove(
-                                fromRow, fromCol, toRow, toCol, color, pieceType, 
+                                frontendFromRow, fromCol, frontendToRow, toCol, color, pieceType, 
                                 capturedColor, capturedPieceType
                             );
                         replayMoves.add(replayMove);
