@@ -1,0 +1,40 @@
+==========================================
+   AI Handler Unit Tests
+==========================================
+ MongoDB connected: chess_server_game
+
+--- Setup: Creating test users ---
+  Created user: test_player_001
+  Created user: test_player_002
+  Created user: test_player_003
+  Created user: test_player_004
+  Created user: test_player_005
+  Created user: test_player
+  Created user: AI_easy
+  Created user: AI_medium
+  Created user: AI_hard
+--- Setup complete ---
+
+
+=== Test 1: UCI to AIMove Conversion ===
+✅ PASS: UCI 'a0a1' converts correctly
+✅ PASS: UCI 'e2e4' converts correctly
+✅ PASS: UCI 'i9i8' converts correctly
+
+=== Test 2: AIMove to UCI Conversion ===
+✅ PASS: Move (0,0)->(1,0) converts to 'a0a1'
+✅ PASS: Move (2,4)->(4,4) converts to 'e2e4'
+✅ PASS: Move (9,8)->(8,8) converts to 'i9i8'
+
+=== Test 3: Board to XFEN Conversion ===
+✅ PASS: Board converts to non-empty XFEN
+✅ PASS: XFEN has turn indicator
+  Generated XFEN: rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1
+
+=== Test 4: AI Service Initialization ===
+[AIService] Initialized with AI script: ./AI/ai.py
+✅ PASS: AI Service initializes successfully
+✅ PASS: AI Service reports ready state
+
+=== Test 5: AI Move Prediction ===
+[AIService] Initialized with AI script: ./AI/ai.py
