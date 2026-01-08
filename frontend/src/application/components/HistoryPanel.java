@@ -428,7 +428,13 @@ public class HistoryPanel extends StackPane {
         
         tableContent.getChildren().clear();
         
-        List<HistoryEntry> currentHistory = isPeopleTabSelected ? peopleHistory : aiHistory;
+        // Nếu đang ở tab "Play with AI", hiển thị "Coming soon"
+        if (!isPeopleTabSelected) {
+            showComingSoon();
+            return;
+        }
+        
+        List<HistoryEntry> currentHistory = peopleHistory;
         
         System.out.println("[HistoryPanel] currentHistory size: " + currentHistory.size());
         
@@ -463,6 +469,32 @@ public class HistoryPanel extends StackPane {
             tableContent.getChildren().add(row);
         }
         System.out.println("[HistoryPanel] ✓ Table refreshed with " + tableContent.getChildren().size() + " rows");
+    }
+    
+    /**
+     * Hiển thị dòng chữ "Coming soon" khi chọn tab "Play with AI"
+     */
+    private void showComingSoon() {
+        // Tạo label "Coming soon" căn giữa
+        Label comingSoonLabel = new Label("Coming soon");
+        comingSoonLabel.setStyle(
+            "-fx-font-family: 'Kolker Brush'; " +
+            "-fx-font-size: 80px; " +
+            "-fx-text-fill: #A65252; " +  // Màu đỏ giống tab selected
+            "-fx-background-color: transparent;"
+        );
+        comingSoonLabel.setAlignment(Pos.CENTER);
+        comingSoonLabel.setPrefWidth(1140);
+        comingSoonLabel.setPrefHeight(520);  // Chiều cao của scrollPane content area
+        
+        // Container để căn giữa label
+        VBox container = new VBox();
+        container.setPrefSize(1140, 520);
+        container.setAlignment(Pos.CENTER);
+        container.getChildren().add(comingSoonLabel);
+        
+        tableContent.getChildren().add(container);
+        System.out.println("[HistoryPanel] Showing 'Coming soon' for AI tab");
     }
     
     private void fadeTo(double target) {

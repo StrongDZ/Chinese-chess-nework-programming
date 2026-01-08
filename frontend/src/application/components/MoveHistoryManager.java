@@ -28,6 +28,10 @@ public class MoveHistoryManager {
     private VBox moveHistoryContainer = null;
     private final java.util.List<String> moveHistory = new java.util.ArrayList<>();
     
+    // Lưu reference đến các Label để có thể highlight
+    private final java.util.List<Label> moveLabels = new java.util.ArrayList<>();
+    private int currentHighlightedIndex = -1;  // Index của move đang được highlight (-1 = không có)
+    
     // Callback để tạo replay control buttons
     private java.util.function.Supplier<javafx.scene.Node> replayControlsSupplier = null;
     
@@ -141,9 +145,16 @@ public class MoveHistoryManager {
         moveHistoryContainer.setAlignment(Pos.TOP_LEFT);
         
         // Hiển thị các nước đi đã lưu
+        moveLabels.clear();  // Clear list khi tạo lại panel
         for (String move : moveHistory) {
             Label moveHistoryLabel = createMoveLabel(move);
+            moveLabels.add(moveHistoryLabel);
             moveHistoryContainer.getChildren().add(moveHistoryLabel);
+        }
+        
+        // Highlight move hiện tại nếu có
+        if (currentHighlightedIndex >= 0 && currentHighlightedIndex < moveLabels.size()) {
+            highlightMove(currentHighlightedIndex);
         }
         
         moveHistoryScrollPane.setContent(moveHistoryContainer);
@@ -236,6 +247,82 @@ public class MoveHistoryManager {
     }
     
     /**
+     * Highlight nước đi tại index chỉ định (dùng trong replay mode)
+     * @param moveIndex Index của move cần highlight (0-based, -1 để bỏ highlight)
+     */
+    public void highlightMove(int moveIndex) {
+        Platform.runLater(() -> {
+            // Bỏ highlight tất cả moves trước
+            for (int i = 0; i < moveLabels.size(); i++) {
+                Label label = moveLabels.get(i);
+                if (label != null) {
+                    // Reset về style mặc định
+                    String moveText = label.getText();
+                    String textColor = "black";
+                    if (moveText.contains("red:")) {
+                        textColor = "#DC143C";
+                    } else if (moveText.contains("black:")) {
+                        textColor = "#000000";
+                    }
+                    
+                    label.setStyle(
+                        "-fx-font-family: 'Kolker Brush'; " +
+                        "-fx-font-size: 35px; " +
+                        "-fx-text-fill: " + textColor + "; " +
+                        "-fx-background-color: transparent; " +
+                        "-fx-wrap-text: true;"
+                    );
+                }
+            }
+            
+            // Highlight move tại index
+            if (moveIndex >= 0 && moveIndex < moveLabels.size()) {
+                Label label = moveLabels.get(moveIndex);
+                if (label != null) {
+                    String moveText = label.getText();
+                    String textColor = "black";
+                    if (moveText.contains("red:")) {
+                        textColor = "#DC143C";
+                    } else if (moveText.contains("black:")) {
+                        textColor = "#000000";
+                    }
+                    
+                    // Highlight với background màu vàng nhạt và border
+                    label.setStyle(
+                        "-fx-font-family: 'Kolker Brush'; " +
+                        "-fx-font-size: 35px; " +
+                        "-fx-text-fill: " + textColor + "; " +
+                        "-fx-background-color: rgba(255, 255, 0, 0.3); " +  // Màu vàng nhạt
+                        "-fx-background-radius: 8px; " +
+                        "-fx-border-color: rgba(255, 200, 0, 0.8); " +  // Border vàng đậm hơn
+                        "-fx-border-width: 2px; " +
+                        "-fx-border-radius: 8px; " +
+                        "-fx-padding: 5px 10px; " +
+                        "-fx-wrap-text: true;"
+                    );
+                    
+                    // Scroll đến move được highlight
+                    if (moveHistoryScrollPane != null && moveHistoryContainer != null) {
+                        // Tính toán vị trí của label trong container
+                        double labelY = label.getLayoutY();
+                        double containerHeight = moveHistoryContainer.getHeight();
+                        double scrollPaneHeight = moveHistoryScrollPane.getHeight();
+                        
+                        if (containerHeight > scrollPaneHeight) {
+                            // Normalize vị trí (0.0 = top, 1.0 = bottom)
+                            double vvalue = labelY / (containerHeight - scrollPaneHeight);
+                            vvalue = Math.max(0.0, Math.min(1.0, vvalue));
+                            moveHistoryScrollPane.setVvalue(vvalue);
+                        }
+                    }
+                }
+            }
+            
+            currentHighlightedIndex = moveIndex;
+        });
+    }
+    
+    /**
      * Thêm nước đi mới vào lịch sử
      */
     public void addMove(String color, String pieceType, int fromRow, int fromCol, int toRow, int toCol) {
@@ -259,6 +346,7 @@ public class MoveHistoryManager {
         // Cập nhật UI nếu panel đang hiển thị
         if (moveHistoryContainer != null) {
             Label newMoveLabel = createMoveLabel(moveText);
+            moveLabels.add(newMoveLabel);  // Thêm vào list để có thể highlight sau
             moveHistoryContainer.getChildren().add(newMoveLabel);
             
             // Scroll xuống nước đi mới nhất
@@ -275,6 +363,8 @@ public class MoveHistoryManager {
      */
     public void clearMoveHistory() {
         moveHistory.clear();
+        moveLabels.clear();
+        currentHighlightedIndex = -1;
         if (moveHistoryContainer != null) {
             moveHistoryContainer.getChildren().clear();
         }

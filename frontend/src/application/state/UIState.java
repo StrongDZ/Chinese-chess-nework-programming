@@ -33,6 +33,7 @@ public class UIState {
     private final BooleanProperty gameModeVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty replayVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final StringProperty replayGameId = new SimpleStringProperty("");  // Game ID for replay
+    private final BooleanProperty replayPlayerIsRed = new SimpleBooleanProperty(true);  // Màu quân cờ của người chơi trong replay (từ database)
     private final BooleanProperty reconnectingVisible = new SimpleBooleanProperty(false);  // Reconnecting overlay visibility
     private final BooleanProperty classicModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty blitzModeVisible = new SimpleBooleanProperty(false);
@@ -286,6 +287,39 @@ public class UIState {
     
     public void setReplayGameId(String value) {
         replayGameId.set(value);
+    }
+    
+    public BooleanProperty replayPlayerIsRedProperty() {
+        return replayPlayerIsRed;
+    }
+    
+    public boolean isReplayPlayerRed() {
+        return replayPlayerIsRed.get();
+    }
+    
+    public void setReplayPlayerIsRed(boolean value) {
+        replayPlayerIsRed.set(value);
+    }
+    
+    /**
+     * Set màu quân cờ của người chơi trong replay (từ database)
+     * Được gọi từ InfoHandler khi nhận được game details
+     */
+    public void setReplayPlayerColor(boolean isRed, String redPlayer, String blackPlayer) {
+        setReplayPlayerIsRed(isRed);
+        System.out.println("[UIState] Set replay player color: isRed=" + isRed + 
+            ", redPlayer=" + redPlayer + ", blackPlayer=" + blackPlayer);
+    }
+    
+    // Callback để ReplayPanel nhận moves từ InfoHandler
+    private java.util.function.Consumer<java.util.List<application.components.ReplayPanel.ReplayMove>> replayMovesCallback = null;
+    
+    public void setReplayMovesCallback(java.util.function.Consumer<java.util.List<application.components.ReplayPanel.ReplayMove>> callback) {
+        this.replayMovesCallback = callback;
+    }
+    
+    public java.util.function.Consumer<java.util.List<application.components.ReplayPanel.ReplayMove>> getReplayMovesCallback() {
+        return replayMovesCallback;
     }
 
     public BooleanProperty gameModeVisibleProperty() {
@@ -941,4 +975,3 @@ public class UIState {
         }
     }
 }
-

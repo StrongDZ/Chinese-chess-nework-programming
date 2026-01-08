@@ -117,6 +117,14 @@ public class InfoHandler implements MessageHandler {
                 return;
             }
             
+            // Check if this is a replay data response (from REPLAY_REQUEST)
+            // Response format: { "status": "success", "game_type": "archived", "game": { ... moves ... } }
+            if (response.has("game") && response.has("game_type")) {
+                System.out.println("[InfoHandler] Detected replay data response");
+                handleReplayData(response);
+                return;
+            }
+            
             // Check if this is a quick matching response
             if (response.has("quick_matching")) {
                 boolean quickMatching = response.get("quick_matching").getAsBoolean();
@@ -660,6 +668,58 @@ public class InfoHandler implements MessageHandler {
                 // Get game_id for replay
                 String gameId = game.has("game_id") ? game.get("game_id").getAsString() : "";
                 
+                // Nếu đang load replay cho game này, cập nhật màu quân cờ và moves
+                String currentReplayGameId = uiState.getReplayGameId();
+                if (currentReplayGameId != null && currentReplayGameId.equals(gameId)) {
+                    // Xác định màu quân cờ của người chơi trong trận này
+                    boolean playerIsRed = currentUsername != null && currentUsername.equals(redPlayer);
+                    // Gọi method để ReplayPanel cập nhật
+                    uiState.setReplayPlayerColor(playerIsRed, redPlayer, blackPlayer);
+                    System.out.println("[InfoHandler] Found replay game: " + gameId + 
+                        ", playerIsRed=" + playerIsRed + ", redPlayer=" + redPlayer + ", blackPlayer=" + blackPlayer);
+                    
+                    // Parse moves từ game object nếu có
+                    if (game.has("moves") && game.get("moves").isJsonArray()) {
+                        com.google.gson.JsonArray movesArray = game.get("moves").getAsJsonArray();
+                        java.util.List<application.components.ReplayPanel.ReplayMove> replayMoves = new java.util.ArrayList<>();
+                        
+                        for (int moveIdx = 0; moveIdx < movesArray.size(); moveIdx++) {
+                            com.google.gson.JsonObject moveObj = movesArray.get(moveIdx).getAsJsonObject();
+                            
+                            // Parse move data (format có thể khác nhau tùy backend)
+                            // Giả sử format: { "fromRow": 6, "fromCol": 4, "toRow": 5, "toCol": 4, 
+                            //                  "color": "red", "pieceType": "pawn", 
+                            //                  "capturedColor": null, "capturedPieceType": null }
+                            int fromRow = moveObj.has("fromRow") ? moveObj.get("fromRow").getAsInt() : -1;
+                            int fromCol = moveObj.has("fromCol") ? moveObj.get("fromCol").getAsInt() : -1;
+                            int toRow = moveObj.has("toRow") ? moveObj.get("toRow").getAsInt() : -1;
+                            int toCol = moveObj.has("toCol") ? moveObj.get("toCol").getAsInt() : -1;
+                            String color = moveObj.has("color") ? moveObj.get("color").getAsString() : "red";
+                            String pieceType = moveObj.has("pieceType") ? moveObj.get("pieceType").getAsString() : "unknown";
+                            String capturedColor = moveObj.has("capturedColor") && !moveObj.get("capturedColor").isJsonNull() 
+                                ? moveObj.get("capturedColor").getAsString() : null;
+                            String capturedPieceType = moveObj.has("capturedPieceType") && !moveObj.get("capturedPieceType").isJsonNull()
+                                ? moveObj.get("capturedPieceType").getAsString() : null;
+                            
+                            if (fromRow >= 0 && fromCol >= 0 && toRow >= 0 && toCol >= 0) {
+                                application.components.ReplayPanel.ReplayMove replayMove = 
+                                    new application.components.ReplayPanel.ReplayMove(
+                                        fromRow, fromCol, toRow, toCol, color, pieceType, 
+                                        capturedColor, capturedPieceType
+                                    );
+                                replayMoves.add(replayMove);
+                            }
+                        }
+                        
+                        // Gửi moves đến ReplayPanel thông qua UIState callback
+                        if (uiState.getReplayMovesCallback() != null) {
+                            uiState.getReplayMovesCallback().accept(replayMoves);
+                        }
+                        
+                        System.out.println("[InfoHandler] Parsed " + replayMoves.size() + " moves for replay game: " + gameId);
+                    }
+                }
+                
                 application.components.HistoryPanel.HistoryEntry entry = 
                     new application.components.HistoryPanel.HistoryEntry(opponentDisplay, result, mode, date, gameId);
                 
@@ -681,6 +741,121 @@ public class InfoHandler implements MessageHandler {
             
         } catch (Exception e) {
             System.err.println("[InfoHandler] Error parsing game history: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Handle replay data response from REPLAY_REQUEST
+     * Response format: { "status": "success", "game_type": "archived", "game": { ... moves ... } }
+     */
+    private void handleReplayData(JsonObject response) {
+        try {
+            System.out.println("[InfoHandler] ========================================");
+            System.out.println("[InfoHandler] Processing replay data response");
+            
+            // Check status
+            if (response.has("status") && "error".equals(response.get("status").getAsString())) {
+                String message = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+                System.err.println("[InfoHandler] Replay request failed: " + message);
+                return;
+            }
+            
+            // Get game object
+            if (!response.has("game")) {
+                System.err.println("[InfoHandler] Replay response missing 'game' field");
+                return;
+            }
+            
+            JsonObject game = response.getAsJsonObject("game");
+            String gameId = game.has("game_id") ? game.get("game_id").getAsString() : "";
+            String redPlayer = game.has("red_player") ? game.get("red_player").getAsString() : "";
+            String blackPlayer = game.has("black_player") ? game.get("black_player").getAsString() : "";
+            
+            System.out.println("[InfoHandler] Replay game: id=" + gameId + 
+                ", redPlayer=" + redPlayer + ", blackPlayer=" + blackPlayer);
+            
+            // Xác định màu quân cờ của người chơi
+            String currentUsername = uiState.getUsername();
+            boolean playerIsRed = currentUsername != null && currentUsername.equals(redPlayer);
+            
+            // Cập nhật player color cho ReplayPanel
+            uiState.setReplayPlayerColor(playerIsRed, redPlayer, blackPlayer);
+            System.out.println("[InfoHandler] Player is red: " + playerIsRed + " (currentUser=" + currentUsername + ")");
+            
+            // Parse moves
+            if (game.has("moves") && game.get("moves").isJsonArray()) {
+                JsonArray movesArray = game.get("moves").getAsJsonArray();
+                java.util.List<application.components.ReplayPanel.ReplayMove> replayMoves = new java.util.ArrayList<>();
+                
+                System.out.println("[InfoHandler] Found " + movesArray.size() + " moves in replay");
+                
+                for (int moveIdx = 0; moveIdx < movesArray.size(); moveIdx++) {
+                    JsonObject moveObj = movesArray.get(moveIdx).getAsJsonObject();
+                    
+                    // Backend format: from_x (col), from_y (row), to_x (col), to_y (row), player (username), piece, captured
+                    int fromCol = moveObj.has("from_x") ? moveObj.get("from_x").getAsInt() : -1;
+                    int fromRow = moveObj.has("from_y") ? moveObj.get("from_y").getAsInt() : -1;
+                    int toCol = moveObj.has("to_x") ? moveObj.get("to_x").getAsInt() : -1;
+                    int toRow = moveObj.has("to_y") ? moveObj.get("to_y").getAsInt() : -1;
+                    
+                    // player field chứa username, cần convert sang color
+                    String color = "red";
+                    if (moveObj.has("player")) {
+                        String player = moveObj.get("player").getAsString();
+                        // Xác định color dựa trên player username
+                        if (player.equals(redPlayer)) {
+                            color = "red";
+                        } else if (player.equals(blackPlayer)) {
+                            color = "black";
+                        } else {
+                            // Fallback: dựa vào move number (chẵn = red, lẻ = black)
+                            color = (moveIdx % 2 == 0) ? "red" : "black";
+                        }
+                    }
+                    
+                    String pieceType = moveObj.has("piece") ? moveObj.get("piece").getAsString() : "unknown";
+                    
+                    String capturedPieceType = null;
+                    String capturedColor = null;
+                    if (moveObj.has("captured") && !moveObj.get("captured").isJsonNull() && 
+                        moveObj.get("captured").isJsonPrimitive() &&
+                        !moveObj.get("captured").getAsString().isEmpty()) {
+                        capturedPieceType = moveObj.get("captured").getAsString();
+                        // Quân bị ăn thuộc màu đối thủ
+                        capturedColor = color.equals("red") ? "black" : "red";
+                    }
+                    
+                    System.out.println("[InfoHandler] Move " + moveIdx + ": " + color + " " + pieceType + 
+                        " from (" + fromRow + "," + fromCol + ") to (" + toRow + "," + toCol + ")" +
+                        (capturedPieceType != null ? " captured " + capturedPieceType : ""));
+                    
+                    if (fromRow >= 0 && fromCol >= 0 && toRow >= 0 && toCol >= 0) {
+                        application.components.ReplayPanel.ReplayMove replayMove = 
+                            new application.components.ReplayPanel.ReplayMove(
+                                fromRow, fromCol, toRow, toCol, color, pieceType, 
+                                capturedColor, capturedPieceType
+                            );
+                        replayMoves.add(replayMove);
+                    }
+                }
+                
+                // Gửi moves đến ReplayPanel thông qua UIState callback
+                if (uiState.getReplayMovesCallback() != null) {
+                    System.out.println("[InfoHandler] Sending " + replayMoves.size() + " moves to ReplayPanel");
+                    uiState.getReplayMovesCallback().accept(replayMoves);
+                } else {
+                    System.err.println("[InfoHandler] WARNING: replayMovesCallback is null!");
+                }
+            } else {
+                System.err.println("[InfoHandler] No moves found in replay response");
+            }
+            
+            System.out.println("[InfoHandler] ✓ Replay data processed successfully");
+            System.out.println("[InfoHandler] ========================================");
+            
+        } catch (Exception e) {
+            System.err.println("[InfoHandler] Error parsing replay data: " + e.getMessage());
             e.printStackTrace();
         }
     }

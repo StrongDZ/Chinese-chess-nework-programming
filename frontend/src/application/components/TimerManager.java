@@ -154,10 +154,7 @@ public class TimerManager {
         updateTimerLabel(timerIndex, seconds);
         isUpdatingFromCountdown = false;
         
-        // Kiểm tra xem có phải blitz hoặc custom mode không (chế độ timer theo lượt)
-        String gameMode = state.getCurrentGameMode();
-        boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
-        
+        // ÁP DỤNG CHO TẤT CẢ CÁC MODE: Timer chỉ đếm khi đến lượt của người chơi đó
         // Xác định timer thuộc bên nào
         // Timer 1, 2 (index 0, 1): red player
         // Timer 3, 4 (index 2, 3): black player
@@ -170,25 +167,19 @@ public class TimerManager {
         // Tạo Timeline đếm ngược mỗi giây
         countdownTimers[timerIndex] = new Timeline(
             new KeyFrame(Duration.seconds(1), e -> {
-                // Kiểm tra lại game mode mỗi lần để đảm bảo logic đúng
-                String currentGameMode = state.getCurrentGameMode();
-                boolean isTurnBased = "blitz".equalsIgnoreCase(currentGameMode) || "custom".equalsIgnoreCase(currentGameMode);
-                
                 // Lấy currentTurn mới nhất từ GamePanel
                 String currentTurnNow = gamePanel.getCurrentTurn();
                 
-                // Trong blitz/custom mode, chỉ đếm nếu đến lượt của bên đó
-                if (isTurnBased) {
-                    if (isRedTimer && !currentTurnNow.equals("red")) {
-                        // Không phải lượt red, dừng timer
-                        countdownTimers[timerIndex].stop();
-                        return;
-                    }
-                    if (isBlackTimer && !currentTurnNow.equals("black")) {
-                        // Không phải lượt black, dừng timer
-                        countdownTimers[timerIndex].stop();
-                        return;
-                    }
+                // QUAN TRỌNG: Chỉ đếm nếu đến lượt của bên đó (áp dụng cho TẤT CẢ các mode)
+                if (isRedTimer && !currentTurnNow.equals("red")) {
+                    // Không phải lượt red, dừng timer
+                    countdownTimers[timerIndex].stop();
+                    return;
+                }
+                if (isBlackTimer && !currentTurnNow.equals("black")) {
+                    // Không phải lượt black, dừng timer
+                    countdownTimers[timerIndex].stop();
+                    return;
                 }
                 
                 remainingSeconds[timerIndex]--;
@@ -204,27 +195,19 @@ public class TimerManager {
         );
         countdownTimers[timerIndex].setCycleCount(Timeline.INDEFINITE);
         
-        // Trong blitz/custom mode, KHÔNG tự động play timer
-        // Chỉ tạo Timeline, để updateTimersOnTurnChange() quyết định timer nào được play
-        if (!isTurnBasedMode) {
-            // Không phải blitz/custom mode, chạy bình thường
+        // Chỉ play timer nếu đến lượt của bên đó
+        if ((isRedTimer && currentTurn.equals("red")) || 
+            (isBlackTimer && currentTurn.equals("black"))) {
+            // Đến lượt của bên này, play timer
             countdownTimers[timerIndex].play();
         }
-        // Nếu là turn-based mode, không play ở đây, để updateTimersOnTurnChange() xử lý
+        // Nếu không phải lượt, không play (để updateTimersOnTurnChange() xử lý sau)
     }
     
     /**
-     * Cập nhật timer khi đổi lượt (chỉ trong blitz/custom mode)
+     * Cập nhật timer khi đổi lượt (áp dụng cho TẤT CẢ các mode)
      */
     public void updateTimersOnTurnChange() {
-        String gameMode = state.getCurrentGameMode();
-        boolean isTurnBasedMode = "blitz".equalsIgnoreCase(gameMode) || "custom".equalsIgnoreCase(gameMode);
-        
-        if (!isTurnBasedMode) {
-            // Không phải blitz/custom mode, không cần làm gì
-            return;
-        }
-        
         // Dừng tất cả timers một cách chắc chắn - đảm bảo không có timer nào đang chạy
         for (int i = 0; i < 4; i++) {
             if (countdownTimers[i] != null) {
@@ -238,16 +221,10 @@ public class TimerManager {
         
         // Đợi một chút để đảm bảo tất cả timers đã dừng hoàn toàn
         Platform.runLater(() -> {
-            // Kiểm tra lại game mode (có thể đã thay đổi)
-            String currentGameMode = state.getCurrentGameMode();
-            boolean isStillTurnBased = "blitz".equalsIgnoreCase(currentGameMode) || "custom".equalsIgnoreCase(currentGameMode);
-            
-            if (!isStillTurnBased) {
-                return; // Không còn turn-based mode
-            }
-            
             // Lấy currentTurn từ GamePanel
             String currentTurn = gamePanel.getCurrentTurn();
+            
+            System.out.println("[TimerManager] updateTimersOnTurnChange: currentTurn=" + currentTurn);
             
             // Bắt đầu timer của bên đang đến lượt
             if (currentTurn.equals("red")) {
@@ -260,9 +237,11 @@ public class TimerManager {
                 }
                 if (countdownTimers[0] != null && remainingSeconds[0] >= 0) {
                     countdownTimers[0].play();
+                    System.out.println("[TimerManager] Started red timer 1");
                 }
                 if (countdownTimers[1] != null && remainingSeconds[1] >= 0) {
                     countdownTimers[1].play();
+                    System.out.println("[TimerManager] Started red timer 2");
                 }
             } else if (currentTurn.equals("black")) {
                 // Bắt đầu timer 3 và 4 (black) - dừng timer 1 và 2 (red) để chắc chắn
@@ -274,9 +253,11 @@ public class TimerManager {
                 }
                 if (countdownTimers[2] != null && remainingSeconds[2] >= 0) {
                     countdownTimers[2].play();
+                    System.out.println("[TimerManager] Started black timer 3");
                 }
                 if (countdownTimers[3] != null && remainingSeconds[3] >= 0) {
                     countdownTimers[3].play();
+                    System.out.println("[TimerManager] Started black timer 4");
                 }
             }
         });
