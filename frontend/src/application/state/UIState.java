@@ -56,6 +56,7 @@ public class UIState {
     
     // Current game mode ("classical", "blitz", or null)
     private final StringProperty currentGameMode = new SimpleStringProperty("classical");  // Default to classical
+    private int currentTimeLimit = 0;  // Time limit in seconds for matching (0 = unlimited)
     
     // Custom board setup - lưu vị trí tùy chỉnh của các quân cờ
     // Format: Map<"row_col", "color_pieceType">, ví dụ: "0_0" -> "Red_Rook"
@@ -624,6 +625,14 @@ public class UIState {
     
     public void setCurrentGameMode(String value) {
         currentGameMode.set(value);
+    }
+    
+    public int getCurrentTimeLimit() {
+        return currentTimeLimit;
+    }
+    
+    public void setCurrentTimeLimit(int value) {
+        this.currentTimeLimit = value;
     }
     
     // Get elo based on current game mode

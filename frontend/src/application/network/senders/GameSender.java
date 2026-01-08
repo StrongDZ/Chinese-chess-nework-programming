@@ -20,12 +20,15 @@ public class GameSender {
     
     /**
      * Send challenge request to another player.
+     * @param targetUsername Username of the player to challenge
+     * @param mode Game mode: "classical" or "blitz"
+     * @param timeLimit Time limit in seconds (0 for unlimited)
      */
-    public void sendChallenge(String targetUsername, String timeControl, boolean rated) throws IOException {
+    public void sendChallenge(String targetUsername, String mode, int timeLimit) throws IOException {
         JsonObject payload = new JsonObject();
         payload.addProperty("to_user", targetUsername);
-        payload.addProperty("time_control", timeControl);
-        payload.addProperty("rated", rated);
+        payload.addProperty("mode", mode != null ? mode : "classical");
+        payload.addProperty("time_limit", timeLimit);
         String payloadJson = gson.toJson(payload);
         System.out.println("[GameSender] Sending CHALLENGE_REQUEST to: " + targetUsername + ", payload: " + payloadJson);
         socketClient.send(MessageType.CHALLENGE_REQUEST, payloadJson);
@@ -136,9 +139,21 @@ public class GameSender {
     
     /**
      * Request quick matching to find an opponent.
+     * @param mode Game mode: "classical" or "blitz"
+     * @param timeLimit Time limit in seconds (0 for unlimited)
+     */
+    public void requestQuickMatching(String mode, int timeLimit) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("mode", mode != null ? mode : "classical");
+        payload.addProperty("time_limit", timeLimit);
+        socketClient.send(MessageType.QUICK_MATCHING, gson.toJson(payload));
+    }
+    
+    /**
+     * Request quick matching to find an opponent (default classical, unlimited time).
      */
     public void requestQuickMatching() throws IOException {
-        socketClient.send(MessageType.QUICK_MATCHING, "{}");
+        requestQuickMatching("classical", 0);
     }
     
     /**

@@ -59,8 +59,11 @@ public class FriendHandler implements MessageHandler {
         try {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
             String fromUser = json.has("from_user") ? json.get("from_user").getAsString() : "unknown";
+            String mode = json.has("mode") ? json.get("mode").getAsString() : "";
+            int timeLimit = json.has("time_limit") ? json.get("time_limit").getAsInt() : 0;
             
-            System.out.println("[FriendHandler] Received friend request from: " + fromUser);
+            System.out.println("[FriendHandler] Received friend request from: " + fromUser 
+                             + ", mode: " + mode + ", timeLimit: " + timeLimit);
             
             // Add to pending requests list
             Platform.runLater(() -> {
@@ -71,9 +74,11 @@ public class FriendHandler implements MessageHandler {
                 if (rootPane != null) {
                     System.out.println("[FriendHandler] Creating and showing friend request dialog for: " + fromUser);
                     
-                    // Tạo dialog trước
+                    // Tạo dialog với mode và timeLimit
                     FriendRequestNotificationDialog dialog = new FriendRequestNotificationDialog(
                         fromUser,
+                        mode,
+                        timeLimit,
                         () -> uiState.removePendingFriendRequest(fromUser)
                     );
                     

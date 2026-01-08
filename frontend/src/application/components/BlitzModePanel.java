@@ -1,6 +1,7 @@
 package application.components;
 
 import application.state.UIState;
+import application.network.NetworkManager;
 import application.util.AssetHelper;
 import javafx.animation.FadeTransition;
 import javafx.animation.ScaleTransition;
@@ -439,15 +440,37 @@ public class BlitzModePanel extends StackPane {
             }
             
             if ("Random".equals(selectedOption)) {
+                // Set mode và time limit cho quick matching
+                int timeSeconds = getSelectedTimeInSeconds();
+                state.setCurrentGameMode("blitz");
+                state.setCurrentTimeLimit(timeSeconds);
+
+                // Gửi QUICK_MATCHING tới backend với mode và time limit
+                try {
+                    NetworkManager.getInstance().game().requestQuickMatching("blitz", timeSeconds);
+                } catch (Exception ex) {
+                    System.err.println("[BlitzModePanel] Failed to request quick matching: " + ex.getMessage());
+                    ex.printStackTrace();
+                    // Không mở waiting nếu gửi message lỗi
+                    return;
+                }
+
                 // Mở waiting panel khi chọn Random
                 state.closeBlitzMode();
                 state.openWaiting();
             } else if ("Friend".equals(selectedOption)) {
+                // Set mode và time limit cho challenge
+                int timeSeconds = getSelectedTimeInSeconds();
+                state.setCurrentGameMode("blitz");
+                state.setCurrentTimeLimit(timeSeconds);
                 // Mở PlayWithFriendPanel khi chọn Friend và bấm Play
                 // Sử dụng openPlayWithFriend() để đánh dấu đang trong play with friend mode
                 state.openPlayWithFriend();
             } else {
                 // Vào game trực tiếp khi chọn AI
+                int timeSeconds = getSelectedTimeInSeconds();
+                state.setCurrentGameMode("blitz");
+                state.setCurrentTimeLimit(timeSeconds);
                 state.closeBlitzMode();
                 state.openGame("blitz");
             }
@@ -464,6 +487,21 @@ public class BlitzModePanel extends StackPane {
         StackPane button = selectedTimeOption;
         Label label = (Label) button.getChildren().get(1); // Label là phần tử thứ 2 (sau Rectangle)
         return label.getText();
+    }
+    
+    /**
+     * Convert time string (e.g., "1 mins", "3 mins") to seconds
+     */
+    private int getSelectedTimeInSeconds() {
+        String timeStr = getSelectedTimeValue();
+        // Parse the number from strings like "1 mins", "3 mins", "10 mins"
+        try {
+            String numStr = timeStr.replaceAll("[^0-9]", "");
+            int minutes = Integer.parseInt(numStr);
+            return minutes * 60;  // Convert to seconds
+        } catch (NumberFormatException e) {
+            return 60;  // Default 1 minute
+        }
     }
     
     private HBox createSocialIcons() {

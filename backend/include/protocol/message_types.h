@@ -90,6 +90,8 @@ struct LogoutPayload {
 struct ChallengeRequestPayload {
   string to_user;   // Client -> Server: target user
   string from_user; // Server -> Client: sender user (when forwarding)
+  string mode;      // Game mode: "classical" or "blitz"
+  int time_limit;   // Time limit in seconds (e.g., 900 for 15 mins)
 };
 
 struct ChallengeCancelPayload {
@@ -101,6 +103,8 @@ struct ChallengeResponsePayload {
   string to_user;   // Client -> Server: original challenger
   string from_user; // Server -> Client: responder (when forwarding)
   bool accept;
+  string mode;    // Game mode from original challenge
+  int time_limit; // Time limit from original challenge
 };
 
 struct AIMatchPayload {
@@ -118,6 +122,7 @@ struct GameStartPayload {
   string opponent;              // Empty if playing with AI
   nlohmann::json opponent_data; // Optional opponent data
   string game_mode;
+  int time_limit{0}; // Time limit in seconds (0 for unlimited)
 };
 
 struct GameEndPayload {
@@ -138,9 +143,9 @@ struct UserStatsPayload {
 };
 
 struct GameHistoryPayload {
-  string username;  // Changed from target_username to match frontend
-  int limit = 50;   // Default limit
-  int offset = 0;   // Default offset
+  string username; // Changed from target_username to match frontend
+  int limit = 50;  // Default limit
+  int offset = 0;  // Default offset
 };
 
 struct ReplayRequestPayload {
@@ -151,6 +156,10 @@ struct ReplayRequestPayload {
 struct RequestAddFriendPayload {
   string to_user;   // Client -> Server: target user
   string from_user; // Server -> Client: sender user
+  string mode;    // Game mode: "classical" or "blitz" (optional, for challenge
+                  // requests)
+  int time_limit; // Time limit in seconds (optional, for challenge requests, 0
+                  // for unlimited)
 };
 
 struct ResponseAddFriendPayload {
@@ -190,7 +199,11 @@ struct RematchResponsePayload {
 };
 
 // Quick matching payload
-struct QuickMatchingPayload {};
+struct QuickMatchingPayload {
+  string mode;    // Game mode: "classical" or "blitz"
+  int time_limit; // Time limit in seconds (e.g., 900 for 15 mins, 0 for
+                  // unlimited)
+};
 struct CancelQMPayload {};
 
 // Empty payload cho các message không cần data
@@ -205,7 +218,8 @@ using Payload =
             UserStatsPayload, GameHistoryPayload, ReplayRequestPayload,
             RequestAddFriendPayload, ResponseAddFriendPayload, UnfriendPayload,
             DrawRequestPayload, DrawResponsePayload, RematchRequestPayload,
-            RematchResponsePayload, CancelQMPayload, ErrorPayload, InfoPayload>;
+            RematchResponsePayload, QuickMatchingPayload, CancelQMPayload,
+            ErrorPayload, InfoPayload>;
 
 // ============= nlohmann::json converters ============= //
 using nlohmann::json;
@@ -223,10 +237,13 @@ inline void to_json(json &j, const LogoutPayload &p) {
 inline void to_json(json &j, const ChallengeRequestPayload &p) {
   if (!p.from_user.empty()) {
     // Server -> Client format
-    j = json{{"from_user", p.from_user}};
+    j = json{{"from_user", p.from_user},
+             {"mode", p.mode},
+             {"time_limit", p.time_limit}};
   } else {
     // Client -> Server format
-    j = json{{"to_user", p.to_user}};
+    j = json{
+        {"to_user", p.to_user}, {"mode", p.mode}, {"time_limit", p.time_limit}};
   }
 }
 inline void to_json(json &j, const ChallengeCancelPayload &p) {
@@ -241,17 +258,25 @@ inline void to_json(json &j, const ChallengeCancelPayload &p) {
 inline void to_json(json &j, const ChallengeResponsePayload &p) {
   if (!p.from_user.empty()) {
     // Server -> Client format
-    j = json{{"from_user", p.from_user}, {"accept", p.accept}};
+    j = json{{"from_user", p.from_user},
+             {"accept", p.accept},
+             {"mode", p.mode},
+             {"time_limit", p.time_limit}};
   } else {
     // Client -> Server format
-    j = json{{"to_user", p.to_user}, {"accept", p.accept}};
+    j = json{{"to_user", p.to_user},
+             {"accept", p.accept},
+             {"mode", p.mode},
+             {"time_limit", p.time_limit}};
   }
 }
 inline void to_json(json &j, const AIMatchPayload &p) {
   j = json{{"gamemode", p.gamemode}};
 }
 inline void to_json(json &j, const GameStartPayload &p) {
-  j = json{{"opponent", p.opponent}, {"game_mode", p.game_mode}};
+  j = json{{"opponent", p.opponent},
+           {"game_mode", p.game_mode},
+           {"time_limit", p.time_limit}};
   if (!p.opponent_data.is_null()) {
     j["opponent_data"] = p.opponent_data;
   }
@@ -291,6 +316,9 @@ inline void to_json(json &j, const RematchRequestPayload &) {
 inline void to_json(json &j, const RematchResponsePayload &p) {
   j = json{{"accept_rematch", p.accept_rematch}};
 }
+inline void to_json(json &j, const QuickMatchingPayload &p) {
+  j = json{{"mode", p.mode}, {"time_limit", p.time_limit}};
+}
 inline void to_json(json &j, const CancelQMPayload &) {
   j = json(); // Empty payload
 }
@@ -298,9 +326,21 @@ inline void to_json(json &j, const RequestAddFriendPayload &p) {
   if (!p.from_user.empty()) {
     // Server -> Client format
     j = json{{"from_user", p.from_user}};
+    if (!p.mode.empty()) {
+      j["mode"] = p.mode;
+    }
+    if (p.time_limit > 0) {
+      j["time_limit"] = p.time_limit;
+    }
   } else {
     // Client -> Server format
     j = json{{"to_user", p.to_user}};
+    if (!p.mode.empty()) {
+      j["mode"] = p.mode;
+    }
+    if (p.time_limit > 0) {
+      j["time_limit"] = p.time_limit;
+    }
   }
 }
 inline void to_json(json &j, const ResponseAddFriendPayload &p) {
@@ -404,6 +444,13 @@ inline optional<Payload> parsePayload(MessageType type,
       } else {
         return nullopt;
       }
+      // Parse mode and time_limit
+      p.mode = doc.HasMember("mode") && doc["mode"].IsString()
+                   ? doc["mode"].GetString()
+                   : "classical";
+      p.time_limit = doc.HasMember("time_limit") && doc["time_limit"].IsInt()
+                         ? doc["time_limit"].GetInt()
+                         : 0;
       return p;
     }
 
@@ -442,6 +489,13 @@ inline optional<Payload> parsePayload(MessageType type,
       } else {
         return nullopt;
       }
+      // Parse mode and time_limit
+      p.mode = doc.HasMember("mode") && doc["mode"].IsString()
+                   ? doc["mode"].GetString()
+                   : "classical";
+      p.time_limit = doc.HasMember("time_limit") && doc["time_limit"].IsInt()
+                         ? doc["time_limit"].GetInt()
+                         : 0;
       return p;
     }
 
@@ -571,6 +625,17 @@ inline optional<Payload> parsePayload(MessageType type,
       return p;
     }
 
+    case MessageType::QUICK_MATCHING: {
+      QuickMatchingPayload p;
+      p.mode = doc.HasMember("mode") && doc["mode"].IsString()
+                   ? doc["mode"].GetString()
+                   : "classical";
+      p.time_limit = doc.HasMember("time_limit") && doc["time_limit"].IsInt()
+                         ? doc["time_limit"].GetInt()
+                         : 0;
+      return p;
+    }
+
     case MessageType::CANCEL_QM: {
       // Empty payload
       return CancelQMPayload{};
@@ -590,6 +655,13 @@ inline optional<Payload> parsePayload(MessageType type,
       } else {
         return nullopt;
       }
+      // Parse optional mode and time_limit
+      p.mode = doc.HasMember("mode") && doc["mode"].IsString()
+                   ? doc["mode"].GetString()
+                   : "";
+      p.time_limit = doc.HasMember("time_limit") && doc["time_limit"].IsInt()
+                         ? doc["time_limit"].GetInt()
+                         : 0;
       return p;
     }
 

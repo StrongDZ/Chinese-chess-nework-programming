@@ -20,17 +20,27 @@ public class FriendRequestNotificationDialog extends StackPane {
     
     private final NetworkManager networkManager = NetworkManager.getInstance();
     private final String fromUser;
+    private final String mode;
+    private final int timeLimit;
     private Runnable onClose;
     private Runnable onHide;
     
     public FriendRequestNotificationDialog(String fromUser, Runnable onClose) {
+        this(fromUser, "", 0, onClose);
+    }
+    
+    public FriendRequestNotificationDialog(String fromUser, String mode, int timeLimit, Runnable onClose) {
         this.fromUser = fromUser;
+        this.mode = mode != null ? mode : "";
+        this.timeLimit = timeLimit;
         this.onClose = onClose;
         this.onHide = null;
         
-        setPrefSize(600, 350);
+        // Tăng chiều cao nếu có mode và timer
+        int height = (mode != null && !mode.isEmpty()) ? 450 : 350;
+        setPrefSize(600, height);
         setLayoutX((1920 - 600) / 2);
-        setLayoutY((1080 - 350) / 2);
+        setLayoutY((1080 - height) / 2);
         
         setVisible(true);
         setManaged(true);
@@ -41,7 +51,7 @@ public class FriendRequestNotificationDialog extends StackPane {
         setDisable(false);
         
         // Background
-        Rectangle bg = new Rectangle(600, 350);
+        Rectangle bg = new Rectangle(600, height);
         bg.setFill(Color.WHITE);
         bg.setStroke(Color.color(0.3, 0.3, 0.3));
         bg.setStrokeWidth(2);
@@ -60,15 +70,16 @@ public class FriendRequestNotificationDialog extends StackPane {
         bg.setEffect(shadow);
         
         // Content
-        VBox content = new VBox(30);
-        content.setPrefSize(600, 350);
+        VBox content = new VBox(20);
+        content.setPrefSize(600, height);
         content.setAlignment(Pos.CENTER);
         content.setPadding(new Insets(40));
         content.setMouseTransparent(false);
         content.setPickOnBounds(true);
         
         // Message
-        Label messageLabel = new Label(fromUser + " wants to be your friend");
+        String messageText = fromUser + " wants to be your friend";
+        Label messageLabel = new Label(messageText);
         messageLabel.setStyle(
             "-fx-font-family: 'Kolker Brush'; " +
             "-fx-font-size: 48px; " +
@@ -79,6 +90,36 @@ public class FriendRequestNotificationDialog extends StackPane {
         messageLabel.setAlignment(Pos.CENTER);
         messageLabel.setPrefWidth(520);
         messageLabel.setMouseTransparent(true);
+        
+        // Hiển thị mode và timer nếu có
+        if (mode != null && !mode.isEmpty()) {
+            String modeText = mode.equals("blitz") ? "Blitz Mode" : "Classic Mode";
+            String timeText = timeLimit > 0 ? formatTime(timeLimit) : "Unlimited time";
+            
+            Label modeLabel = new Label("Game Mode: " + modeText);
+            modeLabel.setStyle(
+                "-fx-font-family: 'Kolker Brush'; " +
+                "-fx-font-size: 36px; " +
+                "-fx-text-fill: #4A4A4A; " +
+                "-fx-background-color: transparent;"
+            );
+            modeLabel.setAlignment(Pos.CENTER);
+            modeLabel.setMouseTransparent(true);
+            
+            Label timeLabel = new Label("Time: " + timeText);
+            timeLabel.setStyle(
+                "-fx-font-family: 'Kolker Brush'; " +
+                "-fx-font-size: 36px; " +
+                "-fx-text-fill: #4A4A4A; " +
+                "-fx-background-color: transparent;"
+            );
+            timeLabel.setAlignment(Pos.CENTER);
+            timeLabel.setMouseTransparent(true);
+            
+            content.getChildren().addAll(messageLabel, modeLabel, timeLabel);
+        } else {
+            content.getChildren().add(messageLabel);
+        }
         
         // Buttons Container
         HBox buttonsContainer = new HBox(20);
@@ -113,7 +154,7 @@ public class FriendRequestNotificationDialog extends StackPane {
         });
         
         buttonsContainer.getChildren().addAll(acceptButton, declineButton);
-        content.getChildren().addAll(messageLabel, buttonsContainer);
+        content.getChildren().add(buttonsContainer);
         
         // Close button (X)
         StackPane closeButton = createCloseButton();
@@ -124,7 +165,7 @@ public class FriendRequestNotificationDialog extends StackPane {
         });
         
         javafx.scene.layout.AnchorPane closeButtonContainer = new javafx.scene.layout.AnchorPane();
-        closeButtonContainer.setPrefSize(600, 350);
+        closeButtonContainer.setPrefSize(600, height);
         // QUAN TRỌNG: pickOnBounds = FALSE để clicks vùng trống đi xuyên qua đến content (Accept/Decline buttons)
         // Chỉ close button mới nhận clicks, không phải toàn bộ AnchorPane
         closeButtonContainer.setMouseTransparent(false);
@@ -221,6 +262,22 @@ public class FriendRequestNotificationDialog extends StackPane {
         });
         
         return button;
+    }
+    
+    private String formatTime(int seconds) {
+        if (seconds <= 0) {
+            return "Unlimited time";
+        }
+        int minutes = seconds / 60;
+        if (minutes < 60) {
+            return minutes + " mins";
+        }
+        int hours = minutes / 60;
+        int remainingMinutes = minutes % 60;
+        if (remainingMinutes == 0) {
+            return hours + " hour" + (hours > 1 ? "s" : "");
+        }
+        return hours + "h " + remainingMinutes + "m";
     }
     
     public void hide() { hide(false); }
