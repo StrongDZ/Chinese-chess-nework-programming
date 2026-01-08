@@ -55,28 +55,43 @@ public class GameSender {
     
     /**
      * Send a game move.
+     * Backend expects format: {"piece":"...", "from":{"row":..., "col":...}, "to":{"row":..., "col":...}}
      */
-    public void sendMove(int fromX, int fromY, int toX, int toY) throws IOException {
+    public void sendMove(int fromCol, int fromRow, int toCol, int toRow) throws IOException {
         JsonObject payload = new JsonObject();
-        payload.addProperty("from_x", fromX);
-        payload.addProperty("from_y", fromY);
-        payload.addProperty("to_x", toX);
-        payload.addProperty("to_y", toY);
+        payload.addProperty("piece", "");  // Empty piece name
+        
+        JsonObject from = new JsonObject();
+        from.addProperty("row", fromRow);
+        from.addProperty("col", fromCol);
+        payload.add("from", from);
+        
+        JsonObject to = new JsonObject();
+        to.addProperty("row", toRow);
+        to.addProperty("col", toCol);
+        payload.add("to", to);
+        
         socketClient.send(MessageType.MOVE, gson.toJson(payload));
     }
     
     /**
      * Send a game move with additional info.
+     * Backend expects format: {"piece":"...", "from":{"row":..., "col":...}, "to":{"row":..., "col":...}}
      */
-    public void sendMove(int fromX, int fromY, int toX, int toY, String piece, String captured, String notation) throws IOException {
+    public void sendMove(int fromCol, int fromRow, int toCol, int toRow, String piece, String captured, String notation) throws IOException {
         JsonObject payload = new JsonObject();
-        payload.addProperty("from_x", fromX);
-        payload.addProperty("from_y", fromY);
-        payload.addProperty("to_x", toX);
-        payload.addProperty("to_y", toY);
-        payload.addProperty("piece", piece);
-        payload.addProperty("captured", captured);
-        payload.addProperty("notation", notation);
+        payload.addProperty("piece", piece != null ? piece : "");
+        
+        JsonObject from = new JsonObject();
+        from.addProperty("row", fromRow);
+        from.addProperty("col", fromCol);
+        payload.add("from", from);
+        
+        JsonObject to = new JsonObject();
+        to.addProperty("row", toRow);
+        to.addProperty("col", toCol);
+        payload.add("to", to);
+        
         socketClient.send(MessageType.MOVE, gson.toJson(payload));
     }
     

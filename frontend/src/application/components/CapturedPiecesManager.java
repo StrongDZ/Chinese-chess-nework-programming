@@ -1,14 +1,14 @@
 package application.components;
 
 import application.state.UIState;
+import application.util.AssetHelper;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
 import javafx.geometry.Insets;
 
 /**
@@ -19,9 +19,10 @@ public class CapturedPiecesManager {
     private final UIState state;
     private final IGamePanel gamePanel;
     
-    // Track captured pieces for each player
-    private final java.util.Map<String, Integer> redCapturedPieces = new java.util.HashMap<>();
-    private final java.util.Map<String, Integer> blackCapturedPieces = new java.util.HashMap<>();
+    // Track captured pieces grouped by WHO captured (player vs opponent)
+    // This giúp bố trí đúng vị trí theo avatar của từng người chơi
+    private final java.util.Map<String, Integer> playerCapturedPieces = new java.util.HashMap<>();
+    private final java.util.Map<String, Integer> opponentCapturedPieces = new java.util.HashMap<>();
     
     // UI components for captured pieces display
     private VBox topLeftCapturedPieces = null;
@@ -69,20 +70,38 @@ public class CapturedPiecesManager {
      * @param pieceType Loại quân cờ (King, Advisor, Elephant, Horse, Rook, Cannon, Pawn)
      */
     public void addCapturedPiece(String capturedPieceColor, String pieceType) {
-        // Xác định người chơi nào đã ăn (người chơi đối lập với màu quân cờ bị ăn)
-        boolean isRedPlayer = capturedPieceColor.equals("black");  // Nếu ăn quân black thì là red player
+        // Xác định màu của NGƯỜI CHƠI hiện tại
+        String playerColor = state.isPlayerRed() ? "red" : "black";
+        String opponentColor = playerColor.equals("red") ? "black" : "red";
+
+        // Quân bị ăn màu gì? -> Người ăn là bên đối lập
+        // Nếu quân bị ăn màu opponent -> Player là người ăn -> hiển thị cạnh avatar Player (bottom-right)
+        // Nếu quân bị ăn màu player -> Opponent là người ăn -> hiển thị cạnh avatar Opponent (top-left)
+        boolean capturedByPlayer = capturedPieceColor.equals(opponentColor);
+
+        java.util.Map<String, Integer> targetMap = capturedByPlayer ? playerCapturedPieces : opponentCapturedPieces;
+        targetMap.put(pieceType, targetMap.getOrDefault(pieceType, 0) + 1);
+
+        System.out.println("[CapturedPiecesManager] addCapturedPiece: pieceType=" + pieceType + 
+            ", capturedPieceColor=" + capturedPieceColor + ", playerColor=" + playerColor + 
+            ", capturedByPlayer=" + capturedByPlayer + ", targetMapSize=" + targetMap.size());
+
+        // Cập nhật UI: 
+        // Trong GamePanel: playerCapturedPieces = createCapturedPiecesDisplay(true) = topLeftCapturedPieces (Manager)
+        //                  opponentCapturedPieces = createCapturedPiecesDisplay(false) = bottomRightCapturedPieces (Manager)
+        // Nhưng GamePanel đặt: playerCapturedPieces ở bottom-right, opponentCapturedPieces ở top-left
+        // Vậy: topLeftCapturedPieces (Manager) = bottom-right (vị trí player)
+        //      bottomRightCapturedPieces (Manager) = top-left (vị trí opponent)
+        // => Khi player ăn quân (capturedByPlayer=true) -> hiển thị ở topLeftCapturedPieces
+        VBox displayContainer = capturedByPlayer ? topLeftCapturedPieces : bottomRightCapturedPieces;
+        // Màu của quân trong map: playerCapturedPieces chứa quân màu opponent, opponentCapturedPieces chứa quân màu player
+        String mapPieceColor = capturedByPlayer ? opponentColor : playerColor;
         
-        // Cập nhật map
-        java.util.Map<String, Integer> capturedMap = isRedPlayer ? redCapturedPieces : blackCapturedPieces;
-        capturedMap.put(pieceType, capturedMap.getOrDefault(pieceType, 0) + 1);
-        
-        // Cập nhật UI
-        VBox displayContainer = isRedPlayer ? topLeftCapturedPieces : bottomRightCapturedPieces;
         if (displayContainer != null) {
             HBox piecesContainer = (HBox) displayContainer.getUserData();
             if (piecesContainer != null) {
                 Platform.runLater(() -> {
-                    updateCapturedPiecesDisplay(piecesContainer, capturedMap, capturedPieceColor);
+                    updateCapturedPiecesDisplay(piecesContainer, targetMap, mapPieceColor);
                 });
             }
         }
@@ -108,53 +127,40 @@ public class CapturedPiecesManager {
     }
     
     /**
-     * Tạo icon cho quân cờ đã bị ăn
+     * Tạo icon cho quân cờ đã bị ăn - sử dụng hình ảnh từ assets/pieces
      */
     private StackPane createCapturedPieceIcon(String pieceType, String pieceColor, int count) {
         StackPane iconContainer = new StackPane();
         iconContainer.setPrefWidth(50);
         iconContainer.setPrefHeight(50);
         
-        // Vòng tròn với màu theo màu quân cờ bị ăn
-        Circle circle = new Circle(25);
-        if (pieceColor.equals("red")) {
-            circle.setFill(Color.web("#DC143C"));  // Màu đỏ
-        } else {
-            circle.setFill(Color.web("#1C1C1C"));  // Màu đen
+        // Load hình ảnh quân cờ từ assets/pieces/{color}/Chinese-{PieceType}-{Color}.png
+        String colorCapitalized = pieceColor.substring(0, 1).toUpperCase() + pieceColor.substring(1).toLowerCase();
+        String imagePath = "pieces/" + pieceColor.toLowerCase() + "/Chinese-" + pieceType + "-" + colorCapitalized + ".png";
+        
+        try {
+            ImageView pieceImage = new ImageView(AssetHelper.image(imagePath));
+            pieceImage.setFitWidth(45);
+            pieceImage.setFitHeight(45);
+            pieceImage.setPreserveRatio(true);
+            iconContainer.getChildren().add(pieceImage);
+        } catch (Exception e) {
+            System.err.println("[CapturedPiecesManager] Failed to load image: " + imagePath + ", error: " + e.getMessage());
+            // Fallback: tạo placeholder nếu không load được hình
+            Label fallbackLabel = new Label(pieceType.substring(0, 1));
+            fallbackLabel.setStyle("-fx-font-size: 20px; -fx-text-fill: " + (pieceColor.equals("red") ? "#DC143C" : "#1C1C1C") + ";");
+            iconContainer.getChildren().add(fallbackLabel);
         }
-        circle.setStroke(Color.WHITE);
-        circle.setStrokeWidth(2);
-        
-        // Text hiển thị chữ quân cờ (chữ Hán)
-        Label pieceLabel = new Label();
-        pieceLabel.setStyle("-fx-font-size: 24px; -fx-text-fill: white; -fx-background-color: transparent;");
-        
-        // Map piece type to Chinese character
-        java.util.Map<String, String> pieceChars = new java.util.HashMap<>();
-        pieceChars.put("King", pieceColor.equals("red") ? "帥" : "將");
-        pieceChars.put("Advisor", pieceColor.equals("red") ? "仕" : "士");
-        pieceChars.put("Elephant", pieceColor.equals("red") ? "相" : "象");
-        pieceChars.put("Horse", pieceColor.equals("red") ? "傌" : "馬");
-        pieceChars.put("Rook", pieceColor.equals("red") ? "俥" : "車");
-        pieceChars.put("Cannon", pieceColor.equals("red") ? "炮" : "砲");
-        pieceChars.put("Pawn", pieceColor.equals("red") ? "兵" : "卒");
-        
-        pieceLabel.setText(pieceChars.getOrDefault(pieceType, "?"));
         
         // Label hiển thị số lượng (luôn hiển thị nếu > 1) - đặt ở góc dưới bên phải
-        Label countLabel = null;
         if (count > 1) {
-            countLabel = new Label(String.valueOf(count));
+            Label countLabel = new Label("x" + count);
             // Màu chữ cùng với màu quân cờ bị ăn
             String textColor = pieceColor.equals("red") ? "#DC143C" : "#1C1C1C";
-            countLabel.setStyle(String.format("-fx-font-family: 'Kolker Brush'; -fx-font-size: 20px; -fx-text-fill: %s; -fx-background-color: transparent; -fx-font-weight: 900;", textColor));
+            countLabel.setStyle(String.format("-fx-font-size: 14px; -fx-text-fill: %s; -fx-background-color: rgba(255,255,255,0.8); -fx-padding: 1 3; -fx-font-weight: bold;", textColor));
             // Đặt ở góc dưới bên phải của icon
             StackPane.setAlignment(countLabel, Pos.BOTTOM_RIGHT);
-            StackPane.setMargin(countLabel, new Insets(0, 3, 3, 0));
-        }
-        
-        iconContainer.getChildren().addAll(circle, pieceLabel);
-        if (countLabel != null) {
+            StackPane.setMargin(countLabel, new Insets(0, 0, 0, 0));
             iconContainer.getChildren().add(countLabel);
         }
         
@@ -165,8 +171,8 @@ public class CapturedPiecesManager {
      * Reset danh sách quân cờ đã bị ăn (khi bắt đầu game mới)
      */
     public void resetCapturedPieces() {
-        redCapturedPieces.clear();
-        blackCapturedPieces.clear();
+        playerCapturedPieces.clear();
+        opponentCapturedPieces.clear();
         
         if (topLeftCapturedPieces != null) {
             HBox piecesContainer = (HBox) topLeftCapturedPieces.getUserData();

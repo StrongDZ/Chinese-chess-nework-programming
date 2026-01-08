@@ -204,6 +204,28 @@ string GameService::calculateNewXfen(const string &currentXfen, int fromX,
   return boardToXfen(board, nextTurn, moveCount * 2);
 }
 
+// Helper: map piece char to human-readable name (uppercase=red, lowercase=black)
+static string charToPieceName(char c) {
+  switch (toupper(c)) {
+  case 'K':
+    return "King";
+  case 'A':
+    return "Advisor";
+  case 'B':
+    return "Elephant";
+  case 'N':
+    return "Horse";
+  case 'R':
+    return "Rook";
+  case 'C':
+    return "Cannon";
+  case 'P':
+    return "Pawn";
+  default:
+    return "";
+  }
+}
+
 void GameService::calculateAndUpdateRatings(const string &redUsername,
                                             const string &blackUsername,
                                             const string &result,
@@ -446,6 +468,13 @@ GameResult GameService::makeMove(const string &username, const string &gameId,
 
   Game game = gameOpt.value();
 
+  // Current board to detect captured piece
+  char board[10][9];
+  parseXfenToBoard(game.xfen, board);
+  char capturedChar = board[toY][toX];
+  string detectedCaptured = (capturedChar != '.') ? charToPieceName(capturedChar)
+                                                  : "";
+
   // 3. Check game is in progress
   if (game.status != "in_progress") {
     result.message = "Game is not in progress";
@@ -481,7 +510,8 @@ GameResult GameService::makeMove(const string &username, const string &gameId,
   move.to_x = toX;
   move.to_y = toY;
   move.piece = piece;
-  move.captured = captured;
+  // If client didn't provide captured, use detectedCaptured
+  move.captured = captured.empty() ? detectedCaptured : captured;
   move.notation = notation;
   move.xfen_after = calculatedXfen; // Use calculated XFEN
   move.time_taken = timeTaken;

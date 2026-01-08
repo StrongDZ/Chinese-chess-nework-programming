@@ -8,6 +8,7 @@ import javafx.application.Platform;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Manages socket connection and message handling for the application.
@@ -35,6 +36,14 @@ public class NetworkManager {
     private GameSender gameSender;
     private FriendSender friendSender;
     private InfoSender infoSender;
+    
+    // Reconnection state
+    private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
+    private Thread reconnectThread;
+    
+    // Saved credentials for auto-login after reconnect
+    private String savedUsername;
+    private String savedPassword;
     
     private NetworkManager() {
         socketClient = new SocketClient();
@@ -130,9 +139,13 @@ public class NetworkManager {
         socketClient.setDisconnectListener(reason -> {
             Platform.runLater(() -> {
                 System.err.println("[NetworkManager] Disconnected: " + reason);
-                // TODO: Show reconnection dialog or notification to user
-                // uiState.showConnectionLost();
+                // Show reconnecting overlay
+                if (uiState != null) {
+                    uiState.setReconnectingVisible(true);
+                }
             });
+            // Start reconnection in background thread
+            startReconnection();
         });
     }
     
@@ -184,6 +197,7 @@ public class NetworkManager {
      * Disconnect from server.
      */
     public void disconnect() {
+        stopReconnection(); // Stop any ongoing reconnection attempts
         socketClient.disconnect();
     }
     
@@ -270,5 +284,135 @@ public class NetworkManager {
      */
     public void connectToServer() throws IOException {
         connect(serverHost, serverPort);
+    }
+    
+    /**
+     * Start reconnection loop in background thread.
+     * Will keep trying to reconnect until successful.
+     */
+    private void startReconnection() {
+        // Only start one reconnection thread at a time
+        if (isReconnecting.compareAndSet(false, true)) {
+            reconnectThread = new Thread(() -> {
+                System.out.println("[NetworkManager] Starting reconnection loop...");
+                
+                while (!isConnected() && isReconnecting.get()) {
+                    try {
+                        // Wait 2 seconds before attempting reconnect
+                        Thread.sleep(2000);
+                        
+                        System.out.println("[NetworkManager] Attempting to reconnect to " + serverHost + ":" + serverPort);
+                        connect(serverHost, serverPort);
+                        
+                        // If connection successful, wait a bit to verify it's stable
+                        if (isConnected()) {
+                            Thread.sleep(500);
+                            if (isConnected()) {
+                                // Connection successful
+                                System.out.println("[NetworkManager] Reconnected successfully");
+                                
+                                // Auto-login if credentials are saved
+                                if (savedUsername != null && savedPassword != null &&
+                                    !savedUsername.isEmpty() && !savedPassword.isEmpty()) {
+                                    try {
+                                        System.out.println("[NetworkManager] Auto-login with saved credentials for user: " + savedUsername);
+                                        auth().login(savedUsername, savedPassword);
+                                        // Server will send AUTHENTICATED which triggers GameHandler to restore game state
+                                    } catch (IOException e) {
+                                        System.err.println("[NetworkManager] Auto-login failed: " + e.getMessage());
+                                    }
+                                } else {
+                                    // No saved credentials - hide overlay and let user login manually
+                                    Platform.runLater(() -> {
+                                        if (uiState != null) {
+                                            uiState.setReconnectingVisible(false);
+                                        }
+                                    });
+                                }
+                                
+                                isReconnecting.set(false);
+                                return;
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                        // Reconnection cancelled
+                        System.out.println("[NetworkManager] Reconnection interrupted");
+                        isReconnecting.set(false);
+                        return;
+                    } catch (IOException e) {
+                        // Connection failed, will retry in next iteration
+                        System.err.println("[NetworkManager] Reconnection attempt failed: " + e.getMessage());
+                    }
+                }
+                
+                // If we exit the loop and still not connected, stop reconnecting
+                isReconnecting.set(false);
+            }, "NetworkManager-ReconnectThread");
+            reconnectThread.setDaemon(true);
+            reconnectThread.start();
+        }
+    }
+    
+    /**
+     * Stop reconnection attempts.
+     * Called when intentionally disconnecting.
+     */
+    public void stopReconnection() {
+        if (isReconnecting.get()) {
+            isReconnecting.set(false);
+            if (reconnectThread != null && reconnectThread.isAlive()) {
+                reconnectThread.interrupt();
+            }
+            Platform.runLater(() -> {
+                if (uiState != null) {
+                    uiState.setReconnectingVisible(false);
+                }
+            });
+        }
+    }
+    
+    // ========== Credentials Management ==========
+    
+    /**
+     * Save credentials for auto-login after reconnect.
+     * Called after successful login.
+     * 
+     * @param username Username
+     * @param password Password (stored in memory only, never persisted)
+     */
+    public void saveCredentials(String username, String password) {
+        this.savedUsername = username;
+        this.savedPassword = password;
+        System.out.println("[NetworkManager] Credentials saved for user: " + username);
+    }
+    
+    /**
+     * Clear saved credentials.
+     * Called on logout.
+     */
+    public void clearCredentials() {
+        this.savedUsername = null;
+        this.savedPassword = null;
+        System.out.println("[NetworkManager] Credentials cleared");
+    }
+    
+    /**
+     * Check if credentials are saved for auto-login.
+     */
+    public boolean hasCredentials() {
+        return savedUsername != null && savedPassword != null &&
+               !savedUsername.isEmpty() && !savedPassword.isEmpty();
+    }
+    
+    /**
+     * Hide reconnecting overlay.
+     * Called when auto-login succeeds.
+     */
+    public void hideReconnectingOverlay() {
+        Platform.runLater(() -> {
+            if (uiState != null) {
+                uiState.setReconnectingVisible(false);
+            }
+        });
     }
 }

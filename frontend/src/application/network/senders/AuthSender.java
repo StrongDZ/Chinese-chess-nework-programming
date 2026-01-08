@@ -2,6 +2,7 @@ package application.network.senders;
 
 import application.network.SocketClient;
 import application.network.MessageType;
+import application.network.NetworkManager;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import java.io.IOException;
@@ -57,6 +58,8 @@ public class AuthSender {
         socketClient.send(MessageType.LOGOUT, "{}");
         // Reset username context but keep socket connection open
         socketClient.resetUsername();
+        // Clear saved credentials to prevent auto-login after logout
+        NetworkManager.getInstance().clearCredentials();
     }
 }
 

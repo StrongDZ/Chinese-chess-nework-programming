@@ -10,8 +10,10 @@ struct PlayerInfo {
   string username;
   bool in_game{false};
   int opponent_fd{-1};
-  bool is_red{false}; // true if player is playing red side (goes first)
-  int avatar_id{1};   // Avatar ID (1-10)
+  bool is_red{false};    // true if player is playing red side (goes first)
+  int avatar_id{1};      // Avatar ID (1-10)
+  string game_id;        // Current active game ID in database
+  string current_turn;   // "red" or "black" - tracks whose turn it is
 };
 
 // ===================== Handler Declarations ===================== //

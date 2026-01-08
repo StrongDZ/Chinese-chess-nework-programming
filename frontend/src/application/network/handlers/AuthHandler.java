@@ -54,14 +54,20 @@ public class AuthHandler implements MessageHandler {
                 onUsernameSet.accept(username);
             }
             
+            NetworkManager networkManager = NetworkManager.getInstance();
+            
+            // Hide reconnecting overlay if it was showing (auto-login after reconnect)
+            networkManager.hideReconnectingOverlay();
+            
             // Fetch user stats (elo) and friends list from backend after successful authentication
             try {
-                NetworkManager networkManager = NetworkManager.getInstance();
                 if (networkManager.isConnected() && username != null && !username.isEmpty()) {
                     // Fetch stats for both modes
                     networkManager.info().requestUserStats(username, "all");  // Fetch all modes at once
                     // Request friends list
                     networkManager.friend().requestFriendsList();
+                    // Request active game to restore game state if any
+                    networkManager.info().requestActiveGame(username);
                 }
             } catch (IOException e) {
                 System.err.println("[AuthHandler] Failed to fetch user data: " + e.getMessage());

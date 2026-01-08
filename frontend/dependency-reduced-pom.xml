@@ -20,7 +20,9 @@
         <version>0.0.8</version>
         <configuration>
           <mainClass>application.Main</mainClass>
-          <moduleName>ChineseChessJavaFX</moduleName>
+          <options>
+            <option>-Dserver=${server}</option>
+          </options>
         </configuration>
       </plugin>
       <plugin>
@@ -38,6 +40,14 @@
                   <mainClass>application.Main</mainClass>
                 </transformer>
               </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
         </executions>

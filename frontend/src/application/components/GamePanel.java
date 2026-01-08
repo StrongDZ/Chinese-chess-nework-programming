@@ -44,7 +44,9 @@ public class GamePanel extends StackPane implements IGamePanel {
     private Pane rootPane = null;  // Lưu reference đến root pane để thêm UI
     private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
     private StackPane boardContainer = null;  // Lưu reference đến board container
+    private ImageView boardImage = null;  // Reference đến board image để xoay riêng
     private String currentTurn = "red";  // Lượt hiện tại: "red" đi trước, sau đó "black"
+    private boolean isBoardFlipped = false;  // True nếu player là black (board cần flip)
 
     public GamePanel(UIState state) {
         this.state = state;
@@ -201,6 +203,26 @@ public class GamePanel extends StackPane implements IGamePanel {
         chessBoardManager.setOnTurnChanged(() -> {
             timerManager.updateTimersOnTurnChange();
         });
+        
+        // Callback để gửi MOVE message đến server khi người chơi di chuyển quân cờ
+        chessBoardManager.setOnMoveMade((fromRow, fromCol, toRow, toCol, piece, captured) -> {
+            try {
+                // Gửi MOVE message đến server
+                application.network.NetworkManager networkManager = application.network.NetworkManager.getInstance();
+                if (networkManager != null) {
+                    networkManager.game().sendMove(fromCol, fromRow, toCol, toRow, piece, captured, null);
+                    System.out.println("[GamePanel] Sent MOVE to server: " + piece + " from (" + fromRow + "," + fromCol + ") to (" + toRow + "," + toCol + ")");
+                }
+            } catch (Exception e) {
+                System.err.println("[GamePanel] Error sending MOVE: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+        
+        // Register callback trong UIState để nhận move từ server
+        state.setOpponentMoveCallback((fromCol, fromRow, toCol, toRow) -> {
+            applyOpponentMove(fromCol, fromRow, toCol, toRow);
+        });
     }
     
     // Lưu reference đến profile containers để có thể đổi vị trí
@@ -257,24 +279,24 @@ public class GamePanel extends StackPane implements IGamePanel {
         getChildren().add(topRightIcons);
         
         // Center: Game board area - hiển thị ảnh bàn cờ đã chọn
-        ImageView boardImage = new ImageView();
-        boardImage.setFitWidth(923);
-        boardImage.setFitHeight(923);
-        boardImage.setPreserveRatio(true);
-        boardImage.setSmooth(true);
-        boardImage.setLayoutX((1920 - 923) / 2);
-        boardImage.setLayoutY((1080 - 923) / 2);
+        this.boardImage = new ImageView();
+        this.boardImage.setFitWidth(923);
+        this.boardImage.setFitHeight(923);
+        this.boardImage.setPreserveRatio(true);
+        this.boardImage.setSmooth(true);
+        this.boardImage.setLayoutX((1920 - 923) / 2);
+        this.boardImage.setLayoutY((1080 - 923) / 2);
         
         // Bind image với selectedBoardImagePath từ state
         state.selectedBoardImagePathProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !newVal.isEmpty()) {
                 try {
-                    boardImage.setImage(AssetHelper.image(newVal));
+                    this.boardImage.setImage(AssetHelper.image(newVal));
                 } catch (Exception e) {
-                    boardImage.setImage(null);
+                    this.boardImage.setImage(null);
                 }
             } else {
-                boardImage.setImage(null);
+                this.boardImage.setImage(null);
             }
         });
         
@@ -282,7 +304,7 @@ public class GamePanel extends StackPane implements IGamePanel {
         String initialBoardPath = state.getSelectedBoardImagePath();
         if (initialBoardPath != null && !initialBoardPath.isEmpty()) {
             try {
-                boardImage.setImage(AssetHelper.image(initialBoardPath));
+                this.boardImage.setImage(AssetHelper.image(initialBoardPath));
             } catch (Exception e) {
                 // Ignore error
             }
@@ -304,7 +326,7 @@ public class GamePanel extends StackPane implements IGamePanel {
         boardContainer.setLayoutY((1080 - 923) / 2);
         boardContainer.setPrefSize(923, 923);
         boardContainer.setAlignment(Pos.CENTER);
-        boardContainer.getChildren().addAll(boardPlaceholder, boardImage);
+        boardContainer.getChildren().addAll(boardPlaceholder, this.boardImage);
         
         // Lưu reference để có thể reset quân cờ
         this.boardContainer = boardContainer;
@@ -688,6 +710,91 @@ public class GamePanel extends StackPane implements IGamePanel {
     public void setCurrentTurn(String turn) {
         this.currentTurn = turn;
     }
+    
+    /**
+     * Apply opponent's move from server
+     * @param fromCol Column of piece to move (0-8)
+     * @param fromRow Row of piece to move (0-9)
+     * @param toCol Target column (0-8)
+     * @param toRow Target row (0-9)
+     */
+    public void applyOpponentMove(int fromCol, int fromRow, int toCol, int toRow) {
+        Platform.runLater(() -> {
+            if (piecesContainer == null) {
+                System.err.println("[GamePanel] piecesContainer is null, cannot apply move");
+                return;
+            }
+            
+            double boardSize = 923.0;
+            double cellWidth = boardSize / 9.0;
+            double cellHeight = boardSize / 10.0;
+            
+            // Tìm quân cờ tại vị trí from
+            ImageView pieceToMove = null;
+            ImageView capturedPiece = null;
+            
+            for (javafx.scene.Node node : piecesContainer.getChildren()) {
+                if (node instanceof ImageView) {
+                    ImageView imgView = (ImageView) node;
+                    if (imgView.getUserData() instanceof ChessBoardManager.PieceInfo) {
+                        int pieceRow = (int) Math.round(imgView.getLayoutY() / cellHeight);
+                        int pieceCol = (int) Math.round(imgView.getLayoutX() / cellWidth);
+                        pieceRow = Math.max(0, Math.min(9, pieceRow));
+                        pieceCol = Math.max(0, Math.min(8, pieceCol));
+                        
+                        if (pieceRow == fromRow && pieceCol == fromCol) {
+                            pieceToMove = imgView;
+                        }
+                        if (pieceRow == toRow && pieceCol == toCol) {
+                            capturedPiece = imgView;
+                        }
+                    }
+                }
+            }
+            
+            if (pieceToMove == null) {
+                System.err.println("[GamePanel] Could not find piece at (" + fromRow + "," + fromCol + ")");
+                return;
+            }
+            
+            // Nếu có quân cờ ở vị trí đích, xóa nó (ăn quân)
+            if (capturedPiece != null && capturedPiece != pieceToMove) {
+                ChessBoardManager.PieceInfo capInfo = (ChessBoardManager.PieceInfo) capturedPiece.getUserData();
+                if (capInfo != null) {
+                    // Thêm vào captured pieces display
+                    capturedPiecesManager.addCapturedPiece(capInfo.color, capInfo.pieceType);
+                }
+                piecesContainer.getChildren().remove(capturedPiece);
+            }
+            
+            // Di chuyển quân cờ đến vị trí mới
+            double newX = toCol * cellWidth + (cellWidth - pieceToMove.getFitWidth()) / 2;
+            double newY = toRow * cellHeight + (cellHeight - pieceToMove.getFitHeight()) / 2;
+            pieceToMove.setLayoutX(newX);
+            pieceToMove.setLayoutY(newY);
+            
+            // Lấy thông tin để thêm vào move history
+            ChessBoardManager.PieceInfo pieceInfo = (ChessBoardManager.PieceInfo) pieceToMove.getUserData();
+            if (pieceInfo != null) {
+                String capturedInfo = "";
+                if (capturedPiece != null && capturedPiece != pieceToMove) {
+                    ChessBoardManager.PieceInfo capInfo = (ChessBoardManager.PieceInfo) capturedPiece.getUserData();
+                    if (capInfo != null) {
+                        capturedInfo = String.format(" (captured %s %s)", capInfo.color, capInfo.pieceType);
+                    }
+                }
+                moveHistoryManager.addMove(pieceInfo.color, pieceInfo.pieceType, fromRow, fromCol, toRow, toCol, capturedInfo);
+            }
+            
+            // Đổi lượt
+            currentTurn = currentTurn.equals("red") ? "black" : "red";
+            
+            // Cập nhật timer
+            timerManager.updateTimersOnTurnChange();
+            
+            System.out.println("[GamePanel] Applied opponent move: (" + fromRow + "," + fromCol + ") -> (" + toRow + "," + toCol + ")");
+        });
+    }
 
     
     /**
@@ -725,20 +832,38 @@ public class GamePanel extends StackPane implements IGamePanel {
             return;
         }
         
+        // Cập nhật flag
+        this.isBoardFlipped = !isPlayerRed;
+        
         // Nếu player là black, xoay 180 độ
         // Nếu player là red, không xoay (0 độ)
-        double rotation = isPlayerRed ? 0.0 : 180.0;
+        double boardRotation = isPlayerRed ? 180.0 : 0.0;
+        
+        System.out.println("[GamePanel] updateBoardRotation: isPlayerRed=" + isPlayerRed + 
+            ", boardRotation=" + boardRotation + ", isBoardFlipped=" + isBoardFlipped);
         
         // Xoay boardContainer - điều này sẽ xoay tất cả children (boardImage, piecesContainer)
-        // Khi xoay 180 độ, pivot point là center của boardContainer
-        boardContainer.setRotate(rotation);
+        boardContainer.setRotate(boardRotation);
         
-        // Đảm bảo piecesContainer cũng được xoay (nếu có)
+        // QUAN TRỌNG: Khi bàn cờ xoay 180 độ, quân cờ cũng bị xoay làm chữ ngược
+        // Cần xoay ngược mỗi quân cờ (ImageView) để chữ luôn đúng hướng
         if (piecesContainer != null) {
-            // piecesContainer sẽ tự động xoay theo boardContainer vì nó là child
-            // Nhưng để chắc chắn, set rotation riêng
-            piecesContainer.setRotate(rotation);
+            double pieceRotation = isPlayerRed ? 180.0 : 0.0;
+            for (javafx.scene.Node node : piecesContainer.getChildren()) {
+                if (node instanceof ImageView) {
+                    ImageView piece = (ImageView) node;
+                    // Xoay ngược quân cờ để chữ luôn đúng hướng
+                    piece.setRotate(pieceRotation);
+                }
+            }
         }
+    }
+    
+    /**
+     * Kiểm tra xem board có đang flipped không (player là black)
+     */
+    public boolean isBoardFlipped() {
+        return isBoardFlipped;
     }
     
     /**
@@ -761,6 +886,8 @@ public class GamePanel extends StackPane implements IGamePanel {
         if (boardContainer != null) {
             Platform.runLater(() -> {
                 resetChessPieces();
+                // Quan trọng: Sau khi reset pieces, cần xoay lại để chữ không bị ngược
+                updateBoardRotation(state.isPlayerRed());
             });
         }
     }
@@ -780,8 +907,15 @@ public class GamePanel extends StackPane implements IGamePanel {
             piecesContainer.setMouseTransparent(false);
             piecesContainer.setPickOnBounds(true);
             
-            // Đảm bảo rotation được áp dụng
+            // Đảm bảo rotation được áp dụng cho board và pieces
             updateBoardRotation(state.isPlayerRed());
         }
+    }
+    
+    /**
+     * Get UIState reference - for ChessBoardManager to access playerIsRed
+     */
+    public UIState getState() {
+        return state;
     }
 }

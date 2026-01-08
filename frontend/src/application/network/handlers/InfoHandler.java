@@ -52,66 +52,50 @@ public class InfoHandler implements MessageHandler {
         try {
             System.out.println("[InfoHandler] Received INFO message, payload: " + payload);
             
-            // INFO message can contain various types of data
-            // First check if it's a JSON array (could be player list or search results)
+            // Backend ALWAYS wraps INFO payload in "data" field (see message_types.h line 323-325)
+            // First, unwrap the "data" field to get the actual content
+            JsonObject wrapper = JsonParser.parseString(payload).getAsJsonObject();
+            
+            // Unwrap "data" field if present
+            String innerPayload = payload;
+            if (wrapper.has("data")) {
+                // Get the inner data - can be array, object, or primitive
+                if (wrapper.get("data").isJsonArray()) {
+                    innerPayload = wrapper.getAsJsonArray("data").toString();
+                    System.out.println("[InfoHandler] Unwrapped data field (array): " + innerPayload);
+                    
+                    // Array data - could be player list or search results
+                    handleSearchResults(innerPayload);
+                    handlePlayerList(innerPayload);
+                    return;
+                } else if (wrapper.get("data").isJsonObject()) {
+                    innerPayload = wrapper.getAsJsonObject("data").toString();
+                    System.out.println("[InfoHandler] Unwrapped data field (object): " + innerPayload);
+                } else if (wrapper.get("data").isJsonPrimitive()) {
+                    innerPayload = wrapper.get("data").getAsString();
+                    System.out.println("[InfoHandler] Unwrapped data field (primitive): " + innerPayload);
+                }
+            }
+            
+            // Now process the unwrapped inner payload
+            // Check if it's a JSON array
             try {
-                JsonArray array = JsonParser.parseString(payload).getAsJsonArray();
-                // Check if this is a search result (when search field has text) or player list
-                // For now, we'll treat all arrays as potential search results if they come after a search request
-                // But also update online players for backward compatibility
-                System.out.println("[InfoHandler] INFO payload is array, treating as search results and player list");
-                handleSearchResults(payload);
-                handlePlayerList(payload); // Also update online players for compatibility
+                JsonArray array = JsonParser.parseString(innerPayload).getAsJsonArray();
+                System.out.println("[InfoHandler] Inner payload is array, treating as search results and player list");
+                handleSearchResults(innerPayload);
+                handlePlayerList(innerPayload);
                 return;
             } catch (Exception e) {
                 // Not an array, continue to check other formats
             }
             
-            // Check if it's a user stats response
-            JsonObject response = JsonParser.parseString(payload).getAsJsonObject();
-            
-            // Check if it's wrapped in "data" field (backend wraps INFO in data field)
-            if (response.has("data")) {
-                Object dataObj = response.get("data");
-                if (dataObj instanceof JsonArray) {
-                    // Array wrapped in data field - could be player list or search results
-                    System.out.println("[InfoHandler] INFO payload has 'data' field with array, treating as both search results and player list");
-                    JsonArray playersArray = response.getAsJsonArray("data");
-                    String arrayString = playersArray.toString();
-                    handleSearchResults(arrayString); // Update search results
-                    handlePlayerList(arrayString); // Also update online players for compatibility
-                    return;
-                } else if (dataObj instanceof JsonObject) {
-                    // Try to handle as nested object
-                    JsonObject dataObjJson = response.getAsJsonObject("data");
-                    // Check if it's a logout response
-                    if (dataObjJson.has("logout")) {
-                        String logoutStatus = dataObjJson.get("logout").getAsString();
-                        if ("ok".equals(logoutStatus)) {
-                            // Reset username in UIState
-                            uiState.setUsername("");
-                            System.out.println("[InfoHandler] Logout successful, username reset");
-                        }
-                        return;
-                    }
-                    if (dataObjJson.has("stat") || dataObjJson.has("stats")) {
-                        System.out.println("[InfoHandler] INFO payload has 'data' field with stats");
-                        handleUserStats(dataObjJson.toString());
-                        return;
-                    }
-                    // Check if it's a friend requests response (has "pending" or "accepted" field)
-                    if (dataObjJson.has("pending") || dataObjJson.has("accepted")) {
-                        System.out.println("[InfoHandler] INFO payload has 'data' field with friend requests");
-                        handleFriendRequests(payload); // Pass full payload, handleFriendRequests will unwrap
-                        return;
-                    }
-                }
-            }
+            // Parse as JSON object
+            JsonObject response = JsonParser.parseString(innerPayload).getAsJsonObject();
             
             // Check if this is a user stats response (has "stat" or "stats" field)
             if (response.has("stat") || response.has("stats")) {
-                System.out.println("[InfoHandler] INFO payload has stats field");
-                handleUserStats(payload);
+                System.out.println("[InfoHandler] Inner payload has stats field");
+                handleUserStats(innerPayload);
                 return;
             }
             
@@ -123,6 +107,13 @@ public class InfoHandler implements MessageHandler {
                     uiState.setUsername("");
                     System.out.println("[InfoHandler] Logout successful, username reset");
                 }
+                return;
+            }
+            
+            // Check if this is an active game restore response
+            if (response.has("action") && 
+                "active_game_restore".equals(response.get("action").getAsString())) {
+                handleActiveGameRestore(response);
                 return;
             }
             
@@ -142,8 +133,8 @@ public class InfoHandler implements MessageHandler {
             
             // Check if it's a friend requests response (has "pending" or "accepted" field)
             if (response.has("pending") || response.has("accepted")) {
-                System.out.println("[InfoHandler] INFO payload has friend requests");
-                handleFriendRequests(payload);
+                System.out.println("[InfoHandler] Inner payload has friend requests");
+                handleFriendRequests(innerPayload);
                 return;
             }
             
@@ -472,6 +463,59 @@ public class InfoHandler implements MessageHandler {
             uiState.updateFriendRequests(pending, accepted);
         } catch (Exception e) {
             System.err.println("[InfoHandler] Error parsing friend requests: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    private void handleActiveGameRestore(JsonObject response) {
+        try {
+            System.out.println("[InfoHandler] Handling active game restore response");
+            
+            boolean hasActiveGame = response.has("has_active_game") && 
+                                    response.get("has_active_game").getAsBoolean();
+            
+            if (!hasActiveGame) {
+                System.out.println("[InfoHandler] No active game to restore");
+                return;
+            }
+            
+            // Extract game info
+            String gameId = response.has("game_id") ? response.get("game_id").getAsString() : "";
+            String opponent = response.has("opponent") ? response.get("opponent").getAsString() : "";
+            String gameMode = response.has("game_mode") ? response.get("game_mode").getAsString() : "classical";
+            boolean isRed = response.has("is_red") && response.get("is_red").getAsBoolean();
+            String currentTurn = response.has("current_turn") ? response.get("current_turn").getAsString() : "red";
+            
+            System.out.println("[InfoHandler] Restoring active game: gameId=" + gameId + 
+                ", opponent=" + opponent + ", gameMode=" + gameMode + ", isRed=" + isRed);
+            
+            // Set opponent info in UIState
+            uiState.setOpponentUsername(opponent);
+            uiState.setPlayerIsRed(isRed);
+            uiState.setCurrentGameMode(gameMode);
+            
+            // Set game action to trigger game restore in GamePanel
+            // Format: "restore_game|opponent|gameMode|isRed|currentTurn|xfen|movesJson"
+            String xfen = response.has("xfen") ? response.get("xfen").getAsString() : "";
+            String movesJson = "";
+            if (response.has("moves") && response.get("moves").isJsonArray()) {
+                movesJson = response.get("moves").toString();
+            }
+            
+            String restoreData = opponent + "|" + gameMode + "|" + isRed + 
+                "|" + currentTurn + "|" + xfen + "|" + movesJson;
+            
+            // Trigger game restore via game action
+            uiState.setGameActionResult(restoreData);
+            uiState.setGameActionTrigger("game_restore");
+            
+            // Open game panel
+            uiState.openGame(gameMode);
+            
+            System.out.println("[InfoHandler] Active game restored, opening game panel");
+            
+        } catch (Exception e) {
+            System.err.println("[InfoHandler] Error handling active game restore: " + e.getMessage());
             e.printStackTrace();
         }
     }

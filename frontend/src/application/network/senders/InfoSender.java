@@ -84,4 +84,15 @@ public class InfoSender {
         payload.addProperty("search_query", searchQuery);
         socketClient.send(MessageType.INFO, gson.toJson(payload));
     }
+    
+    /**
+     * Request active game for a user (for restore after reconnect).
+     * @param username Username to get active game for
+     */
+    public void requestActiveGame(String username) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("action", "get_active_game");
+        payload.addProperty("username", username);
+        socketClient.send(MessageType.INFO, gson.toJson(payload));
+    }
 }

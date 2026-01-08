@@ -3,6 +3,7 @@
 #include <bsoncxx/builder/basic/document.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
+#include <iostream>
 #include <random>
 
 using namespace std;
@@ -682,23 +683,40 @@ bool GameRepository::updatePlayerStats(const string &username,
     auto db = mongoClient.getDatabase();
     auto stats = db["player_stats"];
 
+    // Use upsert to create record if it doesn't exist
     auto updateDoc = document{}
-                     << "$set" << open_document << "rating" << newRating
-                     << close_document << "$inc" << open_document
-                     << "total_games" << 1 << resultField << 1 << close_document
+                     << "$set" << open_document 
+                       << "rating" << newRating
+                       << "username" << username
+                       << "time_control" << timeControl
+                     << close_document 
+                     << "$inc" << open_document
+                       << "total_games" << 1 << resultField << 1 
+                     << close_document
                      << "$max" << open_document << "highest_rating" << newRating
-                     << close_document << "$min" << open_document
-                     << "lowest_rating" << newRating << close_document
+                     << close_document 
+                     << "$min" << open_document << "lowest_rating" << newRating
+                     << close_document
+                     << "$setOnInsert" << open_document
+                       << "rd" << 350.0
+                       << "volatility" << 0.06
+                       << "win_streak" << 0
+                       << "longest_win_streak" << 0
+                     << close_document
                      << finalize;
+
+    mongocxx::options::update options;
+    options.upsert(true); // Create if not exists
 
     auto result =
         stats.update_one(document{} << "username" << username << "time_control"
                                     << timeControl << finalize,
-                         updateDoc.view());
+                         updateDoc.view(), options);
 
-    return result && result->matched_count() > 0;
+    return result && (result->matched_count() > 0 || result->upserted_id());
 
-  } catch (const exception &) {
+  } catch (const exception &e) {
+    cerr << "[updatePlayerStats] Error: " << e.what() << endl;
     return false;
   }
 }

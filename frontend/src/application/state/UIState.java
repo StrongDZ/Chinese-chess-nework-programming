@@ -33,6 +33,7 @@ public class UIState {
     private final BooleanProperty gameModeVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty replayVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final StringProperty replayGameId = new SimpleStringProperty("");  // Game ID for replay
+    private final BooleanProperty reconnectingVisible = new SimpleBooleanProperty(false);  // Reconnecting overlay visibility
     private final BooleanProperty classicModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty blitzModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty customModeVisible = new SimpleBooleanProperty(false);
@@ -305,6 +306,18 @@ public class UIState {
 
     public void closeGameMode() {
         setGameModeVisible(false);
+    }
+
+    public BooleanProperty reconnectingVisibleProperty() {
+        return reconnectingVisible;
+    }
+
+    public boolean isReconnectingVisible() {
+        return reconnectingVisible.get();
+    }
+
+    public void setReconnectingVisible(boolean value) {
+        reconnectingVisible.set(value);
     }
 
     public BooleanProperty classicModeVisibleProperty() {
@@ -819,6 +832,15 @@ public class UIState {
     private java.util.function.BiConsumer<java.util.List<application.components.HistoryPanel.HistoryEntry>,
                                          java.util.List<application.components.HistoryPanel.HistoryEntry>> gameHistoryUpdateCallback;
     
+    // Callback for applying opponent move (from server)
+    private OpponentMoveCallback opponentMoveCallback;
+    
+    // Interface for opponent move callback
+    @FunctionalInterface
+    public interface OpponentMoveCallback {
+        void onOpponentMove(int fromCol, int fromRow, int toCol, int toRow);
+    }
+    
     public void setOnlinePlayersUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
         this.onlinePlayersUpdateCallback = callback;
     }
@@ -903,6 +925,20 @@ public class UIState {
     @FunctionalInterface
     public interface TriConsumer<T, U, V> {
         void accept(T t, U u, V v);
+    }
+    
+    // Set opponent move callback
+    public void setOpponentMoveCallback(OpponentMoveCallback callback) {
+        this.opponentMoveCallback = callback;
+    }
+    
+    // Apply opponent move from server
+    public void applyOpponentMove(int fromCol, int fromRow, int toCol, int toRow) {
+        if (opponentMoveCallback != null) {
+            opponentMoveCallback.onOpponentMove(fromCol, fromRow, toCol, toRow);
+        } else {
+            System.err.println("[UIState] opponentMoveCallback is null, cannot apply move");
+        }
     }
 }
 

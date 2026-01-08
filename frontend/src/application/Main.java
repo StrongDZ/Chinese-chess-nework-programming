@@ -32,6 +32,7 @@ import application.components.ReplayPanel;
 import application.components.ProfilePanel;
 import application.components.WaitingPanel;
 import application.components.PlayWithFriendPanel;
+import application.components.ReconnectingOverlay;
 import application.network.NetworkManager;
 
 /**
@@ -106,6 +107,7 @@ public class Main extends Application {
         ProfilePanel profilePanel = new ProfilePanel(state);
         WaitingPanel waitingPanel = new WaitingPanel(state);
         PlayWithFriendPanel playWithFriendPanel = new PlayWithFriendPanel(state);
+        ReconnectingOverlay reconnectingOverlay = new ReconnectingOverlay(state);
         ReplayPanel replayPanel = new ReplayPanel(state);
 
         stageLayer.getChildren().addAll(
@@ -131,9 +133,8 @@ public class Main extends Application {
                 inventoryPanel,
                 historyPanel,
                 profilePanel,
-                replayPanel
-                
-                
+                replayPanel,
+                reconnectingOverlay  // Add last so it appears on top of everything
         );
 
         StackPane.setAlignment(stageLayer, Pos.CENTER);

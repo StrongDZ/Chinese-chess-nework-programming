@@ -64,9 +64,13 @@ public class RegisterPanel extends StackPane {
                 isProcessing[0] = true;
                 // Send register request (connection already established)
                 try {
-                    networkManager.auth().register(usernameValue.trim(), passwordValue.trim());
+                    String trimmedUsername = usernameValue.trim();
+                    String trimmedPassword = passwordValue.trim();
+                    networkManager.auth().register(trimmedUsername, trimmedPassword);
+                    // Save credentials for auto-login after reconnect
+                    networkManager.saveCredentials(trimmedUsername, trimmedPassword);
                     // Username will be set after successful authentication
-                    state.setUsername(usernameValue.trim());
+                    state.setUsername(trimmedUsername);
                 } catch (IOException ex) {
                     System.err.println("Failed to send register request: " + ex.getMessage());
                     ex.printStackTrace();
