@@ -77,7 +77,7 @@ enable_testing()
 
 # Unit/Integration tests (only if tests directory exists)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests AND IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-    add_subdirectory(tests)
+add_subdirectory(tests)
 endif()
 
 # Installation

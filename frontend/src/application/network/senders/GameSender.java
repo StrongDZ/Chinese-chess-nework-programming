@@ -26,16 +26,21 @@ public class GameSender {
         payload.addProperty("to_user", targetUsername);
         payload.addProperty("time_control", timeControl);
         payload.addProperty("rated", rated);
-        socketClient.send(MessageType.CHALLENGE_REQUEST, gson.toJson(payload));
+        String payloadJson = gson.toJson(payload);
+        System.out.println("[GameSender] Sending CHALLENGE_REQUEST to: " + targetUsername + ", payload: " + payloadJson);
+        socketClient.send(MessageType.CHALLENGE_REQUEST, payloadJson);
+        System.out.println("[GameSender] CHALLENGE_REQUEST sent successfully");
     }
     
     /**
      * Respond to a challenge.
+     * @param challengerUsername The username of the person who sent the challenge (to_user in backend)
+     * @param accepted Whether to accept the challenge
      */
-    public void respondChallenge(String fromUser, boolean accepted) throws IOException {
+    public void respondChallenge(String challengerUsername, boolean accepted) throws IOException {
         JsonObject payload = new JsonObject();
-        payload.addProperty("from_user", fromUser);
-        payload.addProperty("accepted", accepted);
+        payload.addProperty("to_user", challengerUsername);  // Backend expects to_user (challenger)
+        payload.addProperty("accept", accepted);  // Backend expects accept (not accepted)
         socketClient.send(MessageType.CHALLENGE_RESPONSE, gson.toJson(payload));
     }
     

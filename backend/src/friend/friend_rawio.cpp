@@ -65,11 +65,11 @@ void handleRequestAddFriend(const ParsedMessage &pm, int fd) {
     if (it != g_username_to_fd.end()) {
       int target_fd = it->second;
       if (g_clients.count(target_fd)) {
-        // Forward request to target user with from_user field
-        RequestAddFriendPayload forwardPayload;
-        forwardPayload.from_user = sender.username;
-        forwardPayload.to_user = "";
-        sendMessage(target_fd, MessageType::REQUEST_ADD_FRIEND, forwardPayload);
+    // Forward request to target user with from_user field
+    RequestAddFriendPayload forwardPayload;
+    forwardPayload.from_user = sender.username;
+    forwardPayload.to_user = "";
+    sendMessage(target_fd, MessageType::REQUEST_ADD_FRIEND, forwardPayload);
       }
     }
     
@@ -133,12 +133,12 @@ void handleResponseAddFriend(const ParsedMessage &pm, int fd) {
     if (it != g_username_to_fd.end()) {
       int requester_fd = it->second;
       if (g_clients.count(requester_fd)) {
-        // Forward response to requester with from_user field
-        ResponseAddFriendPayload forwardPayload;
-        forwardPayload.from_user = sender.username;
-        forwardPayload.to_user = "";
-        forwardPayload.accept = p.accept;
-        sendMessage(requester_fd, MessageType::RESPONSE_ADD_FRIEND, forwardPayload);
+    // Forward response to requester with from_user field
+    ResponseAddFriendPayload forwardPayload;
+    forwardPayload.from_user = sender.username;
+    forwardPayload.to_user = "";
+    forwardPayload.accept = p.accept;
+    sendMessage(requester_fd, MessageType::RESPONSE_ADD_FRIEND, forwardPayload);
       }
     }
     

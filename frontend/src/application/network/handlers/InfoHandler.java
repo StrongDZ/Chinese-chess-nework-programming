@@ -157,26 +157,49 @@ public class InfoHandler implements MessageHandler {
             System.out.println("[InfoHandler] Parsing player list, payload: " + payload);
             JsonArray players = JsonParser.parseString(payload).getAsJsonArray();
             java.util.List<String> playerList = new java.util.ArrayList<>();
+            java.util.List<String> playersNotInGame = new java.util.ArrayList<>();  // Players not in game
             String currentUser = uiState.getUsername();
             System.out.println("[InfoHandler] Current user: " + currentUser + ", Total players in array: " + players.size());
             
             for (int i = 0; i < players.size(); i++) {
+                String username = null;
+                boolean inGame = false;
+                
+                // Handle both old format (string) and new format (object with username and in_game)
                 if (players.get(i).isJsonPrimitive()) {
-                    String username = players.get(i).getAsString();
-                    // Exclude current user from list
-                    if (currentUser == null || !username.equals(currentUser)) {
-                        playerList.add(username);
+                    // Old format: just username string
+                    username = players.get(i).getAsString();
+                } else if (players.get(i).isJsonObject()) {
+                    // New format: object with username and in_game
+                    JsonObject playerObj = players.get(i).getAsJsonObject();
+                    if (playerObj.has("username")) {
+                        username = playerObj.get("username").getAsString();
+                    }
+                    if (playerObj.has("in_game")) {
+                        inGame = playerObj.get("in_game").getAsBoolean();
+                    }
+                }
+                
+                // Exclude current user from list
+                if (username != null && (currentUser == null || !username.equals(currentUser))) {
+                    playerList.add(username);
+                    // Only add to not-in-game list if in_game is false or not specified (backward compatibility)
+                    if (!inGame) {
+                        playersNotInGame.add(username);
                     }
                 }
             }
             
             System.out.println("[InfoHandler] Player list after filtering: " + playerList.size() + " players");
+            System.out.println("[InfoHandler] Players not in game: " + playersNotInGame.size() + " players");
             if (!playerList.isEmpty()) {
                 System.out.println("[InfoHandler] Sample players: " + playerList.subList(0, Math.min(5, playerList.size())));
             }
             
-            // Update online players list via UIState callback
+            // Update online players list via UIState callback (all online players)
             uiState.updateOnlinePlayers(playerList);
+            // Also update players not in game list for PlayWithFriendPanel
+            uiState.updateOnlinePlayersNotInGame(playersNotInGame);
         } catch (Exception e) {
             System.err.println("[InfoHandler] Error parsing player list: " + e.getMessage());
             e.printStackTrace();
@@ -257,6 +280,13 @@ public class InfoHandler implements MessageHandler {
                         } else if (isOpponent) {
                             // Opponent elo is still single value (not mode-specific for now)
                             uiState.setOpponentElo(rating);
+                        } else {
+                            // Check if this is a friend (not current user, not opponent)
+                            // Update friend elo in PlayWithFriendPanel
+                            if (statUsername != null && uiState.getFriendsList().contains(statUsername)) {
+                                System.out.println("[InfoHandler] Updating elo for friend: " + statUsername + ", mode: " + timeControl + ", elo: " + rating);
+                                uiState.updateFriendElo(statUsername, timeControl, rating);
+                            }
                         }
                     }
                 }
@@ -319,6 +349,13 @@ public class InfoHandler implements MessageHandler {
             } else if (isOpponent) {
                 // Opponent elo is still single value (not mode-specific for now)
                 uiState.setOpponentElo(rating);
+            } else {
+                // Check if this is a friend (not current user, not opponent)
+                // Update friend elo in PlayWithFriendPanel
+                if (uiState.getFriendsList().contains(username)) {
+                    System.out.println("[InfoHandler] processStatObject - Updating elo for friend: " + username + ", mode: " + timeControl + ", elo: " + rating);
+                    uiState.updateFriendElo(username, timeControl, rating);
+                }
             }
         }
         

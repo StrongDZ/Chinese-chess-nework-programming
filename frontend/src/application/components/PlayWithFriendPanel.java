@@ -1,8 +1,12 @@
 package application.components;
 
+import application.network.NetworkManager;
 import application.state.UIState;
 import application.util.AssetHelper;
 import javafx.animation.FadeTransition;
+import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
@@ -22,6 +26,9 @@ import javafx.scene.effect.DropShadow;
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
 import java.util.Random;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.IOException;
 
 /**
  * Play with Friend panel - hiển thị danh sách bạn bè để thách đấu
@@ -30,14 +37,25 @@ public class PlayWithFriendPanel extends StackPane {
     
     private final FadeTransition fade = new FadeTransition(Duration.millis(250), this);
     private final UIState state;
+    private final NetworkManager networkManager = NetworkManager.getInstance();
     private StackPane challengeDialog = null;  // Dialog xác nhận challenge
     private StackPane waitingForResponsePanel = null;  // Panel đếm ngược chờ phản hồi
     private StackPane challengeRequestPanel = null;  // Panel hiển thị challenge request nhận được
     private StackPane rejectNotificationPanel = null;  // Panel thông báo bị reject
     private Pane container;  // Container chính để thêm dialog
+    private javafx.scene.layout.Pane rootPane = null;  // Root pane để hiển thị challenge request dialog (giống FriendRequestNotificationDialog)
     private Timeline countdownTimeline = null;  // Timeline cho countdown
     private int remainingSeconds = 30;  // Thời gian còn lại
     private String currentGameMode = "classical";  // Chế độ game hiện tại (classical/blitz/custom)
+    private String currentChallengedUsername = null;  // Username của người đang được challenge
+    
+    // Friends list data
+    private VBox leftColumn;  // Reference to left column
+    private VBox rightColumn;  // Reference to right column
+    private ObservableList<String> onlinePlayers = FXCollections.observableArrayList();  // Online players list
+    private ObservableList<String> onlinePlayersNotInGame = FXCollections.observableArrayList();  // Online players not in game
+    private java.util.Map<String, java.util.Map<String, Integer>> friendElos = new java.util.HashMap<>();  // Map username -> Map<mode, elo>
+    private boolean isRefreshing = false;  // Flag to prevent concurrent refreshes
 
     public PlayWithFriendPanel(UIState state) {
         this.state = state;
@@ -112,6 +130,50 @@ public class PlayWithFriendPanel extends StackPane {
         mouseTransparentProperty().bind(visibleProperty().not());
         container.mouseTransparentProperty().bind(visibleProperty().not());
         mainPane.mouseTransparentProperty().bind(visibleProperty().not());
+        
+        // Load friends list and online players when panel becomes visible
+        visibleProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                System.out.println("[PlayWithFriendPanel] Panel visible, loading friends list and online players...");
+                System.out.println("[PlayWithFriendPanel] Current friends list size: " + state.getFriendsList().size());
+                System.out.println("[PlayWithFriendPanel] Current online players size: " + onlinePlayers.size());
+                loadFriendsList();
+                loadOnlinePlayers();
+                // Refresh after a short delay to ensure data is loaded and columns are initialized
+                javafx.application.Platform.runLater(() -> {
+                    javafx.util.Duration delay = javafx.util.Duration.millis(100);
+                    javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(delay);
+                    pause.setOnFinished(e -> {
+                        System.out.println("[PlayWithFriendPanel] Delayed refresh after panel becomes visible");
+                        refreshFriendsList();
+                    });
+                    pause.play();
+                });
+            }
+        });
+        
+        // Listen to friends list changes
+        state.getFriendsList().addListener((ListChangeListener<String>) change -> {
+            refreshFriendsList();
+        });
+        
+        // Listen to game mode changes to refresh elo display
+        state.classicModeVisibleProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                currentGameMode = "classical";
+                // Request elo for friends if not cached for this mode
+                refreshFriendsList();
+            }
+        });
+        state.blitzModeVisibleProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                currentGameMode = "blitz";
+                // Request elo for friends if not cached for this mode
+                refreshFriendsList();
+            }
+        });
+        
+        // Note: Online players callback is registered in Main.java to call both FriendsPanel and PlayWithFriendPanel
     }
     
     private HBox createProfileSection() {
@@ -267,25 +329,16 @@ public class PlayWithFriendPanel extends StackPane {
         friendsListContainer.setPadding(new Insets(20));
         
         // Cột trái
-        VBox leftColumn = new VBox(15);
+        leftColumn = new VBox(15);
         leftColumn.setAlignment(Pos.TOP_LEFT);
         leftColumn.setPrefWidth(550);
         
         // Cột phải
-        VBox rightColumn = new VBox(15);
+        rightColumn = new VBox(15);
         rightColumn.setAlignment(Pos.TOP_LEFT);
         rightColumn.setPrefWidth(550);
         
-        // Tạo 6 friend entries (3 mỗi cột)
-        for (int i = 0; i < 6; i++) {
-            HBox friendEntry = createFriendEntry("Username", "Online");
-            if (i < 3) {
-                leftColumn.getChildren().add(friendEntry);
-            } else {
-                rightColumn.getChildren().add(friendEntry);
-            }
-        }
-        
+        // Khởi tạo với empty list, sẽ được refresh khi load data
         friendsListContainer.getChildren().addAll(leftColumn, rightColumn);
         
         // Stack background và content
@@ -303,24 +356,39 @@ public class PlayWithFriendPanel extends StackPane {
         return panel;
     }
     
-    private HBox createFriendEntry(String username, String status) {
+    private HBox createFriendEntry(String username, String status, Integer elo) {
+        System.out.println("[PlayWithFriendPanel] createFriendEntry called with username: " + username + ", status: " + status + ", elo: " + elo);
         HBox entry = new HBox(15);
         entry.setAlignment(Pos.CENTER_LEFT);
         entry.setPadding(new Insets(15));
         entry.setCursor(Cursor.HAND);
+        entry.setPrefWidth(550);  // Đảm bảo entry có đủ width (column width)
         
-        // Avatar circle với viền đỏ
+        // Avatar circle với fill và initial letter
         Circle avatarCircle = new Circle(30);
-        avatarCircle.setFill(Color.TRANSPARENT);
+        avatarCircle.setFill(Color.web("#F5E6E6")); // Light pink fill giống FriendsPanel
         avatarCircle.setStroke(Color.web("#A65252"));
-        avatarCircle.setStrokeWidth(2);
+        avatarCircle.setStrokeWidth(2.5);
         
-        StackPane avatarContainer = new StackPane(avatarCircle);
+        // Initial letter trong avatar (chữ cái đầu của username)
+        Label initialLabel = new Label(username.substring(0, 1).toUpperCase());
+        initialLabel.setStyle(
+            "-fx-font-family: 'Kumar One'; " +
+            "-fx-font-size: 24px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: #A65252; " +
+            "-fx-background-color: transparent;"
+        );
+        
+        StackPane avatarContainer = new StackPane(avatarCircle, initialLabel);
         avatarContainer.setPrefSize(60, 60);
         
-        // Username và status
+        // Username, status và elo
         VBox textInfo = new VBox(5);
         textInfo.setAlignment(Pos.CENTER_LEFT);
+        textInfo.setMinWidth(300);  // Đảm bảo có đủ width tối thiểu
+        textInfo.setPrefWidth(400);  // Width ưu tiên
+        HBox.setHgrow(textInfo, Priority.ALWAYS);  // Cho phép mở rộng để chiếm hết space còn lại
         
         Label usernameLabel = new Label(username);
         usernameLabel.setStyle(
@@ -329,6 +397,16 @@ public class PlayWithFriendPanel extends StackPane {
             "-fx-text-fill: black; " +
             "-fx-background-color: transparent;"
         );
+        usernameLabel.setMaxWidth(Double.MAX_VALUE);  // Cho phép mở rộng
+        usernameLabel.setWrapText(false);  // Không wrap để hiển thị đầy đủ trên 1 dòng
+        usernameLabel.setTextOverrun(javafx.scene.control.OverrunStyle.ELLIPSIS);  // Hiển thị ellipsis nếu quá dài
+        VBox.setVgrow(usernameLabel, Priority.NEVER);
+        
+        // Status và elo trên cùng một dòng
+        HBox statusEloContainer = new HBox(10);
+        statusEloContainer.setAlignment(Pos.CENTER_LEFT);
+        statusEloContainer.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(statusEloContainer, Priority.ALWAYS);
         
         Label statusLabel = new Label(status);
         statusLabel.setStyle(
@@ -337,8 +415,36 @@ public class PlayWithFriendPanel extends StackPane {
             "-fx-text-fill: rgba(0, 0, 0, 0.7); " +
             "-fx-background-color: transparent;"
         );
+        statusLabel.setMaxWidth(Double.MAX_VALUE);
+        statusLabel.setWrapText(false);
+        statusLabel.setTextOverrun(javafx.scene.control.OverrunStyle.ELLIPSIS);
+        HBox.setHgrow(statusLabel, Priority.NEVER);  // Status không cần grow
         
-        textInfo.getChildren().addAll(usernameLabel, statusLabel);
+        // Elo label - luôn hiển thị (nếu chưa có thì hiển thị "Loading...")
+        String modeDisplay = "classical".equals(currentGameMode) ? "Classical" : 
+                           "blitz".equals(currentGameMode) ? "Blitz" : "Classical";
+        String eloText;
+        if (elo != null) {
+            eloText = modeDisplay + " ELO: " + elo;
+        } else {
+            eloText = modeDisplay + " ELO: Loading...";
+        }
+        Label eloLabel = new Label(eloText);
+        eloLabel.setStyle(
+            "-fx-font-family: 'Kumar One'; " +
+            "-fx-font-size: 16px; " +
+            "-fx-text-fill: #A65252; " +
+            "-fx-font-weight: bold; " +
+            "-fx-background-color: transparent;"
+        );
+        eloLabel.setMaxWidth(Double.MAX_VALUE);
+        eloLabel.setWrapText(false);
+        eloLabel.setTextOverrun(javafx.scene.control.OverrunStyle.ELLIPSIS);
+        HBox.setHgrow(eloLabel, Priority.ALWAYS);  // Elo label có thể grow để hiển thị đầy đủ
+        
+        statusEloContainer.getChildren().addAll(statusLabel, eloLabel);
+        
+        textInfo.getChildren().addAll(usernameLabel, statusEloContainer);
         
         // Challenge icon (ic_challenge) - chỉ để hiển thị, không có click handler
         ImageView challengeIcon = new ImageView(AssetHelper.image("ic_challenge.png"));
@@ -347,13 +453,10 @@ public class PlayWithFriendPanel extends StackPane {
         challengeIcon.setPreserveRatio(true);
         StackPane challengeButton = new StackPane(challengeIcon);
         challengeButton.setMouseTransparent(true);  // Không nhận mouse events
+        challengeButton.setPrefWidth(40);  // Fixed width cho icon
         
-        // Spacer để đẩy challenge icon sang phải
-        Region spacer = new Region();
-        spacer.setPrefWidth(Double.MAX_VALUE);
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        
-        entry.getChildren().addAll(avatarContainer, textInfo, spacer, challengeButton);
+        // Không cần spacer nữa vì textInfo đã có HBox.setHgrow
+        entry.getChildren().addAll(avatarContainer, textInfo, challengeButton);
         
         // Click handler cho toàn bộ entry - hiển thị dialog xác nhận challenge
         entry.setOnMouseClicked(e -> {
@@ -469,6 +572,7 @@ public class PlayWithFriendPanel extends StackPane {
      * Hiển thị dialog xác nhận challenge
      */
     private void showChallengeConfirmation(String username) {
+        System.out.println("[PlayWithFriendPanel] showChallengeConfirmation called for: " + username);
         // Nếu đã có dialog, xóa nó trước
         if (challengeDialog != null && container != null && container.getChildren().contains(challengeDialog)) {
             container.getChildren().remove(challengeDialog);
@@ -522,12 +626,13 @@ public class PlayWithFriendPanel extends StackPane {
         // Nút Yes
         StackPane yesButton = createDialogButton("Yes", true);
         yesButton.setOnMouseClicked(e -> {
+            System.out.println("[PlayWithFriendPanel] Yes button clicked for challenge to: " + username);
             // Xử lý khi bấm Yes (challenge)
             hideChallengeConfirmation();
+            // Gửi challenge request đến server
+            sendChallengeRequest(username);
             // Hiển thị panel đếm ngược chờ phản hồi
             showWaitingForResponsePanel(username);
-            // TODO: Gửi challenge request đến server
-            System.out.println("Challenge " + username);
         });
         
         // Nút No
@@ -692,6 +797,8 @@ public class PlayWithFriendPanel extends StackPane {
         // Nút Cancel - màu đỏ và to hơn
         StackPane cancelButton = createCancelButton();
         cancelButton.setOnMouseClicked(e -> {
+            // Cancel challenge request trước khi ẩn panel
+            cancelChallengeRequest();
             hideWaitingForResponsePanel();
         });
         
@@ -729,9 +836,9 @@ public class PlayWithFriendPanel extends StackPane {
                 
                 // Kiểm tra hết thời gian
                 if (remainingSeconds <= 0) {
-                    // Hết thời gian - quay lại PlayWithFriendPanel
+                    // Hết thời gian - cancel challenge và quay lại PlayWithFriendPanel
+                    cancelChallengeRequest();
                     hideWaitingForResponsePanel();
-                    // TODO: Thông báo hết thời gian
                     System.out.println("Time out - challenge expired");
                 }
             })
@@ -741,28 +848,104 @@ public class PlayWithFriendPanel extends StackPane {
     }
     
     /**
-     * Ẩn panel đếm ngược
+     * Ẩn panel đếm ngược (public để có thể gọi từ GameHandler)
      */
-    private void hideWaitingForResponsePanel() {
-        // Dừng timer
-        if (countdownTimeline != null) {
-            countdownTimeline.stop();
-            countdownTimeline = null;
-        }
+    public void hideWaitingForResponsePanel() {
+        // Dừng timer (nếu chưa dừng)
+        stopCountdownTimer();
         
-        if (waitingForResponsePanel != null && container != null && container.getChildren().contains(waitingForResponsePanel)) {
-            container.getChildren().remove(waitingForResponsePanel);
+        if (waitingForResponsePanel != null) {
+            if (rootPane != null && rootPane.getChildren().contains(waitingForResponsePanel)) {
+                rootPane.getChildren().remove(waitingForResponsePanel);
+            }
+            if (container != null && container.getChildren().contains(waitingForResponsePanel)) {
+                container.getChildren().remove(waitingForResponsePanel);
+            }
             waitingForResponsePanel = null;
         }
+        
+        // Reset challenged username
+        currentChallengedUsername = null;
+    }
+    
+    /**
+     * Gửi challenge request đến server
+     */
+    private void sendChallengeRequest(String targetUsername) {
+        try {
+            currentChallengedUsername = targetUsername;
+            // Convert game mode to time_control format
+            String timeControl = currentGameMode;
+            if ("classical".equals(currentGameMode)) {
+                timeControl = "classical";
+            } else if ("blitz".equals(currentGameMode)) {
+                timeControl = "blitz";
+            } else {
+                timeControl = "classical";  // Default to classical
+            }
+            
+            System.out.println("[PlayWithFriendPanel] Sending challenge request to: " + targetUsername + ", timeControl: " + timeControl);
+            networkManager.game().sendChallenge(targetUsername, timeControl, true);  // rated = true
+        } catch (IOException e) {
+            System.err.println("[PlayWithFriendPanel] Failed to send challenge request: " + e.getMessage());
+            e.printStackTrace();
+            // Hide waiting panel on error
+            hideWaitingForResponsePanel();
+        }
+    }
+    
+    /**
+     * Cancel challenge request (khi timeout hoặc user cancel)
+     */
+    private void cancelChallengeRequest() {
+        if (currentChallengedUsername != null) {
+            try {
+                System.out.println("[PlayWithFriendPanel] Canceling challenge request to: " + currentChallengedUsername);
+                networkManager.game().cancelChallenge(currentChallengedUsername);
+            } catch (IOException e) {
+                System.err.println("[PlayWithFriendPanel] Failed to cancel challenge request: " + e.getMessage());
+            }
+        }
+        currentChallengedUsername = null;
+    }
+    
+    /**
+     * Gửi challenge response (accept/reject) đến server
+     */
+    private void sendChallengeResponse(String challengerUsername, boolean accepted) {
+        try {
+            System.out.println("[PlayWithFriendPanel] Sending challenge response to: " + challengerUsername + ", accepted: " + accepted);
+            networkManager.game().respondChallenge(challengerUsername, accepted);
+        } catch (IOException e) {
+            System.err.println("[PlayWithFriendPanel] Failed to send challenge response: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Set root pane để hiển thị challenge request dialog (giống FriendRequestNotificationDialog)
+     */
+    public void setRootPane(javafx.scene.layout.Pane rootPane) {
+        this.rootPane = rootPane;
+        System.out.println("[PlayWithFriendPanel] Root pane set: " + (rootPane != null ? "set" : "null"));
     }
     
     /**
      * Hiển thị panel challenge request nhận được từ đối thủ
      */
     public void showChallengeRequest(String challengerUsername) {
+        System.out.println("[PlayWithFriendPanel] showChallengeRequest called for: " + challengerUsername);
+        System.out.println("[PlayWithFriendPanel] rootPane is " + (rootPane != null ? "set" : "null"));
+        System.out.println("[PlayWithFriendPanel] container is " + (container != null ? "set" : "null"));
+        
         // Nếu đã có panel, xóa nó trước
-        if (challengeRequestPanel != null && container != null && container.getChildren().contains(challengeRequestPanel)) {
-            container.getChildren().remove(challengeRequestPanel);
+        if (challengeRequestPanel != null) {
+            if (rootPane != null && rootPane.getChildren().contains(challengeRequestPanel)) {
+                rootPane.getChildren().remove(challengeRequestPanel);
+            }
+            if (container != null && container.getChildren().contains(challengeRequestPanel)) {
+                container.getChildren().remove(challengeRequestPanel);
+            }
         }
         
         // Tạo panel ở giữa màn hình
@@ -771,17 +954,26 @@ public class PlayWithFriendPanel extends StackPane {
         challengeRequestPanel.setLayoutY((1080 - 300) / 2);  // Căn giữa theo chiều dọc
         challengeRequestPanel.setPrefSize(500, 300);
         
+        // Đảm bảo dialog visible và có thể nhận click events
+        challengeRequestPanel.setVisible(true);
+        challengeRequestPanel.setManaged(true);
+        challengeRequestPanel.setMouseTransparent(false);
+        challengeRequestPanel.setPickOnBounds(true);
+        
         // Background xám đậm
         Rectangle bg = new Rectangle(500, 300);
         bg.setFill(Color.color(0.3, 0.3, 0.3, 1));
         bg.setArcWidth(30);
         bg.setArcHeight(30);
+        bg.setMouseTransparent(true);  // Background không chặn click events
         
         // Container chính
         VBox contentContainer = new VBox(30);
         contentContainer.setAlignment(Pos.CENTER);
         contentContainer.setPrefSize(500, 300);
         contentContainer.setPadding(new Insets(40));
+        contentContainer.setMouseTransparent(false);  // Container phải nhận click events
+        contentContainer.setPickOnBounds(true);
         
         // Label thông báo
         Label messageLabel = new Label(challengerUsername + " want to challenge you");
@@ -802,11 +994,10 @@ public class PlayWithFriendPanel extends StackPane {
         StackPane acceptButton = createDialogButton("Accept", true);
         acceptButton.setOnMouseClicked(e -> {
             hideChallengeRequest();
-            // Gửi accept response đến server và bắt đầu game với chế độ hiện tại
-            // TODO: Gửi accept response đến server
+            // Gửi accept response đến server
+            sendChallengeResponse(challengerUsername, true);
             System.out.println("Accept challenge from " + challengerUsername);
-            // Mở game với chế độ hiện tại
-            state.openGame(currentGameMode);
+            // Game sẽ tự động bắt đầu khi backend gửi GAME_START message
         });
         
         // Nút Reject
@@ -814,10 +1005,8 @@ public class PlayWithFriendPanel extends StackPane {
         rejectButton.setOnMouseClicked(e -> {
             hideChallengeRequest();
             // Gửi reject response đến server
-            // TODO: Gửi reject response đến server
+            sendChallengeResponse(challengerUsername, false);
             System.out.println("Reject challenge from " + challengerUsername);
-            // Hiển thị thông báo reject và quay lại PlayWithFriendPanel
-            showRejectNotification(challengerUsername);
         });
         
         buttonsContainer.getChildren().addAll(acceptButton, rejectButton);
@@ -826,9 +1015,20 @@ public class PlayWithFriendPanel extends StackPane {
         
         challengeRequestPanel.getChildren().addAll(bg, contentContainer);
         
-        // Thêm panel vào container
-        if (container != null) {
-            container.getChildren().add(challengeRequestPanel);
+        // Thêm panel vào root pane (giống FriendRequestNotificationDialog)
+        // Root pane luôn visible, không phụ thuộc vào PlayWithFriendPanel visibility
+        if (rootPane != null) {
+            System.out.println("[PlayWithFriendPanel] Adding challenge request panel to rootPane");
+            rootPane.getChildren().add(challengeRequestPanel);
+            // Đảm bảo dialog ở trên cùng
+            challengeRequestPanel.setViewOrder(-1000);
+        } else {
+            System.err.println("[PlayWithFriendPanel] rootPane is null, cannot show challenge request dialog");
+            // Fallback: thêm vào container nếu rootPane không có
+            if (container != null) {
+                System.out.println("[PlayWithFriendPanel] Fallback: Adding challenge request panel to container");
+                container.getChildren().add(challengeRequestPanel);
+            }
         }
     }
     
@@ -836,30 +1036,48 @@ public class PlayWithFriendPanel extends StackPane {
      * Ẩn panel challenge request
      */
     public void hideChallengeRequest() {
-        if (challengeRequestPanel != null && container != null && container.getChildren().contains(challengeRequestPanel)) {
-            container.getChildren().remove(challengeRequestPanel);
+        if (challengeRequestPanel != null) {
+            if (rootPane != null && rootPane.getChildren().contains(challengeRequestPanel)) {
+                rootPane.getChildren().remove(challengeRequestPanel);
+            }
+            if (container != null && container.getChildren().contains(challengeRequestPanel)) {
+                container.getChildren().remove(challengeRequestPanel);
+            }
             challengeRequestPanel = null;
         }
     }
     
     /**
+     * Dừng countdown timer (được gọi khi vào trận hoặc challenge được accept/reject)
+     */
+    public void stopCountdownTimer() {
+        if (countdownTimeline != null) {
+            System.out.println("[PlayWithFriendPanel] Stopping countdown timer");
+            countdownTimeline.stop();
+            countdownTimeline = null;
+        }
+    }
+    
+    /**
      * Xử lý khi đối thủ chấp nhận challenge - vào trận đấu
+     * Backend sẽ tự động start game và gửi GAME_START message,
+     * GameHandler sẽ xử lý mở game panel.
      */
     public void onChallengeAccepted() {
+        System.out.println("[PlayWithFriendPanel] Challenge accepted - stopping countdown and hiding waiting panel");
+        stopCountdownTimer();
         hideWaitingForResponsePanel();
-        // Mở game với chế độ hiện tại
-        state.openGame(currentGameMode);
-        System.out.println("Challenge accepted - starting game with mode: " + currentGameMode);
     }
     
     /**
      * Xử lý khi đối thủ từ chối challenge - quay lại PlayWithFriendPanel
      */
     public void onChallengeRejected(String opponentUsername) {
+        System.out.println("[PlayWithFriendPanel] Challenge rejected by " + opponentUsername + " - stopping countdown");
+        stopCountdownTimer();
         hideWaitingForResponsePanel();
         // Hiển thị thông báo reject và quay lại PlayWithFriendPanel
         showRejectNotification(opponentUsername);
-        System.out.println("Challenge rejected by " + opponentUsername);
     }
     
     /**
@@ -927,6 +1145,199 @@ public class PlayWithFriendPanel extends StackPane {
             container.getChildren().remove(rejectNotificationPanel);
             rejectNotificationPanel = null;
         }
+    }
+    
+    /**
+     * Load friends list from server.
+     */
+    private void loadFriendsList() {
+        try {
+            System.out.println("[PlayWithFriendPanel] Requesting friends list from server...");
+            networkManager.friend().requestFriendsList();
+        } catch (IOException e) {
+            System.err.println("[PlayWithFriendPanel] Failed to request friends list: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Load online players from server.
+     */
+    private void loadOnlinePlayers() {
+        try {
+            System.out.println("[PlayWithFriendPanel] Requesting player list from server...");
+            networkManager.info().requestPlayerList();
+        } catch (IOException e) {
+            System.err.println("[PlayWithFriendPanel] Failed to request player list: " + e.getMessage());
+            onlinePlayers.clear();
+        }
+    }
+    
+    /**
+     * Update online players list (called from UIState callback chain in Main.java).
+     */
+    public void updateOnlinePlayers(List<String> players) {
+        javafx.application.Platform.runLater(() -> {
+            System.out.println("[PlayWithFriendPanel] updateOnlinePlayers called with " + (players != null ? players.size() : 0) + " players");
+            if (players != null && !players.isEmpty()) {
+                System.out.println("[PlayWithFriendPanel] Sample online players: " + players.subList(0, Math.min(5, players.size())));
+            }
+            onlinePlayers.clear();
+            if (players != null && !players.isEmpty()) {
+                onlinePlayers.addAll(players);
+                System.out.println("[PlayWithFriendPanel] Updated online players list. Total: " + onlinePlayers.size());
+            } else {
+                System.out.println("[PlayWithFriendPanel] No players received from server");
+            }
+            // Refresh friends list to update online status
+            System.out.println("[PlayWithFriendPanel] Calling refreshFriendsList() after online players update");
+            refreshFriendsList();
+        });
+    }
+    
+    /**
+     * Update online players not in game list (called from UIState callback).
+     */
+    public void updateOnlinePlayersNotInGame(List<String> players) {
+        javafx.application.Platform.runLater(() -> {
+            System.out.println("[PlayWithFriendPanel] updateOnlinePlayersNotInGame called with " + (players != null ? players.size() : 0) + " players");
+            onlinePlayersNotInGame.clear();
+            if (players != null && !players.isEmpty()) {
+                onlinePlayersNotInGame.addAll(players);
+                System.out.println("[PlayWithFriendPanel] Updated online players not in game list. Total: " + onlinePlayersNotInGame.size());
+            } else {
+                System.out.println("[PlayWithFriendPanel] No players not in game received from server");
+            }
+            // Refresh friends list to update filter
+            refreshFriendsList();
+        });
+    }
+    
+    /**
+     * Refresh friends list display.
+     * Only shows friends who are online (not in game status will be handled by backend when challenging).
+     */
+    private void refreshFriendsList() {
+        if (leftColumn == null || rightColumn == null) {
+            System.out.println("[PlayWithFriendPanel] refreshFriendsList: leftColumn or rightColumn is null, skipping refresh");
+            return;
+        }
+        
+        // Prevent concurrent refreshes
+        if (isRefreshing) {
+            System.out.println("[PlayWithFriendPanel] refreshFriendsList: Already refreshing, skipping");
+            return;
+        }
+        
+        javafx.application.Platform.runLater(() -> {
+            isRefreshing = true;
+            // Clear both columns
+            leftColumn.getChildren().clear();
+            rightColumn.getChildren().clear();
+            
+            javafx.collections.ObservableList<String> friends = state.getFriendsList();
+            
+            // Filter: chỉ hiển thị bạn bè online và không đang trong trận
+            List<String> onlineFriends = new ArrayList<>();
+            for (String friend : friends) {
+                boolean isOnline = onlinePlayers.contains(friend);
+                boolean isNotInGame = onlinePlayersNotInGame.contains(friend);
+                System.out.println("[PlayWithFriendPanel] Checking friend: " + friend + ", isOnline: " + isOnline + ", isNotInGame: " + isNotInGame);
+                if (isOnline && isNotInGame) {
+                    onlineFriends.add(friend);
+                    // Request elo for this friend if not already cached for current mode
+                    if (!friendElos.containsKey(friend) || !friendElos.get(friend).containsKey(currentGameMode)) {
+                        requestFriendElo(friend);
+                    }
+                }
+            }
+            
+            System.out.println("[PlayWithFriendPanel] Refreshing friends list. Total friends: " + friends.size() + ", Online friends: " + onlineFriends.size());
+            System.out.println("[PlayWithFriendPanel] Friends list: " + friends);
+            System.out.println("[PlayWithFriendPanel] Online players list: " + onlinePlayers);
+            System.out.println("[PlayWithFriendPanel] Online players not in game list: " + onlinePlayersNotInGame);
+            System.out.println("[PlayWithFriendPanel] Friend elos cache: " + friendElos);
+            
+            if (onlineFriends.isEmpty()) {
+                // Show empty message
+                Label emptyLabel = new Label("No online friends available.\nFriends must be online to challenge.");
+                emptyLabel.setStyle(
+                    "-fx-font-family: 'Kumar One'; " +
+                    "-fx-font-size: 24px; " +
+                    "-fx-text-fill: rgba(0, 0, 0, 0.6); " +
+                    "-fx-background-color: transparent; " +
+                    "-fx-alignment: center;"
+                );
+                emptyLabel.setAlignment(Pos.CENTER);
+                emptyLabel.setPrefWidth(1100);
+                emptyLabel.setPrefHeight(200);
+                leftColumn.getChildren().add(emptyLabel);
+            } else {
+                // Display online friends in 2 columns
+                for (int i = 0; i < onlineFriends.size(); i++) {
+                    String username = onlineFriends.get(i);
+                    // Get elo from cache for current mode
+                    Integer elo = null;
+                    if (friendElos.containsKey(username) && friendElos.get(username).containsKey(currentGameMode)) {
+                        elo = friendElos.get(username).get(currentGameMode);
+                        System.out.println("[PlayWithFriendPanel] Found cached elo for " + username + ", mode: " + currentGameMode + ", elo: " + elo);
+                    } else {
+                        System.out.println("[PlayWithFriendPanel] No cached elo for " + username + ", mode: " + currentGameMode + ". Cache: " + friendElos);
+                    }
+                    HBox friendEntry = createFriendEntry(username, "Online", elo);
+                    if (i % 2 == 0) {
+                        leftColumn.getChildren().add(friendEntry);
+                    } else {
+                        rightColumn.getChildren().add(friendEntry);
+                    }
+                }
+            }
+            isRefreshing = false;
+        });
+    }
+    
+    /**
+     * Request elo for a friend based on current game mode.
+     */
+    private void requestFriendElo(String username) {
+        try {
+            // Convert game mode to time_control format
+            String timeControl = currentGameMode;
+            if ("classical".equals(currentGameMode)) {
+                timeControl = "classical";
+            } else if ("blitz".equals(currentGameMode)) {
+                timeControl = "blitz";
+            } else {
+                timeControl = "classical";  // Default to classical
+            }
+            
+            System.out.println("[PlayWithFriendPanel] Requesting elo for friend: " + username + ", mode: " + timeControl);
+            networkManager.info().requestUserStats(username, timeControl);
+        } catch (IOException e) {
+            System.err.println("[PlayWithFriendPanel] Failed to request elo for " + username + ": " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Update elo for a friend (called from InfoHandler callback).
+     * This method will be called by InfoHandler when it receives user stats response.
+     */
+    public void updateFriendElo(String username, String timeControl, int elo) {
+        javafx.application.Platform.runLater(() -> {
+            System.out.println("[PlayWithFriendPanel] Updating elo for friend: " + username + ", mode: " + timeControl + ", elo: " + elo);
+            // Cache elo for this friend and mode
+            if (!friendElos.containsKey(username)) {
+                friendElos.put(username, new java.util.HashMap<>());
+            }
+            friendElos.get(username).put(timeControl, elo);
+            
+            // Only refresh if this is for the current mode
+            if (timeControl.equals(currentGameMode)) {
+                System.out.println("[PlayWithFriendPanel] Refreshing display for current mode");
+                refreshFriendsList();
+            } else {
+                System.out.println("[PlayWithFriendPanel] Cached elo for mode " + timeControl + " (current mode: " + currentGameMode + ")");
+            }
+        });
     }
 }
 

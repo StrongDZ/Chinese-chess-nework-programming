@@ -83,13 +83,13 @@ public class LoginPanel extends StackPane {
                         });
                         return; // Exit early, don't execute finally block
                     } else {
-                        // TODO: Show error message to user
-                        javafx.application.Platform.runLater(() -> {
-                            PauseTransition delay = new PauseTransition(Duration.seconds(1));
-                            delay.setOnFinished(event -> isProcessing[0] = false);
-                            delay.play();
-                        });
-                    }
+                    // TODO: Show error message to user
+                    javafx.application.Platform.runLater(() -> {
+                        PauseTransition delay = new PauseTransition(Duration.seconds(1));
+                        delay.setOnFinished(event -> isProcessing[0] = false);
+                        delay.play();
+                    });
+                }
                 }
                 
                 // Wait for server response (if connected successfully)

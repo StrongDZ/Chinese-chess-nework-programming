@@ -11,9 +11,17 @@ import javafx.application.Platform;
  */
 public class GameHandler implements MessageHandler {
     private final UIState uiState;
+    private application.components.PlayWithFriendPanel playWithFriendPanel;  // Reference to PlayWithFriendPanel
     
     public GameHandler(UIState uiState) {
         this.uiState = uiState;
+    }
+    
+    /**
+     * Set reference to PlayWithFriendPanel for challenge handling.
+     */
+    public void setPlayWithFriendPanel(application.components.PlayWithFriendPanel panel) {
+        this.playWithFriendPanel = panel;
     }
     
     @Override
@@ -130,6 +138,16 @@ public class GameHandler implements MessageHandler {
                 uiState.closeWaiting();
             }
             
+            // Stop countdown timer and hide waiting panel if challenge was accepted (from PlayWithFriendPanel)
+            if (playWithFriendPanel != null) {
+                Platform.runLater(() -> {
+                    playWithFriendPanel.stopCountdownTimer();
+                    // Ẩn waiting panel khi vào game
+                    playWithFriendPanel.hideWaitingForResponsePanel();
+                    System.out.println("[GameHandler] Stopped countdown timer and hid waiting panel after GAME_START");
+                });
+            }
+            
             // Open game panel with the game mode
             uiState.openGame(gameMode);
             
@@ -212,25 +230,52 @@ public class GameHandler implements MessageHandler {
     
     private void handleChallengeRequest(String payload) {
         try {
+            System.out.println("[GameHandler] Received CHALLENGE_REQUEST, payload: " + payload);
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
             String fromUser = json.has("from_user") ? json.get("from_user").getAsString() : "unknown";
-            // TODO: Show challenge dialog
-            // uiState.showChallengeDialog(fromUser);
+            System.out.println("[GameHandler] Parsed from_user: " + fromUser);
+            System.out.println("[GameHandler] PlayWithFriendPanel is " + (playWithFriendPanel != null ? "set" : "null"));
+            
+            // Show challenge request dialog in PlayWithFriendPanel
+            if (playWithFriendPanel != null) {
+                Platform.runLater(() -> {
+                    System.out.println("[GameHandler] Calling playWithFriendPanel.showChallengeRequest(" + fromUser + ")");
+                    playWithFriendPanel.showChallengeRequest(fromUser);
+                });
+            } else {
+                System.err.println("[GameHandler] PlayWithFriendPanel not set, cannot show challenge request");
+            }
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[GameHandler] Error handling challenge request: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
     private void handleChallengeResponse(String payload) {
         try {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-            boolean accepted = json.has("accepted") && json.get("accepted").getAsBoolean();
+            // Backend sends "accept" (boolean), not "accepted"
+            boolean accepted = json.has("accept") && json.get("accept").getAsBoolean();
             String fromUser = json.has("from_user") ? json.get("from_user").getAsString() : "unknown";
-            // TODO: Handle challenge response
-            // if (accepted) uiState.startGameWithOpponent(fromUser);
-            // else uiState.showChallengeRejected(fromUser);
+            System.out.println("[GameHandler] Received challenge response from: " + fromUser + ", accepted: " + accepted);
+            
+            // Handle challenge response in PlayWithFriendPanel
+            if (playWithFriendPanel != null) {
+                Platform.runLater(() -> {
+                    if (accepted) {
+                        // Challenge accepted - game will start automatically via GAME_START message
+                        playWithFriendPanel.onChallengeAccepted();
+                    } else {
+                        // Challenge rejected
+                        playWithFriendPanel.onChallengeRejected(fromUser);
+                    }
+                });
+            } else {
+                System.err.println("[GameHandler] PlayWithFriendPanel not set, cannot handle challenge response");
+            }
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[GameHandler] Error handling challenge response: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
@@ -238,10 +283,20 @@ public class GameHandler implements MessageHandler {
         try {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
             String fromUser = json.has("from_user") ? json.get("from_user").getAsString() : "unknown";
-            // TODO: Hide challenge dialog
-            // uiState.hideChallengeDialog();
+            System.out.println("[GameHandler] Received CHALLENGE_CANCEL from: " + fromUser);
+            
+            // Hide challenge request dialog in PlayWithFriendPanel
+            if (playWithFriendPanel != null) {
+                Platform.runLater(() -> {
+                    System.out.println("[GameHandler] Hiding challenge request dialog for: " + fromUser);
+                    playWithFriendPanel.hideChallengeRequest();
+                });
+            } else {
+                System.err.println("[GameHandler] PlayWithFriendPanel not set, cannot hide challenge request dialog");
+            }
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[GameHandler] Error handling challenge cancel: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     

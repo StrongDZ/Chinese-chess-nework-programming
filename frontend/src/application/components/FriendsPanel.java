@@ -81,7 +81,8 @@ public class FriendsPanel extends Pane {
         setPrefSize(400, 850);
         setStyle("-fx-background-color: transparent;");
         setMouseTransparent(false);  // Cho phép FriendsPanel nhận click events
-        setPickOnBounds(true);  // Chỉ nhận events trong bounds của panel
+        // Không chặn click bên ngoài phần tử con (chỉ phần tử có hit-geometry mới nhận)
+        setPickOnBounds(false);
         
         // Friends panel - đặt ở bên phải, chỉ chiếm đúng kích thước của panel
         VBox friendsContent = createFriendsContent();
@@ -98,36 +99,72 @@ public class FriendsPanel extends Pane {
         setOpacity(0);
         
         // Listener cho friendsVisible - tự quản lý visibility và opacity
+        // Ẩn khi playWithFriendMode = true (để PlayWithFriendPanel hiển thị)
         state.friendsVisibleProperty().addListener((obs, oldVal, newVal) -> {
-            System.out.println("[FriendsPanel] friendsVisible changed: " + newVal + ", appState: " + state.appStateProperty().get());
+            System.out.println("[FriendsPanel] friendsVisible changed: " + newVal + ", appState: " + state.appStateProperty().get() + ", playWithFriendMode: " + state.isPlayWithFriendMode());
             System.out.println("[FriendsPanel] Current layout: X=" + getLayoutX() + ", Y=" + getLayoutY() + ", PrefWidth=" + getPrefWidth() + ", PrefHeight=" + getPrefHeight());
             System.out.println("[FriendsPanel] Current visible: " + isVisible() + ", opacity: " + getOpacity() + ", managed: " + isManaged());
             System.out.println("[FriendsPanel] Parent: " + (getParent() != null ? getParent().getClass().getSimpleName() : "null"));
             System.out.println("[FriendsPanel] Children count: " + getChildren().size());
-            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU) {
+            // Ẩn nếu playWithFriendMode = true (PlayWithFriendPanel đang hiển thị)
+            if (newVal && state.appStateProperty().get() == UIState.AppState.MAIN_MENU && !state.isPlayWithFriendMode()) {
                 System.out.println("[FriendsPanel] Showing panel...");
                 setVisible(true);
                 setManaged(true);
+                setMouseTransparent(false);
+                setPickOnBounds(true);
                 setOpacity(1.0); // Set opacity ngay lập tức để test
                 System.out.println("[FriendsPanel] After setVisible: visible=" + isVisible() + ", opacity=" + getOpacity() + ", managed=" + isManaged());
             } else {
                 System.out.println("[FriendsPanel] Hiding panel...");
                 setOpacity(0);
                 setVisible(false);
+                setManaged(false);
+                setMouseTransparent(true);   // tránh chặn click lên UI khác
+                setPickOnBounds(false);
+            }
+        });
+        
+        // Listener cho playWithFriendMode - ẩn FriendsPanel khi PlayWithFriendPanel hiển thị
+        state.playWithFriendModeProperty().addListener((obs, oldVal, newVal) -> {
+            System.out.println("[FriendsPanel] playWithFriendMode changed: " + newVal);
+            if (newVal) {
+                // PlayWithFriendPanel đang hiển thị, ẩn FriendsPanel
+                System.out.println("[FriendsPanel] playWithFriendMode = true, hiding FriendsPanel...");
+                setOpacity(0);
+                setVisible(false);
+                setManaged(false);
+                setMouseTransparent(true);
+                setPickOnBounds(false);
+            } else if (state.isFriendsVisible() && state.appStateProperty().get() == UIState.AppState.MAIN_MENU) {
+                // PlayWithFriendMode tắt, hiện lại FriendsPanel nếu friendsVisible = true
+                System.out.println("[FriendsPanel] playWithFriendMode = false, showing FriendsPanel...");
+                setVisible(true);
+                setManaged(true);
+                setMouseTransparent(false);
+                setPickOnBounds(true);
+                setOpacity(1.0);
             }
         });
         
         state.appStateProperty().addListener((obs, oldVal, newVal) -> {
-            System.out.println("[FriendsPanel] appState changed: " + newVal + ", friendsVisible: " + state.isFriendsVisible());
-            if (newVal == UIState.AppState.MAIN_MENU && state.isFriendsVisible()) {
+            System.out.println("[FriendsPanel] appState changed: " + newVal + ", friendsVisible: " + state.isFriendsVisible() + ", playWithFriendMode: " + state.isPlayWithFriendMode());
+            // Ẩn nếu playWithFriendMode = true (PlayWithFriendPanel đang hiển thị)
+            if (newVal == UIState.AppState.MAIN_MENU && state.isFriendsVisible() && !state.isPlayWithFriendMode()) {
                 System.out.println("[FriendsPanel] Showing panel...");
                 setVisible(true);
+                setManaged(true);
+                setMouseTransparent(false);
+                setPickOnBounds(true);
                 setOpacity(1.0); // Set opacity ngay lập tức để test
                 // fadeTo(1);
             } else {
                 System.out.println("[FriendsPanel] Hiding panel...");
                 setOpacity(0);
                 setVisible(false);
+                setManaged(false);
+                setMouseTransparent(true);
+                setPickOnBounds(false);
             }
         });
         
@@ -1108,7 +1145,8 @@ public class FriendsPanel extends Pane {
         content.setPrefHeight(850);  // Giảm chiều cao từ 980 xuống 850
         content.setAlignment(Pos.TOP_LEFT);
         content.setPadding(new Insets(20));
-        content.setPickOnBounds(true);
+        // Không tự chặn click ngoài các node con
+        content.setPickOnBounds(false);
         content.setMouseTransparent(false); // Ensure content can receive mouse events
         
         // Background cho friends panel
@@ -1118,6 +1156,8 @@ public class FriendsPanel extends Pane {
         bg.setArcHeight(15);
         bg.setStroke(Color.color(0.3, 0.3, 0.3));
         bg.setStrokeWidth(2);
+        // Cho phép click xuyên qua phần nền (background) nếu không có node con chặn
+        bg.setMouseTransparent(true);
         
         // Header với "Friends" title và Add Friend icon
         HBox header = new HBox(15);
@@ -1315,7 +1355,8 @@ public class FriendsPanel extends Pane {
         friendsPanel.getChildren().addAll(bg, innerContent);
         StackPane.setAlignment(bg, Pos.CENTER);
         StackPane.setAlignment(innerContent, Pos.TOP_LEFT);
-        friendsPanel.setPickOnBounds(true);
+        // Chỉ các node con nhận sự kiện, bản thân StackPane không chặn ngoài vùng con
+        friendsPanel.setPickOnBounds(false);
         friendsPanel.setMouseTransparent(false);
         
         content.getChildren().add(friendsPanel);

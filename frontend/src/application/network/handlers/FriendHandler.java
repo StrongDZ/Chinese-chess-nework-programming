@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import javafx.application.Platform;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.StackPane;
 
 /**
  * Handler for friend-related messages.
@@ -59,21 +60,112 @@ public class FriendHandler implements MessageHandler {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
             String fromUser = json.has("from_user") ? json.get("from_user").getAsString() : "unknown";
             
+            System.out.println("[FriendHandler] Received friend request from: " + fromUser);
+            
             // Add to pending requests list
             Platform.runLater(() -> {
                 uiState.addPendingFriendRequest(fromUser);
+                System.out.println("[FriendHandler] Added to pending requests. RootPane: " + (rootPane != null ? "available" : "null"));
                 
                 // Show notification dialog if root pane is available
                 if (rootPane != null) {
+                    System.out.println("[FriendHandler] Creating and showing friend request dialog for: " + fromUser);
+                    
+                    // Tạo dialog trước
                     FriendRequestNotificationDialog dialog = new FriendRequestNotificationDialog(
                         fromUser,
                         () -> uiState.removePendingFriendRequest(fromUser)
                     );
+                    
+                    // Tạo overlay để chặn clicks phía sau dialog
+                    // QUAN TRỌNG: Overlay phải mouseTransparent(true) để không chặn clicks vào dialog
+                    StackPane overlay = new StackPane();
+                    overlay.setLayoutX(0);
+                    overlay.setLayoutY(0);
+                    overlay.setPrefSize(1920, 1080);
+                    overlay.setStyle("-fx-background-color: rgba(0, 0, 0, 0.3);");
+                    overlay.setPickOnBounds(true);
+                    // Overlay mouseTransparent(true) để không chặn clicks vào dialog
+                    // Dialog sẽ nhận clicks trước vì được thêm sau
+                    overlay.setMouseTransparent(true);
+                    overlay.setViewOrder(-500);  // Overlay ở phía sau dialog
+                    
+                    // Sử dụng event filter trên rootPane để detect clicks vào overlay (không phải dialog)
+                    // Khai báo handler trước để có thể sử dụng trong setOnHide
+                    final StackPane finalOverlay = overlay;
+                    final FriendRequestNotificationDialog finalDialog = dialog;
+                    final javafx.event.EventHandler<javafx.scene.input.MouseEvent>[] overlayClickHandlerRef = new javafx.event.EventHandler[1];
+                    overlayClickHandlerRef[0] = e -> {
+                        // Kiểm tra xem click có vào dialog hoặc children của dialog không
+                        javafx.scene.Node target = (javafx.scene.Node) e.getTarget();
+                        boolean clickedOnDialog = false;
+                        javafx.scene.Node node = target;
+                        while (node != null) {
+                            if (node == finalDialog) {
+                                clickedOnDialog = true;
+                                break;
+                            }
+                            node = node.getParent();
+                        }
+                        
+                        if (clickedOnDialog) {
+                            // Click vào dialog hoặc children của dialog - KHÔNG làm gì, để button handlers xử lý
+                            System.out.println("[FriendHandler] Click detected on dialog, allowing button handlers to process");
+                            return; // Không consume, để event đi đến button handlers
+                        }
+                        
+                        // Click vào overlay (không phải dialog) - đóng dialog
+                        System.out.println("[FriendHandler] Click detected on overlay area (not dialog), closing friend request dialog");
+                        // Remove overlay và dialog
+                        rootPane.getChildren().remove(finalOverlay);
+                        rootPane.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, overlayClickHandlerRef[0]);
+                        finalDialog.hide();
+                        e.consume();
+                    };
+                    rootPane.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, overlayClickHandlerRef[0]);
+                    
+                    // Set callback để remove overlay và event filter khi dialog hide
+                    dialog.setOnHide(() -> {
+                        if (rootPane.getChildren().contains(finalOverlay)) {
+                            rootPane.getChildren().remove(finalOverlay);
+                            System.out.println("[FriendHandler] Overlay removed when dialog hidden");
+                        }
+                        rootPane.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, overlayClickHandlerRef[0]);
+                    });
+                    
+                    // Đảm bảo dialog ở trên overlay (viewOrder càng nhỏ càng ở trên)
+                    dialog.setViewOrder(-2000);
+                    overlay.setViewOrder(-500);
+                    
+                    // Thêm overlay trước, dialog sau (thứ tự: overlay -> dialog)
+                    // Dialog được thêm sau nên sẽ nhận clicks trước
+                    rootPane.getChildren().add(overlay);
                     rootPane.getChildren().add(dialog);
+                    
+                    // Bring dialog to front to ensure it's clickable
+                    javafx.application.Platform.runLater(() -> {
+                        // Đảm bảo dialog ở trên overlay
+                        dialog.toFront();
+                        overlay.toBack();
+                        
+                        // Đảm bảo dialog có thể nhận clicks
+                        dialog.setMouseTransparent(false);
+                        dialog.setPickOnBounds(true);
+                        dialog.setDisable(false);
+                        
+                        System.out.println("[FriendHandler] Dialog brought to front. ViewOrder: " + dialog.getViewOrder());
+                        System.out.println("[FriendHandler] Overlay viewOrder: " + overlay.getViewOrder() + ", mouseTransparent: " + overlay.isMouseTransparent());
+                        System.out.println("[FriendHandler] Dialog mouseTransparent: " + dialog.isMouseTransparent() + ", pickOnBounds: " + dialog.isPickOnBounds() + ", disabled: " + dialog.isDisabled());
+                        System.out.println("[FriendHandler] Dialog bounds: x=" + dialog.getLayoutX() + ", y=" + dialog.getLayoutY() + ", width=" + dialog.getPrefWidth() + ", height=" + dialog.getPrefHeight());
+                    });
+                    System.out.println("[FriendHandler] Dialog and overlay added to rootPane. Total children: " + rootPane.getChildren().size());
+                } else {
+                    System.err.println("[FriendHandler] WARNING: rootPane is null! Cannot show friend request dialog.");
                 }
             });
         } catch (Exception e) {
             System.err.println("[FriendHandler] Error handling friend request: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     

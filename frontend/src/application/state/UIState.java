@@ -773,14 +773,21 @@ public class UIState {
     
     // Callback for updating online players list (used by InfoHandler)
     private java.util.function.Consumer<java.util.List<String>> onlinePlayersUpdateCallback;
+    private java.util.function.Consumer<java.util.List<String>> onlinePlayersNotInGameUpdateCallback;  // Players not in game
     private java.util.function.Consumer<java.util.List<String>> searchResultsUpdateCallback;
     private java.util.function.BiConsumer<java.util.List<application.components.FriendsPanel.FriendRequestInfo>, 
                                          java.util.List<application.components.FriendsPanel.FriendRequestInfo>> friendRequestsUpdateCallback;
     // Callback for updating badge on bottom menu Friends icon
     private java.util.function.Consumer<Integer> friendsBadgeUpdateCallback;
+    // Callback for updating friend elo in PlayWithFriendPanel (username, timeControl, elo)
+    private TriConsumer<String, String, Integer> friendEloUpdateCallback;
     
     public void setOnlinePlayersUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
         this.onlinePlayersUpdateCallback = callback;
+    }
+    
+    public void setOnlinePlayersNotInGameUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
+        this.onlinePlayersNotInGameUpdateCallback = callback;
     }
     
     public void setSearchResultsUpdateCallback(java.util.function.Consumer<java.util.List<String>> callback) {
@@ -797,9 +804,19 @@ public class UIState {
         this.friendsBadgeUpdateCallback = callback;
     }
     
+    public void setFriendEloUpdateCallback(TriConsumer<String, String, Integer> callback) {
+        this.friendEloUpdateCallback = callback;
+    }
+    
     public void updateOnlinePlayers(java.util.List<String> players) {
         if (onlinePlayersUpdateCallback != null) {
             onlinePlayersUpdateCallback.accept(players);
+        }
+    }
+    
+    public void updateOnlinePlayersNotInGame(java.util.List<String> players) {
+        if (onlinePlayersNotInGameUpdateCallback != null) {
+            onlinePlayersNotInGameUpdateCallback.accept(players);
         }
     }
     
@@ -824,6 +841,18 @@ public class UIState {
         if (friendsBadgeUpdateCallback != null) {
             friendsBadgeUpdateCallback.accept(count);
         }
+    }
+    
+    public void updateFriendElo(String username, String timeControl, int elo) {
+        if (friendEloUpdateCallback != null) {
+            friendEloUpdateCallback.accept(username, timeControl, elo);
+        }
+    }
+    
+    // Helper interface for TriConsumer (Java 8 doesn't have it)
+    @FunctionalInterface
+    public interface TriConsumer<T, U, V> {
+        void accept(T t, U u, V v);
     }
 }
 
