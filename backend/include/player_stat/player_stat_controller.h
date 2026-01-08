@@ -18,6 +18,9 @@ public:
 
   // Get leaderboard for a time control, limited to top N (default 100).
   nlohmann::json handleGetLeaderboard(const nlohmann::json &request);
+  
+  // Get all user stats (both classical and blitz) for all users
+  nlohmann::json handleGetAllUsersStats(const nlohmann::json &request);
 };
 
 #endif

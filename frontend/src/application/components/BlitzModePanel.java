@@ -468,12 +468,12 @@ public class BlitzModePanel extends StackPane {
                 // Sử dụng openPlayWithFriend() để đánh dấu đang trong play with friend mode
                 state.openPlayWithFriend();
             } else {
-                // Vào game trực tiếp khi chọn AI
+                // Chọn AI: mở panel chọn độ khó, không vào game ngay
                 int timeSeconds = getSelectedTimeInSeconds();
                 state.setCurrentGameMode("blitz");
                 state.setCurrentTimeLimit(timeSeconds);
                 state.closeBlitzMode();
-                state.openGame("blitz");
+                state.openAIDifficulty();
             }
         });
         

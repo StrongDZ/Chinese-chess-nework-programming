@@ -64,3 +64,12 @@ PlayerStatResult PlayerStatService::getLeaderboard(const string& timeControl, in
     result.message = "Leaderboard retrieved";
     return result;
 }
+
+PlayerStatResult PlayerStatService::getAllUsersStats() {
+    PlayerStatResult result{false, "", nullopt, {}, {}};
+    
+    result.stats = repository.getAllUsersStats();
+    result.success = true;
+    result.message = "All users stats retrieved";
+    return result;
+}

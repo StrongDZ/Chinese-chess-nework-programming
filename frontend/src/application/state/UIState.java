@@ -41,6 +41,7 @@ public class UIState {
     private final BooleanProperty customModeVisible = new SimpleBooleanProperty(false);
     private final BooleanProperty gameVisible = new SimpleBooleanProperty(false);  // Thêm dòng này
     private final BooleanProperty playWithFriendMode = new SimpleBooleanProperty(false);  // Phân biệt play with friend mode
+    private final BooleanProperty aiDifficultyVisible = new SimpleBooleanProperty(false);  // Panel chọn độ khó AI
     
     // Timer values for game panel
     private final StringProperty timer1Value = new SimpleStringProperty("2:00");
@@ -58,6 +59,8 @@ public class UIState {
     // Current game mode ("classical", "blitz", or null)
     private final StringProperty currentGameMode = new SimpleStringProperty("classical");  // Default to classical
     private int currentTimeLimit = 0;  // Time limit in seconds for matching (0 = unlimited)
+    // AI difficulty: "easy", "medium", "hard"
+    private final StringProperty aiDifficulty = new SimpleStringProperty("medium");
     
     // Custom board setup - lưu vị trí tùy chỉnh của các quân cờ
     // Format: Map<"row_col", "color_pieceType">, ví dụ: "0_0" -> "Red_Rook"
@@ -471,11 +474,44 @@ public class UIState {
         setBlitzModeVisible(false);
         setCustomModeVisible(false);
         setGameModeVisible(false);
+        closeAIDifficulty();
     }
 
     public void closeGame() {
         setGameVisible(false);
         setAppState(AppState.MAIN_MENU);
+    }
+
+    // === AI Difficulty Panel ===
+    public BooleanProperty aiDifficultyVisibleProperty() {
+        return aiDifficultyVisible;
+    }
+
+    public boolean isAiDifficultyVisible() {
+        return aiDifficultyVisible.get();
+    }
+
+    public void setAiDifficultyVisible(boolean value) {
+        aiDifficultyVisible.set(value);
+    }
+
+    public void openAIDifficulty() {
+        setAiDifficultyVisible(true);
+        setAppState(AppState.MAIN_MENU);
+    }
+
+    public void closeAIDifficulty() {
+        setAiDifficultyVisible(false);
+    }
+
+    public String getAiDifficulty() {
+        return aiDifficulty.get();
+    }
+
+    public void setAiDifficulty(String value) {
+        if (value != null && !value.isEmpty()) {
+            aiDifficulty.set(value);
+        }
     }
 
     public void setBoardState(BoardState newState) {

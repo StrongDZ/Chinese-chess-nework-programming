@@ -42,6 +42,8 @@ public:
     std::optional<PlayerStat> getStats(const std::string& username, const std::string& timeControl);
     std::vector<PlayerStat> getAllStats(const std::string& username);
     std::vector<LeaderboardEntry> getLeaderboard(const std::string& timeControl, int limit = 100);
+    // Get all user stats (both classical and blitz) for all users
+    std::vector<PlayerStat> getAllUsersStats();
 };
 
 #endif
