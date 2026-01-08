@@ -917,3 +917,59 @@ void handleQuickMatching(const ParsedMessage & /*pm*/, int fd) {
     handleStartGame(fd, opponent_fd);
   }
 }
+
+void handleGameHistory(const ParsedMessage &pm, int fd) {
+  lock_guard<mutex> lock(g_clients_mutex);
+  auto &sender = g_clients[fd];
+
+  if (sender.username.empty()) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Please LOGIN before requesting game history"});
+    return;
+  }
+
+  if (!pm.payload.has_value() ||
+      !holds_alternative<GameHistoryPayload>(*pm.payload)) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"GAME_HISTORY requires username"});
+    return;
+  }
+
+  if (g_game_controller == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Game controller not initialized"});
+    return;
+  }
+
+  try {
+    const auto &p = get<GameHistoryPayload>(*pm.payload);
+
+    cout << "[GAME_HISTORY] Request from user: " << sender.username 
+         << ", target: " << p.username 
+         << ", limit: " << p.limit 
+         << ", offset: " << p.offset << endl;
+
+    // Build request JSON for controller
+    nlohmann::json request;
+    request["username"] = p.username;
+    request["limit"] = p.limit;
+    request["offset"] = p.offset;
+
+    nlohmann::json response = g_game_controller->handleGetGameHistory(request);
+
+    cout << "[GAME_HISTORY] Response status: " 
+         << (response.contains("status") ? response["status"].get<string>() : "no status")
+         << ", history count: " 
+         << (response.contains("count") ? to_string(response["count"].get<int>()) : "no count")
+         << endl;
+
+    // Send response via GAME_HISTORY message type
+    sendMessage(fd, MessageType::GAME_HISTORY, InfoPayload{response});
+  } catch (const exception &e) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Failed to handle GAME_HISTORY: " + string(e.what())});
+  } catch (...) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Failed to handle GAME_HISTORY"});
+  }
+}

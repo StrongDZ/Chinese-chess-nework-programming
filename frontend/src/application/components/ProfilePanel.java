@@ -72,9 +72,18 @@ public class ProfilePanel extends StackPane {
             if (newVal == UIState.AppState.PROFILE && state.isProfileVisible()) {
                 // Fetch all modes when opening profile
                 fetchAllModes();
+                // Fetch match history when opening profile
+                fetchMatchHistory();
                 fadeTo(1);
             } else {
                 fadeTo(0);
+            }
+        });
+        
+        // Also fetch match history when profile becomes visible
+        state.profileVisibleProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal && state.appStateProperty().get() == UIState.AppState.PROFILE) {
+                fetchMatchHistory();
             }
         });
     }
@@ -442,6 +451,32 @@ public class ProfilePanel extends StackPane {
             }
         } catch (IOException e) {
             System.err.println("[ProfilePanel] Failed to fetch profile: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Fetch match history from backend.
+     * This will request game history and display it in HistoryPanel.
+     */
+    public void fetchMatchHistory() {
+        try {
+            if (networkManager.isConnected()) {
+                String username = state.getUsername();
+                System.out.println("[ProfilePanel] fetchMatchHistory - username=" + username);
+                if (username != null && !username.isEmpty()) {
+                    // Request game history from backend (limit 50 games)
+                    // InfoHandler will update HistoryPanel via UIState callback
+                    networkManager.info().requestGameHistory(50);
+                    System.out.println("[ProfilePanel] Sent requestGameHistory request");
+                } else {
+                    System.err.println("[ProfilePanel] Username is null or empty");
+                }
+            } else {
+                System.err.println("[ProfilePanel] NetworkManager is not connected");
+            }
+        } catch (IOException e) {
+            System.err.println("[ProfilePanel] Failed to fetch match history: " + e.getMessage());
             e.printStackTrace();
         }
     }

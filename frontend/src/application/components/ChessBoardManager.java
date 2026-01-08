@@ -20,7 +20,7 @@ import javafx.scene.shape.Rectangle;
 public class ChessBoardManager {
     
     private final UIState state;
-    private final GamePanel gamePanel;
+    private final IGamePanel gamePanel;
     
     // Callbacks để giao tiếp với các manager khác
     private java.util.function.BiConsumer<String, String> onPieceCaptured = null;  // (color, pieceType)
@@ -41,7 +41,7 @@ public class ChessBoardManager {
         }
     }
     
-    public ChessBoardManager(UIState state, GamePanel gamePanel) {
+    public ChessBoardManager(UIState state, IGamePanel gamePanel) {
         this.state = state;
         this.gamePanel = gamePanel;
     }

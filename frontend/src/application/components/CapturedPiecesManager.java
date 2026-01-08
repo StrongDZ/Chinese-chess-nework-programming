@@ -17,7 +17,7 @@ import javafx.geometry.Insets;
 public class CapturedPiecesManager {
     
     private final UIState state;
-    private final GamePanel gamePanel;
+    private final IGamePanel gamePanel;
     
     // Track captured pieces for each player
     private final java.util.Map<String, Integer> redCapturedPieces = new java.util.HashMap<>();
@@ -27,7 +27,7 @@ public class CapturedPiecesManager {
     private VBox topLeftCapturedPieces = null;
     private VBox bottomRightCapturedPieces = null;
     
-    public CapturedPiecesManager(UIState state, GamePanel gamePanel) {
+    public CapturedPiecesManager(UIState state, IGamePanel gamePanel) {
         this.state = state;
         this.gamePanel = gamePanel;
     }

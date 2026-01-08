@@ -21,7 +21,8 @@ public class InfoHandler implements MessageHandler {
         return messageType.equals("INFO") ||
                messageType.equals("PLAYER_LIST") ||
                messageType.equals("USER_STATS") ||
-               messageType.equals("LEADER_BOARD");
+               messageType.equals("LEADER_BOARD") ||
+               messageType.equals("GAME_HISTORY");
     }
     
     @Override
@@ -38,6 +39,9 @@ public class InfoHandler implements MessageHandler {
                 return true;
             case "LEADER_BOARD":
                 handleLeaderBoard(payload);
+                return true;
+            case "GAME_HISTORY":
+                handleGameHistory(payload);
                 return true;
             default:
                 return false;
@@ -468,6 +472,171 @@ public class InfoHandler implements MessageHandler {
             uiState.updateFriendRequests(pending, accepted);
         } catch (Exception e) {
             System.err.println("[InfoHandler] Error parsing friend requests: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Handle GAME_HISTORY response from backend.
+     * Response format:
+     * {
+     *   "status": "success",
+     *   "history": [
+     *     {
+     *       "game_id": "...",
+     *       "red_player": "...",
+     *       "black_player": "...",
+     *       "result": "...",
+     *       "winner": "...",
+     *       "time_control": "...",
+     *       "rated": true/false,
+     *       "move_count": ...,
+     *       "start_time": ...,
+     *       "end_time": ...
+     *     }
+     *   ],
+     *   "count": ...
+     * }
+     */
+    private void handleGameHistory(String payload) {
+        try {
+            System.out.println("[InfoHandler] ========================================");
+            System.out.println("[InfoHandler] ===== GAME_HISTORY response received =====");
+            System.out.println("[InfoHandler] ========================================");
+            System.out.println("[InfoHandler] Full payload length: " + payload.length());
+            System.out.println("[InfoHandler] Full payload: " + payload);
+            
+            // Check if payload is an error message
+            if (payload.contains("\"status\":\"error\"") || payload.contains("Feature not implemented")) {
+                System.err.println("[InfoHandler] Backend returned error: " + payload);
+                System.err.println("[InfoHandler] Note: Backend may not have implemented GAME_HISTORY handler in server.cpp");
+                return;
+            }
+            
+            JsonObject response = JsonParser.parseString(payload).getAsJsonObject();
+            
+            // Check status
+            if (response.has("status") && response.get("status").getAsString().equals("error")) {
+                String errorMsg = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+                System.err.println("[InfoHandler] Error getting game history: " + errorMsg);
+                return;
+            }
+            
+            System.out.println("[InfoHandler] Game history response status: " + 
+                (response.has("status") ? response.get("status").getAsString() : "no status field"));
+            
+            // Check if wrapped in "data" field (backend wraps GAME_HISTORY in data field)
+            JsonObject dataObj = response;
+            if (response.has("data") && response.get("data").isJsonObject()) {
+                System.out.println("[InfoHandler] Response wrapped in 'data' field, unwrapping...");
+                dataObj = response.getAsJsonObject("data");
+            }
+            
+            // Parse history array from data object (or root if no data field)
+            if (!dataObj.has("history") || !dataObj.get("history").isJsonArray()) {
+                System.err.println("[InfoHandler] Game history response missing or invalid 'history' array");
+                System.err.println("[InfoHandler] Available keys in response: " + response.keySet());
+                if (dataObj != response) {
+                    System.err.println("[InfoHandler] Available keys in data: " + dataObj.keySet());
+                }
+                return;
+            }
+            
+            JsonArray historyArray = dataObj.getAsJsonArray("history");
+            String currentUsername = uiState.getUsername();
+            java.util.List<application.components.HistoryPanel.HistoryEntry> peopleHistory = new java.util.ArrayList<>();
+            java.util.List<application.components.HistoryPanel.HistoryEntry> aiHistory = new java.util.ArrayList<>();
+            
+            for (int i = 0; i < historyArray.size(); i++) {
+                JsonObject game = historyArray.get(i).getAsJsonObject();
+                
+                // Determine opponent
+                String redPlayer = game.has("red_player") ? game.get("red_player").getAsString() : "";
+                String blackPlayer = game.has("black_player") ? game.get("black_player").getAsString() : "";
+                String opponent = "";
+                boolean isRed = currentUsername != null && currentUsername.equals(redPlayer);
+                
+                if (isRed) {
+                    opponent = blackPlayer;
+                } else {
+                    opponent = redPlayer;
+                }
+                
+                // Determine result from current user's perspective
+                String result = "Draw";
+                if (game.has("result")) {
+                    String gameResult = game.get("result").getAsString();
+                    if (game.has("winner")) {
+                        String winner = game.get("winner").getAsString();
+                        if (winner.equals(currentUsername)) {
+                            result = "Win";
+                        } else if (!winner.isEmpty()) {
+                            result = "Lose";
+                        }
+                    } else if (gameResult.equals("draw")) {
+                        result = "Draw";
+                    }
+                }
+                
+                // Get time control mode
+                String timeControl = game.has("time_control") ? game.get("time_control").getAsString() : "Classical";
+                String mode = "Classic Mode";
+                if (timeControl.equals("blitz")) {
+                    mode = "Blitz Mode";
+                } else if (timeControl.equals("rapid")) {
+                    mode = "Rapid Mode";
+                }
+                
+                // Format date from end_time (milliseconds since epoch)
+                String date = "N/A";
+                if (game.has("end_time") && game.get("end_time").isJsonPrimitive()) {
+                    try {
+                        long endTimeMs = game.get("end_time").getAsLong();
+                        java.time.Instant instant = java.time.Instant.ofEpochMilli(endTimeMs);
+                        java.time.LocalDate localDate = java.time.LocalDate.ofInstant(instant, java.time.ZoneId.systemDefault());
+                        // Format: yy/mm/dd
+                        int year = localDate.getYear() % 100;
+                        int month = localDate.getMonthValue();
+                        int day = localDate.getDayOfMonth();
+                        date = String.format("%02d/%02d/%02d", year, month, day);
+                    } catch (Exception e) {
+                        System.err.println("[InfoHandler] Error parsing date: " + e.getMessage());
+                    }
+                }
+                
+                // Determine if AI game (opponent is empty or contains "AI")
+                boolean isAIGame = opponent.isEmpty() || opponent.toLowerCase().contains("ai");
+                
+                // Format opponent string (with elo if available)
+                String opponentDisplay = opponent;
+                if (opponentDisplay.isEmpty()) {
+                    opponentDisplay = "AI";
+                }
+                
+                // Get game_id for replay
+                String gameId = game.has("game_id") ? game.get("game_id").getAsString() : "";
+                
+                application.components.HistoryPanel.HistoryEntry entry = 
+                    new application.components.HistoryPanel.HistoryEntry(opponentDisplay, result, mode, date, gameId);
+                
+                if (isAIGame) {
+                    aiHistory.add(entry);
+                } else {
+                    peopleHistory.add(entry);
+                }
+            }
+            
+            System.out.println("[InfoHandler] Game history parsed: " + peopleHistory.size() + " people games, " + aiHistory.size() + " AI games");
+            System.out.println("[InfoHandler] Calling uiState.updateGameHistory()...");
+            
+            // Update history via UIState callback
+            uiState.updateGameHistory(peopleHistory, aiHistory);
+            
+            System.out.println("[InfoHandler] ✓ Game history updated successfully");
+            System.out.println("[InfoHandler] ========================================");
+            
+        } catch (Exception e) {
+            System.err.println("[InfoHandler] Error parsing game history: " + e.getMessage());
             e.printStackTrace();
         }
     }
