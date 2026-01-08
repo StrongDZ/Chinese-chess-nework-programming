@@ -1,6 +1,7 @@
 package application.components;
 
 import application.state.UIState;
+import application.network.NetworkManager;
 import application.util.AssetHelper;
 import javafx.animation.FadeTransition;
 import javafx.geometry.Insets;
@@ -276,7 +277,14 @@ public class SettingsPanel extends StackPane {
         // Log out button - bên trái
         Label logOutButton = createActionButton("Log out", 300, 70);
         logOutButton.setOnMouseClicked(e -> {
+            try {
+                NetworkManager.getInstance().auth().logout();
+            } catch (Exception ex) {
+                System.err.println("[SettingsPanel] Failed to send LOGOUT: " + ex.getMessage());
+            }
+            // Close UI immediately; server response will also reset context
             state.closeSettings();
+            state.setUsername("");
             state.setAppState(UIState.AppState.LANDING);
         });
         

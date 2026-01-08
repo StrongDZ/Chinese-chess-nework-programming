@@ -19,6 +19,7 @@ struct PlayerInfo {
 // g_clients_mutex) instead of passing them as parameters
 void handleLogin(const ParsedMessage &pm, int fd);
 void handleRegister(const ParsedMessage &pm, int fd);
+void handleLogout(const ParsedMessage &pm, int fd);
 void handleUserStats(const ParsedMessage &pm, int fd);
 void handleLeaderBoard(const ParsedMessage &pm, int fd);
 void handleChallenge(const ParsedMessage &pm, int fd);

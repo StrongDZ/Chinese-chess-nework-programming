@@ -35,7 +35,7 @@
 
 // ===================== Raw IO Handlers ===================== //
 // Handler implementations are in separate rawio.cpp files:
-// - auth/auth_rawio.cpp: handleLogin, handleRegister
+// - auth/auth_rawio.cpp: handleLogin, handleRegister, handleLogout
 // - friend/friend_rawio.cpp: handleRequestAddFriend, handleResponseAddFriend
 // - game/game_rawio.cpp: handleChallenge, handleChallengeResponse, handleMove,
 // handleMessage
@@ -480,7 +480,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
       request["username"] = sender.username;
       request["friend_username"] = p.to_user;
       nlohmann::json response = g_friend_controller->handleUnfriend(request);
-      
+
       // Send response via INFO message
       sendMessage(fd, MessageType::INFO, InfoPayload{response});
     } catch (...) {
@@ -488,25 +488,9 @@ void processMessage(const ParsedMessage &pm, int fd) {
     }
     break;
   }
-  case MessageType::LOGOUT: {
-    lock_guard<mutex> lock(g_clients_mutex);
-    if (g_clients.count(fd) == 0) {
-      return;
-    }
-    auto &sender = g_clients[fd];
-    if (!sender.username.empty() && g_username_to_fd.count(sender.username)) {
-      g_username_to_fd.erase(sender.username);
-    }
-    // TODO: Cleanup AI game state via Python API
-    // if (g_game_state.hasGame(fd)) {
-    //   g_game_state.endGame(fd);
-    // }
-    sendMessage(fd, MessageType::INFO,
-                InfoPayload{nlohmann::json{{"logout", "ok"}}});
-    shutdown(fd, SHUT_RDWR);
-    // Connection will be closed by epoll detecting shutdown
+  case MessageType::LOGOUT:
+    handleLogout(pm, fd);
     break;
-  }
   case MessageType::CHALLENGE_CANCEL: {
     lock_guard<mutex> lock(g_clients_mutex);
     if (g_clients.count(fd) == 0) {
@@ -542,8 +526,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
     break;
   case MessageType::INFO: {
     // Handle INFO messages with special actions (e.g., list_friends)
-    if (pm.payload.has_value() &&
-        holds_alternative<InfoPayload>(*pm.payload)) {
+    if (pm.payload.has_value() && holds_alternative<InfoPayload>(*pm.payload)) {
       try {
         const auto &info = get<InfoPayload>(*pm.payload);
         if (info.data.is_object() && info.data.contains("action")) {
@@ -556,8 +539,9 @@ void processMessage(const ParsedMessage &pm, int fd) {
             }
             auto &sender = g_clients[fd];
             if (sender.username.empty()) {
-              sendMessage(fd, MessageType::ERROR,
-                          ErrorPayload{"Please LOGIN before requesting friends list"});
+              sendMessage(
+                  fd, MessageType::ERROR,
+                  ErrorPayload{"Please LOGIN before requesting friends list"});
               break;
             }
             if (g_friend_controller == nullptr) {
@@ -568,7 +552,8 @@ void processMessage(const ParsedMessage &pm, int fd) {
             // Call controller to get friends list
             nlohmann::json request;
             request["username"] = sender.username;
-            nlohmann::json response = g_friend_controller->handleListFriends(request);
+            nlohmann::json response =
+                g_friend_controller->handleListFriends(request);
             // Send response via INFO message
             sendMessage(fd, MessageType::INFO, InfoPayload{response});
             break;
@@ -580,8 +565,10 @@ void processMessage(const ParsedMessage &pm, int fd) {
             }
             auto &sender = g_clients[fd];
             if (sender.username.empty()) {
-              sendMessage(fd, MessageType::ERROR,
-                          ErrorPayload{"Please LOGIN before requesting friend requests"});
+              sendMessage(
+                  fd, MessageType::ERROR,
+                  ErrorPayload{
+                      "Please LOGIN before requesting friend requests"});
               break;
             }
             if (g_friend_controller == nullptr) {
@@ -592,7 +579,8 @@ void processMessage(const ParsedMessage &pm, int fd) {
             // Call controller to get all received requests
             nlohmann::json request;
             request["username"] = sender.username;
-            nlohmann::json response = g_friend_controller->handleListAllReceivedRequests(request);
+            nlohmann::json response =
+                g_friend_controller->handleListAllReceivedRequests(request);
             // Send response via INFO message
             sendMessage(fd, MessageType::INFO, InfoPayload{response});
             break;
@@ -608,25 +596,29 @@ void processMessage(const ParsedMessage &pm, int fd) {
                           ErrorPayload{"Please LOGIN before searching users"});
               break;
             }
-            
+
             // Get search query from request
             string searchQuery = "";
-            if (info.data.contains("search_query") && info.data["search_query"].is_string()) {
+            if (info.data.contains("search_query") &&
+                info.data["search_query"].is_string()) {
               searchQuery = info.data["search_query"].get<string>();
             }
-            
+
             if (searchQuery.empty()) {
               sendMessage(fd, MessageType::ERROR,
                           ErrorPayload{"search_query is required"});
               break;
             }
-            
+
             // Search users in database
-            vector<string> usernames = g_auth_repo->searchUsers(searchQuery, 50);
-            
+            vector<string> usernames =
+                g_auth_repo->searchUsers(searchQuery, 50);
+
             // Exclude current user from results
-            usernames.erase(remove(usernames.begin(), usernames.end(), sender.username), usernames.end());
-            
+            usernames.erase(
+                remove(usernames.begin(), usernames.end(), sender.username),
+                usernames.end());
+
             // Send results via INFO message
             nlohmann::json arr = nlohmann::json::array();
             for (const auto &username : usernames) {
@@ -656,7 +648,7 @@ void processMessage(const ParsedMessage &pm, int fd) {
 
 // ===================== Handler Implementations ===================== //
 // Handler implementations have been moved to module-specific rawio.cpp files:
-// - auth/auth_rawio.cpp: handleLogin, handleRegister
+// - auth/auth_rawio.cpp: handleLogin, handleRegister, handleLogout
 // - friend/friend_rawio.cpp: handleRequestAddFriend, handleResponseAddFriend
 // - game/game_rawio.cpp: handleChallenge, handleChallengeResponse, handleMove,
 // handleMessage

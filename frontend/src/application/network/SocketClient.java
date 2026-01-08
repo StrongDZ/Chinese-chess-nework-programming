@@ -109,6 +109,14 @@ public class SocketClient {
     }
 
     /**
+     * Reset username context (called after logout).
+     * This clears the username but keeps the socket connection open.
+     */
+    public void resetUsername() {
+        this.username = null;
+    }
+
+    /**
      * Get current username from context.
      */
     public String getUsername() {
