@@ -95,4 +95,15 @@ public class InfoSender {
         payload.addProperty("username", username);
         socketClient.send(MessageType.INFO, gson.toJson(payload));
     }
+    
+    /**
+     * Request replay data for a specific game (includes full moves).
+     * @param gameId Game ID to get replay for
+     */
+    public void requestReplayData(String gameId) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("game_id", gameId);
+        socketClient.send(MessageType.REPLAY_REQUEST, gson.toJson(payload));
+        System.out.println("[InfoSender] Requesting replay data for game: " + gameId);
+    }
 }

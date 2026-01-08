@@ -16,6 +16,7 @@ import javafx.util.Duration;
 import javafx.scene.Cursor;
 import javafx.application.Platform;
 import javafx.animation.ScaleTransition;
+import application.network.NetworkManager;
 
 /**
  * Replay panel for viewing game replays.
@@ -38,14 +39,40 @@ public class ReplayPanel extends StackPane implements IGamePanel {
     private StackPane boardContainer = null;
     private String currentGameId = "";  // Current game being replayed
     private int currentMoveIndex = -1;  // Current move index in replay (-1 = initial position)
-    private java.util.List<String> replayMoves = new java.util.ArrayList<>();  // List of moves to replay
+    private java.util.List<ReplayMove> replayMoves = new java.util.ArrayList<>();  // List of moves to replay
     private String currentTurn = "red";  // Current turn for replay
+    private boolean replayPlayerIsRed = true;  // Màu quân cờ của người chơi trong trận đấu này (từ database)
+    
+    // Inner class để lưu thông tin move (phải public để InfoHandler có thể tạo)
+    public static class ReplayMove {
+        public int fromRow, fromCol, toRow, toCol;
+        public String color;
+        public String pieceType;
+        public String capturedColor;
+        public String capturedPieceType;
+        
+        public ReplayMove(int fromRow, int fromCol, int toRow, int toCol, String color, String pieceType, 
+                   String capturedColor, String capturedPieceType) {
+            this.fromRow = fromRow;
+            this.fromCol = fromCol;
+            this.toRow = toRow;
+            this.toCol = toCol;
+            this.color = color;
+            this.pieceType = pieceType;
+            this.capturedColor = capturedColor;
+            this.capturedPieceType = capturedPieceType;
+        }
+    }
     
     // Profile containers
     private HBox playerProfile = null;
     private HBox opponentProfile = null;
     private VBox playerCapturedPieces = null;
     private VBox opponentCapturedPieces = null;
+    
+    // Replay control buttons (để có thể update state)
+    private StackPane backButton = null;
+    private StackPane nextButton = null;
     
     public ReplayPanel(UIState state) {
         this.state = state;
@@ -126,6 +153,31 @@ public class ReplayPanel extends StackPane implements IGamePanel {
                 loadReplay(newVal);
             }
         });
+        
+        // Listen to replay player color changes (từ database)
+        state.replayPlayerIsRedProperty().addListener((obs, oldVal, newVal) -> {
+            this.replayPlayerIsRed = newVal;
+            Platform.runLater(() -> {
+                updateProfilePositions(replayPlayerIsRed);
+                updateBoardRotation(replayPlayerIsRed);
+            });
+        });
+        
+        // Register callback để nhận moves từ InfoHandler
+        state.setReplayMovesCallback((moves) -> {
+            Platform.runLater(() -> {
+                setReplayMoves(moves);
+            });
+        });
+        
+        // Listen to replay player color changes (từ database)
+        state.replayPlayerIsRedProperty().addListener((obs, oldVal, newVal) -> {
+            this.replayPlayerIsRed = newVal;
+            Platform.runLater(() -> {
+                updateProfilePositions(replayPlayerIsRed);
+                updateBoardRotation(replayPlayerIsRed);
+            });
+        });
     }
     
     private StackPane createReplayContent() {
@@ -149,15 +201,10 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         playerCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(true);
         opponentCapturedPieces = capturedPiecesManager.createCapturedPiecesDisplay(false);
         
-        // Cập nhật vị trí profile ban đầu
-        updateProfilePositions(state.isPlayerRed());
+        // Cập nhật vị trí profile ban đầu (sẽ được cập nhật lại khi load game data)
+        updateProfilePositions(replayPlayerIsRed);
         
-        // Listener để cập nhật vị trí profile khi playerIsRed thay đổi
-        state.playerIsRedProperty().addListener((obs, oldVal, newVal) -> {
-            updateProfilePositions(newVal);
-        });
-        
-        // Center: Game board area
+        // Center: Game board area - setup giống GamePanel
         ImageView boardImage = new ImageView();
         boardImage.setFitWidth(923);
         boardImage.setFitHeight(923);
@@ -207,15 +254,30 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         boardContainer.setAlignment(Pos.CENTER);
         boardContainer.getChildren().addAll(boardPlaceholder, boardImage);
         
-        // Xoay bàn cờ theo hướng người chơi
-        state.playerIsRedProperty().addListener((obs, oldVal, newVal) -> {
-            updateBoardRotation(newVal);
-        });
-        updateBoardRotation(state.isPlayerRed());
+        // Xoay bàn cờ theo hướng người chơi trong trận đấu này
+        // Sẽ được cập nhật lại khi load game data từ database
+        // Sử dụng replayPlayerIsRed thay vì state.isPlayerRed() để hiển thị đúng theo trận đấu
+        updateBoardRotation(replayPlayerIsRed);
         
         // Tạo và thêm các quân cờ vào bàn cờ
+        // createChessPieces() trả về container có highlight layer và các quân cờ
         piecesContainer = chessBoardManager.createChessPieces();
+        
+        // Tắt khả năng di chuyển quân cờ trong replay (chỉ xem, không tương tác)
+        disablePieceInteraction(piecesContainer);
+        
         boardContainer.getChildren().add(piecesContainer);
+        
+        // Listener để reset quân cờ khi đổi bàn cờ (giống GamePanel)
+        state.selectedBoardImagePathProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.isEmpty() && boardContainer != null) {
+                Platform.runLater(() -> {
+                    resetChessPieces();
+                    // Quan trọng: Sau khi reset pieces, cần xoay lại để chữ không bị ngược
+                    updateBoardRotation(state.isPlayerRed());
+                });
+            }
+        });
         
         // Top right: Move icon (ic_move.png) - luôn hiển thị để chỉ ra move history đang mở
         HBox topRightIcons = createTopRightIcons();
@@ -278,28 +340,80 @@ public class ReplayPanel extends StackPane implements IGamePanel {
     private HBox createReplayControls() {
         HBox container = new HBox(20);
         container.setAlignment(Pos.CENTER);
+        container.setMouseTransparent(false);  // Đảm bảo container không chặn mouse events
+        container.setPickOnBounds(true);
         
         // Back move button (ic_backmove.png)
         StackPane backButton = createReplayControlButton("ic_backmove.png", "Back");
         backButton.setOnMouseClicked(e -> {
-            goToPreviousMove();
+            System.out.println("[ReplayPanel] Back button clicked, disabled=" + backButton.isDisabled() + ", currentMoveIndex=" + currentMoveIndex);
+            if (!backButton.isDisabled()) {
+                goToPreviousMove();
+            } else {
+                System.out.println("[ReplayPanel] Back button is disabled, ignoring click");
+            }
+            e.consume();
         });
         
         // Next move button (ic_nextMove.png)
         StackPane nextButton = createReplayControlButton("ic_nextMove.png", "Next");
         nextButton.setOnMouseClicked(e -> {
-            goToNextMove();
+            System.out.println("[ReplayPanel] Next button clicked, disabled=" + nextButton.isDisabled() + ", currentMoveIndex=" + currentMoveIndex + ", moves.size()=" + replayMoves.size());
+            if (!nextButton.isDisabled()) {
+                goToNextMove();
+            } else {
+                System.out.println("[ReplayPanel] Next button is disabled, ignoring click");
+            }
+            e.consume();
         });
         
         // Quit button (ic_quit.png)
         StackPane quitButton = createReplayControlButton("ic_quit.png", "Quit");
         quitButton.setOnMouseClicked(e -> {
+            System.out.println("[ReplayPanel] Quit button clicked");
             state.closeReplay();
+            e.consume();
         });
+        
+        // Lưu reference để có thể update state sau này
+        this.backButton = backButton;
+        this.nextButton = nextButton;
         
         container.getChildren().addAll(backButton, nextButton, quitButton);
         
+        // Update button states lần đầu - nhưng không disable nếu chưa có moves
+        // Chỉ disable khi thực sự cần (sau khi có moves)
+        if (replayMoves.isEmpty()) {
+            // Chưa có moves, enable next button để có thể bấm (sẽ load moves)
+            nextButton.setDisable(false);
+            nextButton.setOpacity(1.0);
+            backButton.setDisable(true);  // Back luôn disable khi ở đầu
+            backButton.setOpacity(0.5);
+        } else {
+            updateButtonStates();
+        }
+        
         return container;
+    }
+    
+    /**
+     * Cập nhật trạng thái enable/disable của các nút replay
+     */
+    private void updateButtonStates() {
+        Platform.runLater(() -> {
+            if (backButton != null) {
+                boolean shouldDisable = currentMoveIndex <= -1;
+                backButton.setDisable(shouldDisable);
+                backButton.setOpacity(shouldDisable ? 0.5 : 1.0);
+                System.out.println("[ReplayPanel] Back button: disabled=" + shouldDisable + ", currentMoveIndex=" + currentMoveIndex);
+            }
+            if (nextButton != null) {
+                boolean shouldDisable = (replayMoves.isEmpty() || currentMoveIndex >= replayMoves.size() - 1);
+                nextButton.setDisable(shouldDisable);
+                nextButton.setOpacity(shouldDisable ? 0.5 : 1.0);
+                System.out.println("[ReplayPanel] Next button: disabled=" + shouldDisable + ", currentMoveIndex=" + currentMoveIndex + ", moves.size()=" + replayMoves.size());
+            }
+        });
     }
     
     /**
@@ -314,11 +428,13 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         icon.setFitHeight(70);
         icon.setPreserveRatio(true);
         icon.setSmooth(true);
+        icon.setMouseTransparent(true);  // Icon không nhận mouse events, chỉ button nhận
         
         button.getChildren().add(icon);
         button.setCursor(Cursor.HAND);
         button.setPickOnBounds(true);
         button.setMouseTransparent(false);
+        button.setDisable(false);  // Mặc định enable
         
         // Hover effect với scale
         ScaleTransition scaleIn = new ScaleTransition(Duration.millis(200), button);
@@ -352,6 +468,8 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         if (currentMoveIndex > -1) {
             currentMoveIndex--;
             applyMoveToPosition(currentMoveIndex);
+            updateMoveHistoryDisplay();
+            updateButtonStates();
             System.out.println("[ReplayPanel] Moved to move index: " + currentMoveIndex);
         }
     }
@@ -363,23 +481,171 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         if (currentMoveIndex < replayMoves.size() - 1) {
             currentMoveIndex++;
             applyMoveToPosition(currentMoveIndex);
+            updateMoveHistoryDisplay();
+            updateButtonStates();
             System.out.println("[ReplayPanel] Moved to move index: " + currentMoveIndex);
         }
     }
     
     /**
      * Áp dụng nước đi đến vị trí chỉ định
+     * Reset bàn cờ về vị trí ban đầu, rồi apply tất cả moves từ đầu đến moveIndex
+     * LƯU Ý: KHÔNG clear move history vì đã hiển thị sẵn từ setReplayMoves()
      */
     private void applyMoveToPosition(int moveIndex) {
-        // TODO: Implement move application logic
-        // Reset board to initial position
-        resetChessPieces();
+        if (piecesContainer == null || boardContainer == null) {
+            System.err.println("[ReplayPanel] piecesContainer or boardContainer is null");
+            return;
+        }
         
-        // Apply all moves up to moveIndex
+        // Reset board to initial position (KHÔNG clear move history)
+        resetChessPieces();
+        capturedPiecesManager.resetCapturedPieces();
+        // KHÔNG gọi moveHistoryManager.clearMoveHistory() - giữ nguyên để user thấy tất cả moves
+        
+        // Apply all moves up to moveIndex (chỉ cập nhật board, không thêm vào history)
         for (int i = 0; i <= moveIndex && i < replayMoves.size(); i++) {
-            String move = replayMoves.get(i);
-            // TODO: Parse and apply move
-            System.out.println("[ReplayPanel] Applying move " + i + ": " + move);
+            ReplayMove move = replayMoves.get(i);
+            applySingleMoveToBoard(move);  // Dùng method không thêm vào history
+        }
+    }
+    
+    /**
+     * Áp dụng một nước đi lên bàn cờ MÀ KHÔNG thêm vào move history
+     * (Dùng khi navigate - move history đã hiển thị sẵn)
+     */
+    private void applySingleMoveToBoard(ReplayMove move) {
+        if (piecesContainer == null) return;
+        
+        double boardSize = 923.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        
+        // Tìm quân cờ tại vị trí from
+        ImageView pieceToMove = null;
+        ImageView capturedPiece = null;
+        
+        for (javafx.scene.Node node : piecesContainer.getChildren()) {
+            if (node instanceof ImageView) {
+                ImageView imgView = (ImageView) node;
+                if (imgView.getUserData() instanceof ChessBoardManager.PieceInfo) {
+                    int pieceRow = (int) Math.round(imgView.getLayoutY() / cellHeight);
+                    int pieceCol = (int) Math.round(imgView.getLayoutX() / cellWidth);
+                    pieceRow = Math.max(0, Math.min(9, pieceRow));
+                    pieceCol = Math.max(0, Math.min(8, pieceCol));
+                    
+                    if (pieceRow == move.fromRow && pieceCol == move.fromCol) {
+                        pieceToMove = imgView;
+                    }
+                    if (pieceRow == move.toRow && pieceCol == move.toCol) {
+                        capturedPiece = imgView;
+                    }
+                }
+            }
+        }
+        
+        if (pieceToMove == null) {
+            return;  // Silent fail - quân cờ có thể đã bị ăn
+        }
+        
+        // Nếu có quân cờ ở vị trí đích, xóa nó (ăn quân)
+        if (capturedPiece != null && capturedPiece != pieceToMove) {
+            ChessBoardManager.PieceInfo capInfo = (ChessBoardManager.PieceInfo) capturedPiece.getUserData();
+            if (capInfo != null) {
+                capturedPiecesManager.addCapturedPiece(capInfo.color, capInfo.pieceType);
+            }
+            piecesContainer.getChildren().remove(capturedPiece);
+        }
+        
+        // Di chuyển quân cờ đến vị trí mới
+        double newX = move.toCol * cellWidth + (cellWidth - pieceToMove.getFitWidth()) / 2;
+        double newY = move.toRow * cellHeight + (cellHeight - pieceToMove.getFitHeight()) / 2;
+        pieceToMove.setLayoutX(newX);
+        pieceToMove.setLayoutY(newY);
+        
+        // KHÔNG thêm vào move history - đã hiển thị sẵn từ setReplayMoves()
+    }
+    
+    /**
+     * Áp dụng một nước đi lên bàn cờ (tham khảo từ GamePanel.applyOpponentMove)
+     */
+    private void applySingleMove(ReplayMove move) {
+        if (piecesContainer == null) return;
+        
+        double boardSize = 923.0;
+        double cellWidth = boardSize / 9.0;
+        double cellHeight = boardSize / 10.0;
+        
+        // Tìm quân cờ tại vị trí from
+        ImageView pieceToMove = null;
+        ImageView capturedPiece = null;
+        
+        for (javafx.scene.Node node : piecesContainer.getChildren()) {
+            if (node instanceof ImageView) {
+                ImageView imgView = (ImageView) node;
+                if (imgView.getUserData() instanceof ChessBoardManager.PieceInfo) {
+                    int pieceRow = (int) Math.round(imgView.getLayoutY() / cellHeight);
+                    int pieceCol = (int) Math.round(imgView.getLayoutX() / cellWidth);
+                    pieceRow = Math.max(0, Math.min(9, pieceRow));
+                    pieceCol = Math.max(0, Math.min(8, pieceCol));
+                    
+                    if (pieceRow == move.fromRow && pieceCol == move.fromCol) {
+                        pieceToMove = imgView;
+                    }
+                    if (pieceRow == move.toRow && pieceCol == move.toCol) {
+                        capturedPiece = imgView;
+                    }
+                }
+            }
+        }
+        
+        if (pieceToMove == null) {
+            System.err.println("[ReplayPanel] Could not find piece at (" + move.fromRow + "," + move.fromCol + ")");
+            return;
+        }
+        
+        // Nếu có quân cờ ở vị trí đích, xóa nó (ăn quân)
+        if (capturedPiece != null && capturedPiece != pieceToMove) {
+            ChessBoardManager.PieceInfo capInfo = (ChessBoardManager.PieceInfo) capturedPiece.getUserData();
+            if (capInfo != null) {
+                // Thêm vào captured pieces display
+                capturedPiecesManager.addCapturedPiece(capInfo.color, capInfo.pieceType);
+            }
+            piecesContainer.getChildren().remove(capturedPiece);
+        }
+        
+        // Di chuyển quân cờ đến vị trí mới
+        double newX = move.toCol * cellWidth + (cellWidth - pieceToMove.getFitWidth()) / 2;
+        double newY = move.toRow * cellHeight + (cellHeight - pieceToMove.getFitHeight()) / 2;
+        pieceToMove.setLayoutX(newX);
+        pieceToMove.setLayoutY(newY);
+        
+        // Thêm vào move history
+        String capturedInfo = "";
+        if (capturedPiece != null && capturedPiece != pieceToMove && move.capturedPieceType != null) {
+            capturedInfo = String.format(" (captured %s %s)", move.capturedColor, move.capturedPieceType);
+        }
+        moveHistoryManager.addMove(move.color, move.pieceType, move.fromRow, move.fromCol, 
+            move.toRow, move.toCol, capturedInfo);
+    }
+    
+    /**
+     * Cập nhật hiển thị move history để highlight nước đi hiện tại
+     */
+    private void updateMoveHistoryDisplay() {
+        // Highlight nước đi hiện tại trong move history panel
+        // currentMoveIndex = -1 nghĩa là ở vị trí ban đầu (chưa có nước nào)
+        // currentMoveIndex = 0 nghĩa là đã chơi nước đầu tiên
+        if (moveHistoryManager != null) {
+            // Highlight move tại index (currentMoveIndex + 1 - 1 = currentMoveIndex)
+            // Vì move index trong history là 0-based và tương ứng với currentMoveIndex
+            int highlightIndex = currentMoveIndex;
+            if (highlightIndex >= 0 && highlightIndex < replayMoves.size()) {
+                moveHistoryManager.highlightMove(highlightIndex);
+            } else {
+                // Nếu ở vị trí ban đầu (-1), không highlight gì
+                moveHistoryManager.highlightMove(-1);
+            }
         }
     }
     
@@ -395,12 +661,69 @@ public class ReplayPanel extends StackPane implements IGamePanel {
     }
     
     /**
+     * Set moves cho replay (được gọi từ InfoHandler khi fetch được moves từ backend)
+     */
+    public void setReplayMoves(java.util.List<ReplayMove> moves) {
+        System.out.println("[ReplayPanel] ========================================");
+        System.out.println("[ReplayPanel] setReplayMoves() called with " + (moves != null ? moves.size() : 0) + " moves");
+        
+        if (moves == null || moves.isEmpty()) {
+            System.err.println("[ReplayPanel] WARNING: No moves provided!");
+            return;
+        }
+        
+        this.replayMoves.clear();
+        this.replayMoves.addAll(moves);
+        this.currentMoveIndex = -1;  // Reset về vị trí ban đầu
+        
+        // Reset board về trạng thái ban đầu
+        resetChessPieces();
+        capturedPiecesManager.resetCapturedPieces();
+        moveHistoryManager.clearMoveHistory();
+        
+        // Thêm TẤT CẢ moves vào move history panel để người dùng thấy toàn bộ lịch sử
+        System.out.println("[ReplayPanel] Adding all " + replayMoves.size() + " moves to history panel...");
+        for (int i = 0; i < replayMoves.size(); i++) {
+            ReplayMove move = replayMoves.get(i);
+            String capturedInfo = "";
+            if (move.capturedPieceType != null && !move.capturedPieceType.isEmpty()) {
+                capturedInfo = String.format(" (captured %s %s)", move.capturedColor, move.capturedPieceType);
+            }
+            moveHistoryManager.addMove(move.color, move.pieceType, move.fromRow, move.fromCol, 
+                move.toRow, move.toCol, capturedInfo);
+        }
+        
+        // Cập nhật button states sau khi có moves
+        updateButtonStates();
+        
+        // Highlight move hiện tại (nếu có)
+        updateMoveHistoryDisplay();
+        
+        System.out.println("[ReplayPanel] Set " + moves.size() + " moves for replay, currentMoveIndex=" + currentMoveIndex);
+        System.out.println("[ReplayPanel] ========================================");
+    }
+    
+    /**
      * Load game data for replay
+     * Fetch từ backend để biết người chơi chơi màu gì và các nước đi
      */
     public void loadReplay(String gameId) {
         this.currentGameId = gameId;
         resetReplayState();
-        // TODO: Fetch game data from backend
+        
+        // Request replay data từ backend (REPLAY_REQUEST)
+        // InfoHandler sẽ tự động cập nhật replayPlayerIsRed và gọi setReplayMoves() khi parse response
+        try {
+            NetworkManager networkManager = NetworkManager.getInstance();
+            if (networkManager != null && networkManager.info() != null) {
+                // Gọi REPLAY_REQUEST để lấy full game data với moves
+                networkManager.info().requestReplayData(gameId);
+            }
+        } catch (Exception e) {
+            System.err.println("[ReplayPanel] Error requesting replay data: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
         System.out.println("[ReplayPanel] Loading replay for game: " + gameId);
     }
     
@@ -521,13 +844,34 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         }
     }
     
+    /**
+     * Xoay bàn cờ để quân cờ của người chơi luôn ở phía dưới
+     * Logic giống GamePanel: 
+     * - Nếu player là red: boardRotation = 180.0, pieceRotation = 180.0
+     * - Nếu player là black: boardRotation = 0.0, pieceRotation = 0.0
+     */
     private void updateBoardRotation(boolean playerIsRed) {
         if (boardContainer == null) return;
         
-        if (playerIsRed) {
-            boardContainer.setRotate(0);
-        } else {
-            boardContainer.setRotate(180);
+        System.out.println("[ReplayPanel] updateBoardRotation: playerIsRed=" + playerIsRed);
+        
+        // Xoay boardContainer - điều này sẽ xoay tất cả children (boardImage, piecesContainer)
+        // Logic: nếu player là red, xoay 180 độ; nếu là black, không xoay
+        double boardRotation = playerIsRed ? 180.0 : 0.0;
+        boardContainer.setRotate(boardRotation);
+        
+        // QUAN TRỌNG: Khi bàn cờ xoay 180 độ, quân cờ cũng bị xoay làm chữ ngược
+        // Cần xoay ngược lại các quân cờ để chữ luôn đọc được
+        // Logic: nếu board xoay 180 (player red), thì quân cờ cũng xoay 180 để chữ đúng
+        if (piecesContainer != null) {
+            double pieceRotation = playerIsRed ? 180.0 : 0.0;
+            System.out.println("[ReplayPanel] Setting piece rotation: " + pieceRotation);
+            for (javafx.scene.Node node : piecesContainer.getChildren()) {
+                if (node instanceof ImageView) {
+                    ImageView piece = (ImageView) node;
+                    piece.setRotate(pieceRotation);
+                }
+            }
         }
     }
     
@@ -541,7 +885,13 @@ public class ReplayPanel extends StackPane implements IGamePanel {
         // Tạo lại quân cờ ở vị trí ban đầu
         if (chessBoardManager != null && boardContainer != null) {
             piecesContainer = chessBoardManager.createChessPieces();
+            // Tắt khả năng tương tác (chỉ xem replay)
+            disablePieceInteraction(piecesContainer);
             boardContainer.getChildren().add(piecesContainer);
+            
+            // QUAN TRỌNG: Phải gọi updateBoardRotation() sau khi tạo mới quân cờ
+            // để xoay các quân cờ đúng hướng (chữ không bị ngược)
+            updateBoardRotation(replayPlayerIsRed);
         }
     }
     
@@ -553,6 +903,51 @@ public class ReplayPanel extends StackPane implements IGamePanel {
     @Override
     public void setCurrentTurn(String turn) {
         this.currentTurn = turn;
+    }
+    
+    /**
+     * Tắt khả năng tương tác với quân cờ (chỉ xem replay, không cho di chuyển)
+     */
+    private void disablePieceInteraction(Pane piecesContainer) {
+        if (piecesContainer == null) return;
+        
+        // Tắt mouse events cho container chính
+        piecesContainer.setMouseTransparent(true);
+        piecesContainer.setPickOnBounds(false);
+        
+        // Tắt mouse events cho tất cả các children (quân cờ, click layer, highlight layer)
+        for (javafx.scene.Node node : piecesContainer.getChildren()) {
+            node.setMouseTransparent(true);
+            node.setPickOnBounds(false);
+            
+            // Nếu là ImageView (quân cờ), tắt cursor và events
+            if (node instanceof ImageView) {
+                ImageView piece = (ImageView) node;
+                piece.setCursor(Cursor.DEFAULT);
+                piece.setOnMouseClicked(null);
+                piece.setOnMousePressed(null);
+                piece.setOnMouseDragged(null);
+                piece.setOnMouseReleased(null);
+            }
+            
+            // Nếu là Pane (click layer hoặc highlight layer), tắt events cho children
+            if (node instanceof Pane) {
+                Pane pane = (Pane) node;
+                pane.setMouseTransparent(true);
+                pane.setPickOnBounds(false);
+                for (javafx.scene.Node child : pane.getChildren()) {
+                    child.setMouseTransparent(true);
+                    child.setPickOnBounds(false);
+                    if (child instanceof Rectangle) {
+                        Rectangle rect = (Rectangle) child;
+                        rect.setOnMouseClicked(null);
+                    }
+                    if (child instanceof ImageView) {
+                        ((ImageView) child).setCursor(Cursor.DEFAULT);
+                    }
+                }
+            }
+        }
     }
     
     private void fadeTo(double target) {
