@@ -60,9 +60,13 @@ public class LoginPanel extends StackPane {
                 isProcessing[0] = true;
                 // Send login request (connection already established)
                 try {
-                    networkManager.auth().login(usernameValue.trim(), passwordValue.trim());
+                    String trimmedUsername = usernameValue.trim();
+                    String trimmedPassword = passwordValue.trim();
+                    networkManager.auth().login(trimmedUsername, trimmedPassword);
+                    // Save credentials for auto-login after reconnect
+                    networkManager.saveCredentials(trimmedUsername, trimmedPassword);
                     // Username will be set after successful authentication
-                    state.setUsername(usernameValue.trim());
+                    state.setUsername(trimmedUsername);
                 } catch (IOException ex) {
                     System.err.println("Failed to send login request: " + ex.getMessage());
                     ex.printStackTrace();

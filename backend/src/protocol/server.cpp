@@ -210,7 +210,8 @@ int main(int argc, char **argv) {
 
           {
             lock_guard<mutex> lock(g_clients_mutex);
-            g_clients[client_fd] = PlayerInfo{-1, string(), false, -1};
+            g_clients[client_fd] =
+                PlayerInfo{-1, string(), false, -1, false, 1, "", ""};
           }
           // Initialize read buffer for this connection
           initReadBuffer(client_fd);
@@ -284,15 +285,58 @@ int main(int argc, char **argv) {
           lock_guard<mutex> lock(g_clients_mutex);
           auto itc = g_clients.find(fd);
           if (itc != g_clients.end()) {
-            if (!itc->second.username.empty()) {
-              g_username_to_fd.erase(itc->second.username);
+            auto &disconnectedPlayer = itc->second;
+
+            if (!disconnectedPlayer.username.empty()) {
+              g_username_to_fd.erase(disconnectedPlayer.username);
+              cout << "[DISCONNECT] Player " << disconnectedPlayer.username
+                   << " disconnected" << endl;
             }
-            int opp = itc->second.opponent_fd;
+
+            int opp = disconnectedPlayer.opponent_fd;
+            string game_id = disconnectedPlayer.game_id;
+
             if (opp >= 0 && g_clients.count(opp)) {
-              g_clients[opp].in_game = false;
-              g_clients[opp].opponent_fd = -1;
-              sendMessage(opp, MessageType::INFO,
-                          InfoPayload{nlohmann::json("opponent_disconnected")});
+              auto &opponent = g_clients[opp];
+
+              // If there's an active game, opponent wins by abandonment
+              if (disconnectedPlayer.in_game && !game_id.empty() &&
+                  g_game_controller != nullptr) {
+                try {
+                  // Determine result - opponent wins
+                  string result = opponent.is_red ? "red_win" : "black_win";
+
+                  nlohmann::json endRequest;
+                  endRequest["game_id"] = game_id;
+                  endRequest["result"] = result;
+                  endRequest["termination"] = "abandonment";
+                  nlohmann::json endResponse =
+                      g_game_controller->handleEndGame(endRequest);
+                  cout << "[DISCONNECT] Game ended due to abandonment: "
+                       << endResponse.dump() << " (Elo calculated if rated)"
+                       << endl;
+
+                  // Send GAME_END to opponent
+                  GameEndPayload gp;
+                  gp.win_side = opponent.username;
+                  sendMessage(opp, MessageType::GAME_END, gp);
+
+                } catch (const exception &e) {
+                  cerr << "[DISCONNECT] Error ending game: " << e.what()
+                       << endl;
+                }
+              }
+
+              // Clear opponent's game state
+              opponent.in_game = false;
+              opponent.opponent_fd = -1;
+              opponent.game_id = "";
+              opponent.current_turn = "";
+
+              // Notify opponent of disconnection
+              sendMessage(
+                  opp, MessageType::INFO,
+                  InfoPayload{nlohmann::json{{"opponent_disconnected", true}}});
             }
           }
           // Cleanup read buffer before closing
@@ -407,23 +451,70 @@ void processMessage(const ParsedMessage &pm, int fd) {
       break;
     }
     int opp = sender.opponent_fd;
+    string game_id = sender.game_id;
+    const auto &gameEndPayload = get<GameEndPayload>(*pm.payload);
 
-    // TODO: Cleanup AI game state via Python API
-    // if (g_game_state.hasGame(fd)) {
-    //   g_game_state.endGame(fd);
-    // }
+    cout << "[GAME_END] Player " << sender.username
+         << " reports game end: win_side=" << gameEndPayload.win_side
+         << ", game_id=" << game_id << endl;
 
     if (opp >= 0 && g_clients.count(opp)) {
       // Regular PvP game
-      sendMessage(opp, MessageType::GAME_END, get<GameEndPayload>(*pm.payload));
-      g_clients[opp].in_game = false;
-      g_clients[opp].opponent_fd = -1;
-    } else {
-      // AI game (opponent_fd < 0)
-      // AI game cleanup already done above
+      auto &opponent = g_clients[opp];
+
+      // Forward GAME_END to opponent
+      sendMessage(opp, MessageType::GAME_END, gameEndPayload);
+
+      // Update database to end game and calculate Elo
+      if (g_game_controller != nullptr && !game_id.empty()) {
+        try {
+          // Determine result based on win_side
+          string result;
+          if (gameEndPayload.win_side == "draw") {
+            result = "draw";
+          } else if (gameEndPayload.win_side == sender.username) {
+            // Sender wins
+            result = sender.is_red ? "red_win" : "black_win";
+          } else if (gameEndPayload.win_side == opponent.username) {
+            // Opponent wins
+            result = opponent.is_red ? "red_win" : "black_win";
+          } else if (gameEndPayload.win_side == "red") {
+            result = "red_win";
+          } else if (gameEndPayload.win_side == "black") {
+            result = "black_win";
+          } else {
+            // Try to infer from username
+            result =
+                sender.is_red ? "black_win" : "red_win"; // Assume opponent won
+          }
+
+          nlohmann::json endRequest;
+          endRequest["game_id"] = game_id;
+          endRequest["result"] = result;
+          endRequest["termination"] = "checkmate";
+          nlohmann::json endResponse =
+              g_game_controller->handleEndGame(endRequest);
+          cout << "[GAME_END] Database update result: " << endResponse.dump()
+               << " (Elo calculated if rated game)" << endl;
+        } catch (const exception &e) {
+          cerr << "[GAME_END] Error updating database: " << e.what() << endl;
+        }
+      }
+
+      // Clear game state for both players
+      opponent.in_game = false;
+      opponent.opponent_fd = -1;
+      opponent.game_id = "";
+      opponent.current_turn = "";
     }
+
+    // Clear sender's game state
     sender.in_game = false;
     sender.opponent_fd = -1;
+    sender.game_id = "";
+    sender.current_turn = "";
+
+    cout << "[GAME_END] Game ended successfully" << endl;
     break;
   }
   case MessageType::RESIGN:
@@ -631,6 +722,113 @@ void processMessage(const ParsedMessage &pm, int fd) {
               arr.push_back(username);
             }
             sendMessage(fd, MessageType::INFO, InfoPayload{arr});
+            break;
+          } else if (action == "get_active_game") {
+            // Get active game for user (for restore after reconnect)
+            lock_guard<mutex> lock(g_clients_mutex);
+            if (g_clients.count(fd) == 0) {
+              return;
+            }
+            auto &sender = g_clients[fd];
+            if (sender.username.empty()) {
+              sendMessage(
+                  fd, MessageType::ERROR,
+                  ErrorPayload{"Please LOGIN before requesting active game"});
+              break;
+            }
+            if (g_game_controller == nullptr) {
+              sendMessage(fd, MessageType::ERROR,
+                          ErrorPayload{"Game controller not initialized"});
+              break;
+            }
+
+            // Get active games for this user
+            nlohmann::json request;
+            request["username"] = sender.username;
+            request["filter"] = "active";
+            nlohmann::json response =
+                g_game_controller->handleListGames(request);
+
+            // Check if there's an active game
+            if (response.contains("games") && response["games"].is_array() &&
+                response["games"].size() > 0) {
+              // Get the first (most recent) active game
+              nlohmann::json game = response["games"][0];
+
+              // Restore game state for this player
+              string redPlayer = game.value("red_player", "");
+              string blackPlayer = game.value("black_player", "");
+              string gameId = game.value("game_id", "");
+              string gameMode = game.value("time_control", "classical");
+              string currentTurn = game.value("current_turn", "red");
+
+              // Determine if this player is red or black
+              bool isRed = (sender.username == redPlayer);
+              string opponentUsername = isRed ? blackPlayer : redPlayer;
+
+              // Update player state with game_id and current_turn
+              sender.in_game = true;
+              sender.is_red = isRed;
+              sender.game_id = gameId;
+              sender.current_turn = currentTurn;
+
+              // Check if opponent is online and update opponent_fd
+              if (g_username_to_fd.count(opponentUsername)) {
+                int opponentFd = g_username_to_fd[opponentUsername];
+                if (g_clients.count(opponentFd) > 0) {
+                  sender.opponent_fd = opponentFd;
+                  // Also update opponent's reference to this player
+                  auto &opponent = g_clients[opponentFd];
+                  if (opponent.in_game) {
+                    opponent.opponent_fd = fd;
+                    // Sync game_id and current_turn with opponent
+                    opponent.game_id = gameId;
+                    opponent.current_turn = currentTurn;
+                  }
+                }
+              } else {
+                sender.opponent_fd = -1; // Opponent offline
+              }
+
+              cout << "[GET_ACTIVE_GAME] Restored game for " << sender.username
+                   << ": game_id=" << gameId << ", is_red=" << isRed
+                   << ", current_turn=" << currentTurn << endl;
+
+              // Get full game details with moves for restore
+              nlohmann::json detailsRequest;
+              detailsRequest["game_id"] = gameId;
+              nlohmann::json detailsResponse =
+                  g_game_controller->handleGetGame(detailsRequest);
+
+              // Send active game response with game details
+              nlohmann::json activeGameResponse;
+              activeGameResponse["action"] = "active_game_restore";
+              activeGameResponse["has_active_game"] = true;
+              activeGameResponse["game_id"] = gameId;
+              activeGameResponse["opponent"] = opponentUsername;
+              activeGameResponse["game_mode"] = gameMode;
+              activeGameResponse["is_red"] = isRed;
+              activeGameResponse["current_turn"] = currentTurn;
+
+              // Include game state (XFEN) and moves for board restore
+              if (detailsResponse.contains("game")) {
+                activeGameResponse["xfen"] =
+                    detailsResponse["game"].value("xfen", "");
+                if (detailsResponse["game"].contains("moves")) {
+                  activeGameResponse["moves"] =
+                      detailsResponse["game"]["moves"];
+                }
+              }
+
+              sendMessage(fd, MessageType::INFO,
+                          InfoPayload{activeGameResponse});
+            } else {
+              // No active game
+              nlohmann::json noGameResponse;
+              noGameResponse["action"] = "active_game_restore";
+              noGameResponse["has_active_game"] = false;
+              sendMessage(fd, MessageType::INFO, InfoPayload{noGameResponse});
+            }
             break;
           }
         }

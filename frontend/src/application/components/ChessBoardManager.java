@@ -28,6 +28,15 @@ public class ChessBoardManager {
     private java.util.function.Consumer<String> onMoveAddedWithDetails = null;  // (color, pieceType, fromRow, fromCol, toRow, toCol, capturedInfo)
     private Runnable onTurnChanged = null;
     
+    // Callback để gửi MOVE message đến server
+    private MoveCallback onMoveMade = null;
+    
+    // Interface cho callback gửi move
+    @FunctionalInterface
+    public interface MoveCallback {
+        void onMove(int fromRow, int fromCol, int toRow, int toCol, String piece, String captured);
+    }
+    
     // Helper class để lưu thông tin quân cờ
     public static class PieceInfo {
         public String color;
@@ -72,6 +81,13 @@ public class ChessBoardManager {
      */
     public void setOnTurnChanged(Runnable callback) {
         this.onTurnChanged = callback;
+    }
+    
+    /**
+     * Set callback khi thực hiện nước đi (để gửi lên server)
+     */
+    public void setOnMoveMade(MoveCallback callback) {
+        this.onMoveMade = callback;
     }
     
     /**
@@ -194,11 +210,20 @@ public class ChessBoardManager {
                 return;
             }
             
-            // Kiểm tra lượt: chỉ cho phép chọn quân cờ của lượt hiện tại
+            // Kiểm tra lượt: chỉ cho phép chọn quân cờ của lượt hiện tại VÀ quân cờ của người chơi
             PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
             String currentTurn = gamePanel.getCurrentTurn();
+            boolean playerIsRed = state.isPlayerRed();
+            String playerColor = playerIsRed ? "red" : "black";
+            
+            // Kiểm tra 1: Phải là lượt của quân cờ này
             if (pieceInfo == null || !pieceInfo.color.equals(currentTurn)) {
                 return; // Không phải lượt của quân cờ này
+            }
+            
+            // Kiểm tra 2: Người chơi chỉ được đi quân của mình
+            if (!pieceInfo.color.equals(playerColor)) {
+                return; // Không phải quân cờ của người chơi
             }
             
             // Đánh dấu quân cờ đang được chọn
@@ -398,12 +423,19 @@ public class ChessBoardManager {
                 if (pieceInfo != null && (fromRow != toRow || fromCol != toCol)) {
                     // Thêm nước đi vào history với thông tin quân cờ bị ăn (nếu có)
                     String capturedInfo = "";
+                    String capturedPieceType = null;
                     if (capturedPiece != null) {
                         PieceInfo capInfo = (PieceInfo) capturedPiece.getUserData();
                         if (capInfo != null) {
                             capturedInfo = String.format(" (captured %s %s)", 
                                 capInfo.color, capInfo.pieceType);
+                            capturedPieceType = capInfo.pieceType;
                         }
+                    }
+                    
+                    // GỬI MOVE MESSAGE ĐẾN SERVER TRƯỚC KHI CẬP NHẬT LOCAL
+                    if (onMoveMade != null) {
+                        onMoveMade.onMove(fromRow, fromCol, toRow, toCol, pieceInfo.pieceType, capturedPieceType);
                     }
                     
                     // Thông báo nước đi đã được thực hiện
@@ -440,9 +472,18 @@ public class ChessBoardManager {
                     if (selectedPiece[0] != null) {
                         PieceInfo selectedPieceInfo = (PieceInfo) selectedPiece[0].getUserData();
                         String currentTurn = gamePanel.getCurrentTurn();
+                        boolean playerIsRed = state.isPlayerRed();
+                        String playerColor = playerIsRed ? "red" : "black";
+                        
                         if (selectedPieceInfo == null || !selectedPieceInfo.color.equals(currentTurn)) {
                             e.consume();
                             return; // Không phải lượt của quân cờ đã chọn
+                        }
+                        
+                        // Kiểm tra: Người chơi chỉ được đi quân của mình
+                        if (!selectedPieceInfo.color.equals(playerColor)) {
+                            e.consume();
+                            return; // Không phải quân cờ của người chơi
                         }
                         
                         // Nếu đã chọn quân cờ và ô này trống, thử di chuyển đến ô này
@@ -488,6 +529,16 @@ public class ChessBoardManager {
             piece.setOnMouseClicked(e -> {
                 PieceInfo pieceInfo = (PieceInfo) piece.getUserData();
                 String currentTurn = gamePanel.getCurrentTurn();
+                boolean playerIsRed = state.isPlayerRed();
+                String playerColor = playerIsRed ? "red" : "black";
+                
+                // Debug log để theo dõi vấn đề
+                System.out.println("[ChessBoardManager] Click on piece: color=" + 
+                    (pieceInfo != null ? pieceInfo.color : "null") + 
+                    ", pieceType=" + (pieceInfo != null ? pieceInfo.pieceType : "null") +
+                    ", playerIsRed=" + playerIsRed + 
+                    ", playerColor=" + playerColor +
+                    ", currentTurn=" + currentTurn);
                 
                 // Nếu đã có quân cờ được chọn, kiểm tra xem có thể di chuyển đến quân cờ này không
                 if (selectedPiece[0] != null && selectedPiece[0] != piece) {
@@ -496,6 +547,12 @@ public class ChessBoardManager {
                     if (selectedPieceInfo == null || !selectedPieceInfo.color.equals(currentTurn)) {
                         e.consume();
                         return; // Không phải lượt của quân cờ đã chọn
+                    }
+                    
+                    // Kiểm tra: Người chơi chỉ được đi quân của mình
+                    if (!selectedPieceInfo.color.equals(playerColor)) {
+                        e.consume();
+                        return; // Không phải quân cờ của người chơi
                     }
                     
                     // Tính toán row và col của quân cờ được click
@@ -518,10 +575,16 @@ public class ChessBoardManager {
                     }
                 }
                 
-                // Kiểm tra lượt: chỉ cho phép chọn quân cờ của lượt hiện tại
+                // Kiểm tra lượt: chỉ cho phép chọn quân cờ của lượt hiện tại VÀ quân cờ của người chơi
                 if (pieceInfo == null || !pieceInfo.color.equals(currentTurn)) {
                     e.consume();
                     return; // Không phải lượt của quân cờ này
+                }
+                
+                // Kiểm tra: Người chơi chỉ được chọn quân của mình
+                if (!pieceInfo.color.equals(playerColor)) {
+                    e.consume();
+                    return; // Không phải quân cờ của người chơi
                 }
                 
                 // Xóa highlights cũ nếu có (khi click vào quân cờ khác)

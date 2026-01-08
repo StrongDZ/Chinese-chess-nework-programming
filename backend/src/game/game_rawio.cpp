@@ -235,8 +235,13 @@ void handleStartGame(int player1_fd, int player2_fd) {
   // Set up game for both players
   player1.in_game = true;
   player1.opponent_fd = player2_fd;
+  player1.game_id = game_id;
+  player1.current_turn = "red"; // Red always goes first
+
   player2.in_game = true;
   player2.opponent_fd = player1_fd;
+  player2.game_id = game_id;
+  player2.current_turn = "red"; // Red always goes first
 
   // Set player colors based on created game
   player1.is_red = player1IsRed;
@@ -315,8 +320,7 @@ void handleMove(const ParsedMessage &pm, int fd) {
   }
 
   // Check if AI game (opponent_fd == -1) or PvP game
-  // TODO: Check game state via Python API
-  bool is_ai_game = (sender.opponent_fd == -1); // && g_game_state.hasGame(fd);
+  bool is_ai_game = (sender.opponent_fd == -1);
 
   if (!is_ai_game) {
     // PvP game - check opponent exists
@@ -332,6 +336,7 @@ void handleMove(const ParsedMessage &pm, int fd) {
       return;
     }
   }
+
   if (!pm.payload.has_value() || !holds_alternative<MovePayload>(*pm.payload)) {
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"MOVE requires piece/from/to"});
@@ -340,93 +345,78 @@ void handleMove(const ParsedMessage &pm, int fd) {
 
   const MovePayload &move = get<MovePayload>(*pm.payload);
 
-  // TODO: Get current board state via Python API
-  char board[10][9];
-  // bool has_board = g_game_state.getCurrentBoardArray(fd, board);
-  // if (!has_board) {
-  //   sendMessage(fd, MessageType::ERROR, ErrorPayload{"Game state not
-  //   found"}); return;
-  // }
-  // For now, skip board validation - will be handled by Python API
-  memset(board, ' ', sizeof(board));
+  // Validate turn based on current_turn tracking
+  bool is_red_turn = (sender.current_turn == "red");
+  bool player_is_red = sender.is_red;
 
-  // TODO: Validate move via Python API
-  // GameStateManager::BoardState board_state = g_game_state.getBoardState(fd);
-  // if (!board_state.is_valid) {
-  //   sendMessage(fd, MessageType::ERROR, ErrorPayload{"Invalid game state"});
-  //   return;
-  // }
-
-  // Check if piece belongs to current player
-  char piece = board[move.from.row][move.from.col];
-  if (piece == ' ') {
+  // Check if it's this player's turn
+  if ((is_red_turn && !player_is_red) || (!is_red_turn && player_is_red)) {
     sendMessage(fd, MessageType::INVALID_MOVE,
-                InvalidMovePayload{"No piece at source position"});
+                InvalidMovePayload{"Not your turn"});
     return;
   }
 
-  bool piece_is_red = (piece >= 'A' && piece <= 'Z');
-  bool piece_is_black = (piece >= 'a' && piece <= 'z');
-  bool player_is_red = sender.is_red;
+  // Calculate next turn
+  string nextTurn = is_red_turn ? "black" : "red";
 
-  // TODO: Determine turn via Python API
-  // For now, use simple logic: player is red if is_red flag is set
-  bool is_red_turn = sender.is_red;
-  // if (is_ai_game) {
-  //   is_red_turn = board_state.player_turn;
-  // } else {
-  //   int move_count = board_state.moves.size();
-  //   is_red_turn = (move_count % 2 == 0);
-  // }
+  // Save move to database if game_controller is available and we have a game_id
+  if (g_game_controller != nullptr && !sender.game_id.empty()) {
+    try {
+      nlohmann::json moveRequest;
+      moveRequest["username"] = sender.username;
+      moveRequest["game_id"] = sender.game_id;
+      moveRequest["from"]["x"] = move.from.col;
+      moveRequest["from"]["y"] = move.from.row;
+      moveRequest["to"]["x"] = move.to.col;
+      moveRequest["to"]["y"] = move.to.row;
+      moveRequest["piece"] = move.piece;
+      moveRequest["captured"] = ""; // Will be determined by service
+      moveRequest["notation"] = "";
+      moveRequest["time_taken"] = 0;
 
-  // Validate piece color matches player and turn
-  if (is_red_turn) {
-    if (!player_is_red || !piece_is_red) {
-      sendMessage(fd, MessageType::INVALID_MOVE,
-                  InvalidMovePayload{"Not your turn or wrong piece"});
-      return;
-    }
-  } else {
-    if (player_is_red || !piece_is_black) {
-      sendMessage(fd, MessageType::INVALID_MOVE,
-                  InvalidMovePayload{"Not your turn or wrong piece"});
-      return;
+      nlohmann::json moveResponse =
+          g_game_controller->handleMakeMove(moveRequest);
+
+      if (!moveResponse.contains("status") ||
+          moveResponse["status"] != "success") {
+        string errorMsg = moveResponse.value("message", "Invalid move");
+        cout << "[MOVE] Database error: " << errorMsg << endl;
+        sendMessage(fd, MessageType::INVALID_MOVE,
+                    InvalidMovePayload{errorMsg});
+        return;
+      }
+
+      cout << "[MOVE] Move saved to database: " << sender.username
+           << " game_id=" << sender.game_id << endl;
+
+    } catch (const exception &e) {
+      cerr << "[MOVE] Exception saving move: " << e.what() << endl;
+      // Continue anyway to not break gameplay
     }
   }
 
-  // TODO: Validate move legality via Python API
-  // if (!GameStateManager::isValidMoveOnBoard(board, move)) {
-  //   sendMessage(
-  //       fd, MessageType::INVALID_MOVE,
-  //       InvalidMovePayload{"Illegal move: violates Chinese Chess rules"});
-  //   return;
-  // }
+  // Update turn tracking for both players
+  sender.current_turn = nextTurn;
 
-  // TODO: Update game state via Python API
-  // if (!g_game_state.applyMove(fd, move)) {
-  //   sendMessage(fd, MessageType::ERROR, ErrorPayload{"Failed to apply
-  //   move"}); return;
-  // }
-
-  // TODO: If PvP, also update opponent's game state via Python API
-  // if (!is_ai_game) {
-  //   int opp = sender.opponent_fd;
-  //   if (g_game_state.hasGame(opp)) {
-  //     g_game_state.applyMove(opp, move);
-  //   }
-  // }
-
-  // Send responses
-  sendMessage(fd, MessageType::MOVE, move); // Echo to sender
+  // NOTE: Do NOT echo MOVE back to sender - they have already moved locally
+  // Only send to opponent to sync their board
 
   if (is_ai_game) {
     // Generate and send AI move
     handleAIMove(fd);
   } else {
-    // PvP: send move to opponent
+    // PvP: send move to opponent and update their turn tracking
     int opp = sender.opponent_fd;
-    sendMessage(opp, MessageType::MOVE, move);
+    if (g_clients.count(opp) > 0) {
+      g_clients[opp].current_turn = nextTurn;
+      sendMessage(opp, MessageType::MOVE, move);
+    }
   }
+
+  cout << "[MOVE] Move processed: " << sender.username << " from=("
+       << move.from.row << "," << move.from.col << ")"
+       << " to=(" << move.to.row << "," << move.to.col << ")"
+       << " next_turn=" << nextTurn << endl;
 }
 
 void handleMessage(const ParsedMessage &pm, int fd) {
@@ -464,10 +454,11 @@ void handleDrawRequest(const ParsedMessage & /*pm*/, int fd) {
   }
 
   auto &opponent = g_clients[opp];
+  string game_id = sender.game_id;
 
   cout << "[DRAW_REQUEST] Player " << sender.username << " (fd=" << fd
        << ") requests draw. Sending to opponent " << opponent.username
-       << " (fd=" << opp << ")" << endl;
+       << " (fd=" << opp << "), game_id=" << game_id << endl;
 
   // Forward draw request to opponent
   DrawRequestPayload drawReq;
@@ -475,46 +466,16 @@ void handleDrawRequest(const ParsedMessage & /*pm*/, int fd) {
 
   cout << "[DRAW_REQUEST] Draw request sent successfully to opponent" << endl;
 
-  // Try to update database if game controller is available
-  if (g_game_controller != nullptr) {
+  // Update database with game_id directly
+  if (g_game_controller != nullptr && !game_id.empty()) {
     try {
-      // Find active game for these players
-      nlohmann::json listRequest;
-      listRequest["username"] = sender.username;
-      listRequest["filter"] = "active";
-      nlohmann::json listResponse =
-          g_game_controller->handleListGames(listRequest);
-
-      if (listResponse.contains("status") &&
-          listResponse["status"] == "success" &&
-          listResponse.contains("games") && listResponse["games"].is_array() &&
-          !listResponse["games"].empty()) {
-        // Find game with this opponent
-        for (const auto &game : listResponse["games"]) {
-          if (game.contains("red_player") && game.contains("black_player")) {
-            string redPlayer = game["red_player"].get<string>();
-            string blackPlayer = game["black_player"].get<string>();
-
-            if ((redPlayer == sender.username &&
-                 blackPlayer == opponent.username) ||
-                (redPlayer == opponent.username &&
-                 blackPlayer == sender.username)) {
-              // Found the game - update draw offer in database
-              if (game.contains("game_id")) {
-                string gameId = game["game_id"].get<string>();
-                nlohmann::json offerRequest;
-                offerRequest["username"] = sender.username;
-                offerRequest["game_id"] = gameId;
-                nlohmann::json offerResponse =
-                    g_game_controller->handleOfferDraw(offerRequest);
-                cout << "[DRAW_REQUEST] Database update result: "
-                     << offerResponse.dump() << endl;
-              }
-              break;
-            }
-          }
-        }
-      }
+      nlohmann::json offerRequest;
+      offerRequest["username"] = sender.username;
+      offerRequest["game_id"] = game_id;
+      nlohmann::json offerResponse =
+          g_game_controller->handleOfferDraw(offerRequest);
+      cout << "[DRAW_REQUEST] Database update result: " << offerResponse.dump()
+           << endl;
     } catch (const exception &e) {
       cerr << "[DRAW_REQUEST] Error updating database: " << e.what() << endl;
     }
@@ -542,9 +503,11 @@ void handleDrawResponse(const ParsedMessage &pm, int fd) {
   const auto &drawResp = get<DrawResponsePayload>(*pm.payload);
 
   auto &opponent = g_clients[opp];
+  string game_id = sender.game_id;
 
   cout << "[DRAW_RESPONSE] Player " << sender.username << " (fd=" << fd
-       << ") responds to draw request: accept=" << drawResp.accept_draw << endl;
+       << ") responds to draw request: accept=" << drawResp.accept_draw
+       << ", game_id=" << game_id << endl;
 
   // Forward response to opponent first
   cout << "[DRAW_RESPONSE] Sending DRAW_RESPONSE to opponent "
@@ -555,48 +518,19 @@ void handleDrawResponse(const ParsedMessage &pm, int fd) {
   if (drawResp.accept_draw) {
     cout << "[DRAW_RESPONSE] Draw accepted - ending game" << endl;
 
-    // Try to update database if game controller is available
-    if (g_game_controller != nullptr) {
+    // Update database with game_id directly (this also calculates Elo for rated
+    // games)
+    if (g_game_controller != nullptr && !game_id.empty()) {
       try {
-        // Find active game for these players
-        nlohmann::json listRequest;
-        listRequest["username"] = sender.username;
-        listRequest["filter"] = "active";
-        nlohmann::json listResponse =
-            g_game_controller->handleListGames(listRequest);
-
-        if (listResponse.contains("status") &&
-            listResponse["status"] == "success" &&
-            listResponse.contains("games") &&
-            listResponse["games"].is_array() &&
-            !listResponse["games"].empty()) {
-          // Find game with this opponent
-          for (const auto &game : listResponse["games"]) {
-            if (game.contains("red_player") && game.contains("black_player")) {
-              string redPlayer = game["red_player"].get<string>();
-              string blackPlayer = game["black_player"].get<string>();
-
-              if ((redPlayer == sender.username &&
-                   blackPlayer == opponent.username) ||
-                  (redPlayer == opponent.username &&
-                   blackPlayer == sender.username)) {
-                // Found the game - update it
-                if (game.contains("game_id")) {
-                  string gameId = game["game_id"].get<string>();
-                  nlohmann::json respondRequest;
-                  respondRequest["username"] = sender.username;
-                  respondRequest["game_id"] = gameId;
-                  respondRequest["accept"] = true;
-                  nlohmann::json respondResponse =
-                      g_game_controller->handleRespondToDraw(respondRequest);
-                  cout << "[DRAW_RESPONSE] Database update result: "
-                       << respondResponse.dump() << endl;
-                }
-                break;
-              }
-            }
-          }
-        }
+        nlohmann::json respondRequest;
+        respondRequest["username"] = sender.username;
+        respondRequest["game_id"] = game_id;
+        respondRequest["accept"] = true;
+        nlohmann::json respondResponse =
+            g_game_controller->handleRespondToDraw(respondRequest);
+        cout << "[DRAW_RESPONSE] Database update result: "
+             << respondResponse.dump() << " (Elo calculated if rated game)"
+             << endl;
       } catch (const exception &e) {
         cerr << "[DRAW_RESPONSE] Error updating database: " << e.what() << endl;
       }
@@ -614,58 +548,32 @@ void handleDrawResponse(const ParsedMessage &pm, int fd) {
          << opponent.username << " (fd=" << opp << ")" << endl;
     sendMessage(opp, MessageType::GAME_END, gp);
 
-    // Clean up game state
+    // Clean up game state for both players
     sender.in_game = false;
     sender.opponent_fd = -1;
-    g_clients[opp].in_game = false;
-    g_clients[opp].opponent_fd = -1;
+    sender.game_id = "";
+    sender.current_turn = "";
+
+    opponent.in_game = false;
+    opponent.opponent_fd = -1;
+    opponent.game_id = "";
+    opponent.current_turn = "";
 
     cout << "[DRAW_RESPONSE] Draw accepted - game ended successfully" << endl;
   } else {
     cout << "[DRAW_RESPONSE] Draw declined by " << sender.username << endl;
 
-    // Try to clear draw offer in database
-    if (g_game_controller != nullptr) {
+    // Clear draw offer in database
+    if (g_game_controller != nullptr && !game_id.empty()) {
       try {
-        // Find active game for these players
-        nlohmann::json listRequest;
-        listRequest["username"] = sender.username;
-        listRequest["filter"] = "active";
-        nlohmann::json listResponse =
-            g_game_controller->handleListGames(listRequest);
-
-        if (listResponse.contains("status") &&
-            listResponse["status"] == "success" &&
-            listResponse.contains("games") &&
-            listResponse["games"].is_array() &&
-            !listResponse["games"].empty()) {
-          // Find game with this opponent
-          for (const auto &game : listResponse["games"]) {
-            if (game.contains("red_player") && game.contains("black_player")) {
-              string redPlayer = game["red_player"].get<string>();
-              string blackPlayer = game["black_player"].get<string>();
-
-              if ((redPlayer == sender.username &&
-                   blackPlayer == opponent.username) ||
-                  (redPlayer == opponent.username &&
-                   blackPlayer == sender.username)) {
-                // Found the game - clear draw offer
-                if (game.contains("game_id")) {
-                  string gameId = game["game_id"].get<string>();
-                  nlohmann::json respondRequest;
-                  respondRequest["username"] = sender.username;
-                  respondRequest["game_id"] = gameId;
-                  respondRequest["accept"] = false;
-                  nlohmann::json respondResponse =
-                      g_game_controller->handleRespondToDraw(respondRequest);
-                  cout << "[DRAW_RESPONSE] Database update result (decline): "
-                       << respondResponse.dump() << endl;
-                }
-                break;
-              }
-            }
-          }
-        }
+        nlohmann::json respondRequest;
+        respondRequest["username"] = sender.username;
+        respondRequest["game_id"] = game_id;
+        respondRequest["accept"] = false;
+        nlohmann::json respondResponse =
+            g_game_controller->handleRespondToDraw(respondRequest);
+        cout << "[DRAW_RESPONSE] Database update result (decline): "
+             << respondResponse.dump() << endl;
       } catch (const exception &e) {
         cerr << "[DRAW_RESPONSE] Error updating database: " << e.what() << endl;
       }
@@ -684,14 +592,10 @@ void handleResign(const ParsedMessage & /*pm*/, int fd) {
     return;
   }
   int opp = sender.opponent_fd;
+  string game_id = sender.game_id;
 
   cout << "[RESIGN] Player " << sender.username << " (fd=" << fd
-       << ") resigns. Opponent fd=" << opp << endl;
-
-  // TODO: Cleanup AI game state via Python API
-  // if (g_game_state.hasGame(fd)) {
-  //   g_game_state.endGame(fd);
-  // }
+       << ") resigns. Opponent fd=" << opp << ", game_id=" << game_id << endl;
 
   if (opp >= 0 && g_clients.count(opp)) {
     // Regular PvP game - opponent wins
@@ -717,57 +621,31 @@ void handleResign(const ParsedMessage & /*pm*/, int fd) {
          << endl;
     sendMessage(fd, MessageType::GAME_END, senderLosePayload);
 
-    // Update game state for both players
-    opponent.in_game = false;
-    opponent.opponent_fd = -1;
-    sender.in_game = false;
-    sender.opponent_fd = -1;
-
-    // Try to update database if game controller is available
-    if (g_game_controller != nullptr) {
+    // Update database with game_id directly (this also calculates Elo)
+    if (g_game_controller != nullptr && !game_id.empty()) {
       try {
-        // Find active game for these players
-        nlohmann::json listRequest;
-        listRequest["username"] = sender.username;
-        listRequest["filter"] = "active";
-        nlohmann::json listResponse =
-            g_game_controller->handleListGames(listRequest);
-
-        if (listResponse.contains("status") &&
-            listResponse["status"] == "success" &&
-            listResponse.contains("games") &&
-            listResponse["games"].is_array() &&
-            !listResponse["games"].empty()) {
-          // Find game with this opponent
-          for (const auto &game : listResponse["games"]) {
-            if (game.contains("red_player") && game.contains("black_player")) {
-              string redPlayer = game["red_player"].get<string>();
-              string blackPlayer = game["black_player"].get<string>();
-
-              if ((redPlayer == sender.username &&
-                   blackPlayer == opponent.username) ||
-                  (redPlayer == opponent.username &&
-                   blackPlayer == sender.username)) {
-                // Found the game - update it
-                if (game.contains("game_id")) {
-                  string gameId = game["game_id"].get<string>();
-                  nlohmann::json resignRequest;
-                  resignRequest["username"] = sender.username;
-                  resignRequest["game_id"] = gameId;
-                  nlohmann::json resignResponse =
-                      g_game_controller->handleResign(resignRequest);
-                  cout << "[RESIGN] Database update result: "
-                       << resignResponse.dump() << endl;
-                }
-                break;
-              }
-            }
-          }
-        }
+        nlohmann::json resignRequest;
+        resignRequest["username"] = sender.username;
+        resignRequest["game_id"] = game_id;
+        nlohmann::json resignResponse =
+            g_game_controller->handleResign(resignRequest);
+        cout << "[RESIGN] Database update result: " << resignResponse.dump()
+             << " (Elo calculated if rated game)" << endl;
       } catch (const exception &e) {
         cerr << "[RESIGN] Error updating database: " << e.what() << endl;
       }
     }
+
+    // Clear game state for both players
+    opponent.in_game = false;
+    opponent.opponent_fd = -1;
+    opponent.game_id = "";
+    opponent.current_turn = "";
+
+    sender.in_game = false;
+    sender.opponent_fd = -1;
+    sender.game_id = "";
+    sender.current_turn = "";
 
     cout << "[RESIGN] Resignation processed successfully" << endl;
   } else {
@@ -777,6 +655,8 @@ void handleResign(const ParsedMessage & /*pm*/, int fd) {
     sendMessage(fd, MessageType::GAME_END, gp);
     sender.in_game = false;
     sender.opponent_fd = -1;
+    sender.game_id = "";
+    sender.current_turn = "";
     cout << "[RESIGN] AI game ended" << endl;
   }
 }

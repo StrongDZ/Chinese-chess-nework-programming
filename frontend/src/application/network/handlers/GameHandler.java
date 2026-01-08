@@ -161,14 +161,29 @@ public class GameHandler implements MessageHandler {
     private void handleMove(String payload) {
         try {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
-            // TODO: Apply opponent's move to the board
-            // int fromX = json.get("from_x").getAsInt();
-            // int fromY = json.get("from_y").getAsInt();
-            // int toX = json.get("to_x").getAsInt();
-            // int toY = json.get("to_y").getAsInt();
-            // uiState.applyOpponentMove(fromX, fromY, toX, toY);
+            
+            // Parse move coordinates from server
+            // Server format: {"from":{"row":..., "col":...}, "to":{"row":..., "col":...}, "piece":"..."}
+            JsonObject from = json.getAsJsonObject("from");
+            JsonObject to = json.getAsJsonObject("to");
+            
+            int fromRow = from.get("row").getAsInt();
+            int fromCol = from.get("col").getAsInt();
+            int toRow = to.get("row").getAsInt();
+            int toCol = to.get("col").getAsInt();
+            
+            String piece = json.has("piece") ? json.get("piece").getAsString() : "Unknown";
+            
+            System.out.println("[GameHandler] Received MOVE: " + piece + " from (row=" + fromRow + ",col=" + fromCol + ") to (row=" + toRow + ",col=" + toCol + ")");
+            
+            // Apply opponent's move to the board
+            // IMPORTANT: UIState.applyOpponentMove signature is (fromCol, fromRow, toCol, toRow)
+            Platform.runLater(() -> {
+                uiState.applyOpponentMove(fromCol, fromRow, toCol, toRow);
+            });
         } catch (Exception e) {
-            // Ignore parse errors
+            System.err.println("[GameHandler] Error parsing MOVE: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
