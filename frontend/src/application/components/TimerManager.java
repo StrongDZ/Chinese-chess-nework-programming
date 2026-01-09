@@ -26,6 +26,10 @@ public class TimerManager {
     private int[] initialSeconds = new int[4];  // Thời gian ban đầu để reset (giây)
     private boolean isUpdatingFromCountdown = false;  // Flag để tránh vòng lặp
     
+    // Lưu reference đến timers container và các timer panes để có thể xoay
+    private VBox timersContainer = null;
+    private StackPane[] timerPanes = new StackPane[4];  // Lưu reference đến 4 timer panes
+    
     // Timer xám (index 1, 2): đếm trước
     // Timer còn lại (index 0, 3): chỉ chạy khi timer xám hết, reset sau mỗi lượt
     
@@ -48,39 +52,70 @@ public class TimerManager {
         VBox container = new VBox(15);
         container.setAlignment(Pos.TOP_LEFT);
         
+        // Lưu reference đến container
+        this.timersContainer = container;
+        
         // Tạo 4 timer riêng biệt và bind với state
         // Timer 1: bind với timer1Value
         StackPane timer1Pane = createTimerPane(state.timer1ValueProperty(), "2:00", 0);
+        timerPanes[0] = timer1Pane;
         
         // Timer 2: bind với timer2Value
         StackPane timer2Pane = createTimerPane(state.timer2ValueProperty(), "10:00", 1);
+        timerPanes[1] = timer2Pane;
         
         // Timer 3: bind với timer3Value
         StackPane timer3Pane = createTimerPane(state.timer3ValueProperty(), "10:00", 2);
+        timerPanes[2] = timer3Pane;
         
         // Timer 4: bind với timer4Value
         StackPane timer4Pane = createTimerPane(state.timer4ValueProperty(), "2:00", 3);
+        timerPanes[3] = timer4Pane;
         
         container.getChildren().addAll(timer1Pane, timer2Pane, timer3Pane, timer4Pane);
         
         // Bắt đầu countdown khi giá trị thay đổi (chỉ khi không phải từ countdown)
         state.timer1ValueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !isUpdatingFromCountdown) {
+                // QUAN TRỌNG: Không start countdown nếu là classical mode
+                String gameMode = state.getCurrentGameMode();
+                if (gameMode != null && "classical".equals(gameMode)) {
+                    System.out.println("[TimerManager] Classical mode: Skipping timer1 listener startCountdown");
+                    return;
+                }
                 startCountdown(0, newVal);
             }
         });
         state.timer2ValueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !isUpdatingFromCountdown) {
+                // QUAN TRỌNG: Không start countdown nếu là classical mode
+                String gameMode = state.getCurrentGameMode();
+                if (gameMode != null && "classical".equals(gameMode)) {
+                    System.out.println("[TimerManager] Classical mode: Skipping timer2 listener startCountdown");
+                    return;
+                }
                 startCountdown(1, newVal);
             }
         });
         state.timer3ValueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !isUpdatingFromCountdown) {
+                // QUAN TRỌNG: Không start countdown nếu là classical mode
+                String gameMode = state.getCurrentGameMode();
+                if (gameMode != null && "classical".equals(gameMode)) {
+                    System.out.println("[TimerManager] Classical mode: Skipping timer3 listener startCountdown");
+                    return;
+                }
                 startCountdown(2, newVal);
             }
         });
         state.timer4ValueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !isUpdatingFromCountdown) {
+                // QUAN TRỌNG: Không start countdown nếu là classical mode
+                String gameMode = state.getCurrentGameMode();
+                if (gameMode != null && "classical".equals(gameMode)) {
+                    System.out.println("[TimerManager] Classical mode: Skipping timer4 listener startCountdown");
+                    return;
+                }
                 startCountdown(3, newVal);
             }
         });
@@ -97,6 +132,25 @@ public class TimerManager {
         
         // Sử dụng Platform.runLater để đảm bảo giá trị đã được set
         Platform.runLater(() -> {
+            // QUAN TRỌNG: Nếu là classical mode, đảm bảo cả 4 timer đều là "Unlimited time" và KHÔNG start countdown
+            String gameMode = state.getCurrentGameMode();
+            if (gameMode != null && "classical".equals(gameMode)) {
+                // Dừng tất cả timers để chắc chắn
+                stopAllTimers();
+                
+                // Set tất cả timers thành "Unlimited time"
+                isUpdatingFromCountdown = true;
+                state.setTimer1Value("Unlimited time");
+                state.setTimer2Value("Unlimited time");
+                state.setTimer3Value("Unlimited time");
+                state.setTimer4Value("Unlimited time");
+                isUpdatingFromCountdown = false;
+                
+                System.out.println("[TimerManager] Classical mode detected in initializeTimers: All 4 timers set to Unlimited time, NO countdown started");
+                return;  // QUAN TRỌNG: Return ngay, không start countdown
+            }
+            
+            // Chỉ start countdown nếu KHÔNG phải classical mode
             // Force start countdown cho tất cả timers
             String timer1 = state.getTimer1Value();
             String timer2 = state.getTimer2Value();
@@ -144,6 +198,14 @@ public class TimerManager {
                     countdownTimers[i].stop();
                     retryCount++;
                 }
+                // QUAN TRỌNG: Xóa reference để timers không thể chạy lại
+                // (Nhưng không set null ngay vì có thể cần dùng lại sau)
+                // Chỉ set null nếu là classical mode
+                String gameMode = state.getCurrentGameMode();
+                if (gameMode != null && "classical".equals(gameMode)) {
+                    countdownTimers[i] = null;
+                    System.out.println("[TimerManager] Classical mode: Cleared timer " + i);
+                }
             }
         }
     }
@@ -159,6 +221,13 @@ public class TimerManager {
      * Bắt đầu countdown cho một timer
      */
     private void startCountdown(int timerIndex, String initialValue) {
+        // QUAN TRỌNG: Trong classical mode, không tạo countdown timer
+        String gameMode = state.getCurrentGameMode();
+        if (gameMode != null && "classical".equals(gameMode)) {
+            System.out.println("[TimerManager] Classical mode: Skipping startCountdown for timer " + timerIndex);
+            return;
+        }
+        
         // Dừng và xóa timer cũ nếu có
         if (countdownTimers[timerIndex] != null) {
             countdownTimers[timerIndex].stop();
@@ -292,6 +361,19 @@ public class TimerManager {
      * Cập nhật timer khi đổi lượt (áp dụng cho TẤT CẢ các mode)
      */
     public void updateTimersOnTurnChange() {
+        // QUAN TRỌNG: Trong classical mode, không start/play timers
+        String gameMode = state.getCurrentGameMode();
+        if (gameMode != null && "classical".equals(gameMode)) {
+            System.out.println("[TimerManager] Classical mode: Skipping updateTimersOnTurnChange - no timers should run");
+            // Dừng tất cả timers để chắc chắn
+            for (int i = 0; i < 4; i++) {
+                if (countdownTimers[i] != null) {
+                    countdownTimers[i].stop();
+                }
+            }
+            return;
+        }
+        
         // Dừng tất cả timers một cách chắc chắn - đảm bảo không có timer nào đang chạy
         for (int i = 0; i < 4; i++) {
             if (countdownTimers[i] != null) {
@@ -432,6 +514,13 @@ public class TimerManager {
      * Cập nhật label của timer
      */
     private void updateTimerLabel(int timerIndex, int totalSeconds) {
+        // QUAN TRỌNG: Trong classical mode, không update timer values
+        String gameMode = state.getCurrentGameMode();
+        if (gameMode != null && "classical".equals(gameMode)) {
+            System.out.println("[TimerManager] Classical mode: Skipping updateTimerLabel for timer " + timerIndex);
+            return;
+        }
+        
         String formattedTime = formatSecondsToTime(totalSeconds);
         
         switch (timerIndex) {
@@ -497,6 +586,80 @@ public class TimerManager {
         timerPane.getChildren().addAll(timerBg, timerLabel);
         
         return timerPane;
+    }
+    
+    /**
+     * Cập nhật xoay và sắp xếp các bộ đếm theo vị trí player/opponent
+     * - Player luôn ở bottom-right, Opponent luôn ở top-left
+     * - Timers ở bên trái board: timers trên cùng = opponent (gần top-left), timers dưới cùng = player (gần bottom-right)
+     * - Khi board xoay (isPlayerRed = true): red timers xoay 180 độ để chữ đúng hướng
+     * 
+     * @param isPlayerRed true nếu player là red, false nếu player là black
+     */
+    public void updateRotation(boolean isPlayerRed) {
+        // Logic sắp xếp:
+        // - Nếu player là RED: opponent là BLACK -> Black timers (2,3) ở trên, Red timers (0,1 - player) ở dưới
+        // - Nếu player là BLACK: opponent là RED -> Red timers (0,1 - opponent) ở trên, Black timers (2,3 - player) ở dưới
+        // Timer 1, 2 (index 0, 1): red player
+        // Timer 3, 4 (index 2, 3): black player
+        
+        if (timerPanes == null || timersContainer == null) {
+            return;
+        }
+        
+        // Đổi thứ tự timers: opponent ở trên, player ở dưới
+        // Thứ tự: remaining, gray, gray, remaining
+        // Timer 0 = red remaining, Timer 1 = red gray
+        // Timer 2 = black gray, Timer 3 = black remaining
+        if (isPlayerRed) {
+            // Player là RED (ở dưới): opponent là BLACK (ở trên)
+            // Opponent (black) ở trên: [black remaining (3), black gray (2)]
+            // Player (red) ở dưới: [red gray (1), red remaining (0)]
+            // Thứ tự: remaining, gray, gray, remaining
+            timersContainer.getChildren().clear();
+            timersContainer.getChildren().addAll(timerPanes[3], timerPanes[2], timerPanes[1], timerPanes[0]);
+            System.out.println("[TimerManager] Player is RED: Order = [black remaining (3), black gray (2), red gray (1), red remaining (0)]");
+        } else {
+            // Player là BLACK (ở dưới): opponent là RED (ở trên)
+            // Opponent (red) ở trên: [red remaining (0), red gray (1)]
+            // Player (black) ở dưới: [black gray (2), black remaining (3)]
+            // Thứ tự: remaining, gray, gray, remaining
+            timersContainer.getChildren().clear();
+            timersContainer.getChildren().addAll(timerPanes[0], timerPanes[1], timerPanes[2], timerPanes[3]);
+            System.out.println("[TimerManager] Player is BLACK: Order = [red remaining (0), red gray (1), black gray (2), black remaining (3)]");
+        }
+        
+        // Xoay các timers: timers cần xoay ngược lại so với board rotation để chữ đúng hướng
+        // Logic: Khi board xoay (isPlayerRed = true), red pieces xoay 180 độ để chữ đúng
+        //        Red timers cũng cần xoay 180 độ để đồng bộ với red pieces
+        //        Nhưng vì red timers ở dưới (player position) không bị ảnh hưởng bởi board rotation,
+        //        nên chúng KHÔNG cần xoay (0 độ)
+        //        Black timers ở trên (opponent) cũng không cần xoay vì chúng không bị ảnh hưởng
+        
+        // Tất cả timers không xoay vì chúng không nằm trong boardContainer
+        // Chỉ cần đảm bảo chữ hiển thị đúng hướng
+        double redTimerRotation = 0.0;  // Red timers không xoay
+        double blackTimerRotation = 0.0;  // Black timers không xoay
+        
+        // Timer 0, 1 (red player)
+        if (timerPanes[0] != null) {
+            timerPanes[0].setRotate(redTimerRotation);
+        }
+        if (timerPanes[1] != null) {
+            timerPanes[1].setRotate(redTimerRotation);
+        }
+        
+        // Timer 2, 3 (black player)
+        if (timerPanes[2] != null) {
+            timerPanes[2].setRotate(blackTimerRotation);
+        }
+        if (timerPanes[3] != null) {
+            timerPanes[3].setRotate(blackTimerRotation);
+        }
+        
+        System.out.println("[TimerManager] updateRotation: isPlayerRed=" + isPlayerRed + 
+            ", redTimerRotation=" + redTimerRotation + ", blackTimerRotation=" + blackTimerRotation +
+            ", order=" + (isPlayerRed ? "black(opponent) on top, red(player) on bottom" : "red(opponent) on top, black(player) on bottom"));
     }
 }
 
