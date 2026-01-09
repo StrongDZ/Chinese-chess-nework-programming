@@ -48,6 +48,7 @@ public enum MessageType {
 
     // AI
     SUGGEST_MOVE,
+    AI_QUIT,  // Quit AI game (không tính là resign, không mất điểm)
 
     // System
     ERROR,

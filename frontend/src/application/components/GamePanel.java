@@ -43,6 +43,9 @@ public class GamePanel extends StackPane implements IGamePanel {
     // Game End Checker
     private application.game.GameEndChecker gameEndChecker;
     
+    // Flag để tránh gửi AI_QUIT nhiều lần
+    private boolean aiQuitSent = false;
+    
     // Core fields
     private Pane rootPane = null;  // Lưu reference đến root pane để thêm UI
     private Pane piecesContainer = null;  // Lưu reference đến container chứa quân cờ
@@ -94,6 +97,11 @@ public class GamePanel extends StackPane implements IGamePanel {
             updateLeftIcons();
         });
         
+        // Listener để cập nhật leftIcons khi opponent username thay đổi (quan trọng cho AI game)
+        state.opponentUsernameProperty().addListener((obs, oldVal, newVal) -> {
+            updateLeftIcons();
+        });
+        
         // Cập nhật leftIcons lần đầu để đảm bảo UI đúng khi game được mở
         Platform.runLater(() -> {
             updateLeftIcons();
@@ -121,6 +129,7 @@ public class GamePanel extends StackPane implements IGamePanel {
                     resetAllGamePanels();
                     ensurePiecesVisible();
                     timerManager.initializeTimers();
+                    updateLeftIcons(); // Đảm bảo leftIcons được cập nhật khi game becomes visible
                 });
                 fadeTo(1);
             } else {
@@ -136,6 +145,7 @@ public class GamePanel extends StackPane implements IGamePanel {
                     resetAllGamePanels();
                     ensurePiecesVisible();
                     timerManager.initializeTimers();
+                    updateLeftIcons(); // Đảm bảo leftIcons được cập nhật khi vào game
                 });
                 fadeTo(1);
             } else {
@@ -191,14 +201,23 @@ public class GamePanel extends StackPane implements IGamePanel {
             // Nếu đối thủ hết thời gian → thắng
             boolean isCurrentPlayerLosing = losingPlayerColor.equals(currentPlayerColor);
             
+            boolean isAIGame = isAIGame();
             if (isCurrentPlayerLosing) {
                 // Người chơi hiện tại hết thời gian → thua
                 System.out.println("[GamePanel] Current player (" + currentPlayerColor + ") ran out of time - LOSE");
-                dialogManager.showGameResult(false);
+                if (isAIGame) {
+                    dialogManager.showGameResultWithCustomText("You lose", 0);
+                } else {
+                    dialogManager.showGameResult(false);
+                }
             } else {
                 // Đối thủ hết thời gian → thắng
                 System.out.println("[GamePanel] Opponent (" + losingPlayerColor + ") ran out of time - WIN");
-                dialogManager.showGameResult(true);
+                if (isAIGame) {
+                    dialogManager.showGameResultWithCustomText("You win", 0);
+                } else {
+                    dialogManager.showGameResult(true);
+                }
             }
             
             // TODO: Có thể gửi message đến server để đối thủ cũng nhận được thông báo
@@ -220,15 +239,28 @@ public class GamePanel extends StackPane implements IGamePanel {
             switch (newVal) {
                 case "game_result":
                     System.out.println("[GamePanel] Handling game_result case");
+                    boolean isAIGame = isAIGame();
                     if ("win".equals(result)) {
-                        System.out.println("[GamePanel] Calling showGameResult(true) - WIN");
-                        dialogManager.showGameResult(true);
+                        System.out.println("[GamePanel] Calling showGameResult - WIN");
+                        if (isAIGame) {
+                            dialogManager.showGameResultWithCustomText("You win", 0);
+                        } else {
+                            dialogManager.showGameResult(true);
+                        }
                     } else if ("lose".equals(result)) {
-                        System.out.println("[GamePanel] Calling showGameResult(false) - LOSE");
-                        dialogManager.showGameResult(false);
+                        System.out.println("[GamePanel] Calling showGameResult - LOSE");
+                        if (isAIGame) {
+                            dialogManager.showGameResultWithCustomText("You lose", 0);
+                        } else {
+                            dialogManager.showGameResult(false);
+                        }
                     } else if ("draw".equals(result)) {
-                        System.out.println("[GamePanel] Calling showGameResultDraw() - DRAW");
-                        dialogManager.showGameResultDraw();
+                        System.out.println("[GamePanel] Calling showGameResult - DRAW");
+                        if (isAIGame) {
+                            dialogManager.showGameResultWithCustomText("Draw", 0);
+                        } else {
+                            dialogManager.showGameResultDraw();
+                        }
                     } else {
                         System.out.println("[GamePanel] Unknown result: " + result);
                     }
@@ -278,6 +310,20 @@ public class GamePanel extends StackPane implements IGamePanel {
                             
                             // Update timers based on current turn
                             timerManager.updateTimersOnTurnChange();
+                        }
+                    }
+                    break;
+                case "suggest_move":
+                    if (result != null && !result.isEmpty()) {
+                        // Format: "fromRow_fromCol_toRow_toCol"
+                        String[] parts = result.split("_");
+                        if (parts.length == 4) {
+                            int fromRow = Integer.parseInt(parts[0]);
+                            int fromCol = Integer.parseInt(parts[1]);
+                            int toRow = Integer.parseInt(parts[2]);
+                            int toCol = Integer.parseInt(parts[3]);
+                            // Highlight suggest move
+                            chessBoardManager.highlightSuggestMove(fromRow, fromCol, toRow, toCol);
                         }
                     }
                     break;
@@ -549,10 +595,35 @@ public class GamePanel extends StackPane implements IGamePanel {
             }
         } else {
             // Opponent profile (bottom-right) - bind với opponent state
-            usernameLabel.textProperty().bind(state.opponentUsernameProperty());
+            // Custom binding để format AI name và elo
+            usernameLabel.textProperty().bind(
+                javafx.beans.binding.Bindings.createStringBinding(
+                    () -> {
+                        String opponent = state.getOpponentUsername();
+                        if (opponent != null && (opponent.startsWith("AI") || opponent.startsWith("AI_"))) {
+                            // Parse difficulty từ opponent username
+                            String difficulty = parseAIDifficulty(opponent);
+                            return "AI_" + difficulty;
+                        }
+                        return opponent != null ? opponent : "";
+                    },
+                    state.opponentUsernameProperty()
+                )
+            );
+            
             eloLabel.textProperty().bind(
                 javafx.beans.binding.Bindings.createStringBinding(
-                    () -> "do " + state.getOpponentElo(),
+                    () -> {
+                        String opponent = state.getOpponentUsername();
+                        if (opponent != null && (opponent.startsWith("AI") || opponent.startsWith("AI_"))) {
+                            // Get elo từ difficulty
+                            String difficulty = parseAIDifficulty(opponent);
+                            int elo = getAIElo(difficulty);
+                            return "do " + elo;
+                        }
+                        return "do " + state.getOpponentElo();
+                    },
+                    state.opponentUsernameProperty(),
                     state.opponentEloProperty()
                 )
             );
@@ -938,6 +1009,11 @@ public class GamePanel extends StackPane implements IGamePanel {
                 }
             }
         }
+        
+        // Xoay các bộ đếm (timers) giống như xoay quân cờ để chữ luôn đúng hướng
+        if (timerManager != null) {
+            timerManager.updateRotation(isPlayerRed);
+        }
     }
     
     /**
@@ -957,6 +1033,9 @@ public class GamePanel extends StackPane implements IGamePanel {
         
         // Reset currentTurn về red (mặc định red đi trước)
         currentTurn = "red";
+        
+        // Reset AI quit flag
+        aiQuitSent = false;
         
         // Reset các Manager
         dialogManager.resetAllDialogs();
@@ -1058,6 +1137,18 @@ public class GamePanel extends StackPane implements IGamePanel {
         // Get current board state
         char[][] board = getCurrentBoardState();
         
+        // Debug: Check if King exists on board
+        boolean hasRedKing = false;
+        boolean hasBlackKing = false;
+        for (int row = 0; row < 10; row++) {
+            for (int col = 0; col < 9; col++) {
+                if (board[row][col] == 'K') hasRedKing = true;
+                if (board[row][col] == 'k') hasBlackKing = true;
+            }
+        }
+        System.out.println("[GamePanel] checkGameEndAfterMove: captured=" + captured + 
+                          ", hasRedKing=" + hasRedKing + ", hasBlackKing=" + hasBlackKing);
+        
         // Record move in history
         gameEndChecker.recordMove(board, captured);
         
@@ -1067,6 +1158,9 @@ public class GamePanel extends StackPane implements IGamePanel {
         
         if (result.isGameOver) {
             System.out.println("[GamePanel] Game Over: " + result.result + " - " + result.termination + " - " + result.message);
+            
+            // Check if this is an AI game
+            boolean isAIGame = isAIGame();
             
             // Determine if player wins/loses/draws
             boolean playerIsRed = state.isPlayerRed();
@@ -1086,18 +1180,27 @@ public class GamePanel extends StackPane implements IGamePanel {
                 application.network.NetworkManager networkManager = 
                     application.network.NetworkManager.getInstance();
                 if (networkManager != null) {
-                    // Determine win_side for server
-                    String winSide = "draw";
-                    if ("red".equals(result.result)) {
-                        winSide = state.isPlayerRed() ? state.getUsername() : state.getOpponentUsername();
-                    } else if ("black".equals(result.result)) {
-                        winSide = state.isPlayerRed() ? state.getOpponentUsername() : state.getUsername();
+                    if (isAIGame) {
+                        // AI game: gửi AI_QUIT thay vì GAME_END (chỉ gửi một lần)
+                        if (!aiQuitSent) {
+                            networkManager.game().quitAIGame();
+                            aiQuitSent = true;
+                            System.out.println("[GamePanel] AI game ended - sent AI_QUIT (no rating change)");
+                        } else {
+                            System.out.println("[GamePanel] AI_QUIT already sent, skipping duplicate");
+                        }
+                    } else {
+                        // Human game: gửi GAME_END như bình thường
+                        String winSide = "draw";
+                        if ("red".equals(result.result)) {
+                            winSide = state.isPlayerRed() ? state.getUsername() : state.getOpponentUsername();
+                        } else if ("black".equals(result.result)) {
+                            winSide = state.isPlayerRed() ? state.getOpponentUsername() : state.getUsername();
+                        }
+                        networkManager.game().sendGameEnd(winSide);
+                        System.out.println("[GamePanel] Game ended - result: " + result.result + 
+                            ", termination: " + result.termination + ", winSide: " + winSide);
                     }
-                    
-                    // Send GAME_END message
-                    networkManager.game().sendGameEnd(winSide);
-                    System.out.println("[GamePanel] Game ended - result: " + result.result + 
-                        ", termination: " + result.termination + ", winSide: " + winSide);
                 }
             } catch (Exception e) {
                 System.err.println("[GamePanel] Error sending game end: " + e.getMessage());
@@ -1106,12 +1209,24 @@ public class GamePanel extends StackPane implements IGamePanel {
             
             // Show result dialog
             Platform.runLater(() -> {
-                if ("draw".equals(playerResult)) {
-                    dialogManager.showGameResultDraw();
-                } else if ("win".equals(playerResult)) {
-                    dialogManager.showGameResult(true);
+                if (isAIGame) {
+                    // AI game: hiển thị dialog không có điểm (eloDelta = 0)
+                    if ("draw".equals(playerResult)) {
+                        dialogManager.showGameResultWithCustomText("Draw", 0);
+                    } else if ("win".equals(playerResult)) {
+                        dialogManager.showGameResultWithCustomText("You win", 0);
+                    } else {
+                        dialogManager.showGameResultWithCustomText("You lose", 0);
+                    }
                 } else {
-                    dialogManager.showGameResult(false);
+                    // Human game: hiển thị dialog có điểm như bình thường
+                    if ("draw".equals(playerResult)) {
+                        dialogManager.showGameResultDraw();
+                    } else if ("win".equals(playerResult)) {
+                        dialogManager.showGameResult(true);
+                    } else {
+                        dialogManager.showGameResult(false);
+                    }
                 }
             });
         } else {
@@ -1127,7 +1242,7 @@ public class GamePanel extends StackPane implements IGamePanel {
     }
     
     /**
-     * Cập nhật leftIcons dựa trên currentGameMode
+     * Cập nhật leftIcons dựa trên currentGameMode và AI game
      */
     private void updateLeftIcons() {
         if (leftIcons == null || dialogManager == null) {
@@ -1137,11 +1252,19 @@ public class GamePanel extends StackPane implements IGamePanel {
         // Xóa tất cả children cũ
         leftIcons.getChildren().clear();
         
-        // Kiểm tra xem có đang ở custom mode không
-        boolean isCustomMode = "custom".equals(state.getCurrentGameMode());
+        // Check if playing with AI
+        String opponentUsername = state.getOpponentUsername();
+        boolean isAIGame = opponentUsername != null && 
+                          (opponentUsername.startsWith("AI") || 
+                           opponentUsername.startsWith("AI_") ||
+                           opponentUsername.equals("AI") ||
+                           opponentUsername.startsWith("AI ("));
         
-        if (isCustomMode) {
-            // Custom mode: chỉ hiển thị quit button
+        System.out.println("[GamePanel] updateLeftIcons: opponentUsername=" + opponentUsername + 
+                          ", isAIGame=" + isAIGame + ", leftIcons.children.size=" + leftIcons.getChildren().size());
+        
+        if (isAIGame) {
+            // AI game: chỉ hiển thị quit và suggest buttons
             StackPane quitContainer = new StackPane();
             ImageView quitIcon = new ImageView(AssetHelper.image("ic_quit.png"));
             quitIcon.setFitWidth(60);
@@ -1176,13 +1299,46 @@ public class GamePanel extends StackPane implements IGamePanel {
             
             // Click handler để hiển thị quit confirmation dialog
             quitContainer.setOnMouseClicked(e -> {
-                dialogManager.showQuitConfirmation();
+                // Show quit confirmation dialog với callback để gửi message về BE
+                // Lấy thông tin opponent trước khi vào lambda để tránh conflict
+                final String oppUsername = state.getOpponentUsername();
+                final boolean isAI = oppUsername != null && 
+                                    (oppUsername.startsWith("AI") || 
+                                     oppUsername.startsWith("AI_") ||
+                                     oppUsername.equals("AI") ||
+                                     oppUsername.startsWith("AI ("));
+                
+                dialogManager.showQuitConfirmation(() -> {
+                    // Callback khi user confirm quit
+                    try {
+                        application.network.NetworkManager networkManager = 
+                            application.network.NetworkManager.getInstance();
+                        if (networkManager != null) {
+                            if (isAI) {
+                                // AI game: gửi AI_QUIT (không tính là resign, không mất điểm)
+                                networkManager.game().quitAIGame();
+                                System.out.println("[GamePanel] Quit AI game - sent AI_QUIT");
+                            } else {
+                                // Human game: gửi RESIGN
+                                networkManager.game().resign();
+                                System.out.println("[GamePanel] Quit human game - sent RESIGN");
+                            }
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("[GamePanel] Error sending quit message: " + ex.getMessage());
+                        ex.printStackTrace();
+                    }
+                });
                 e.consume();
             });
             
             leftIcons.getChildren().add(quitContainer);
+            
+            // Thêm suggest button
+            StackPane suggestContainer = createSuggestButton();
+            leftIcons.getChildren().add(suggestContainer);
         } else {
-            // Normal mode: hiển thị resign và draw buttons
+            // Normal mode (không phải AI): hiển thị resign và draw buttons
             // Flag icon (ic_signup.png - có thể là resign/surrender) - wrap trong StackPane
             StackPane resignContainer = new StackPane();
             ImageView resignIcon = new ImageView(AssetHelper.image("ic_signup.png"));
@@ -1260,7 +1416,131 @@ public class GamePanel extends StackPane implements IGamePanel {
                 e.consume();
             });
             
-            leftIcons.getChildren().addAll(resignContainer, drawContainer);
+            leftIcons.getChildren().add(resignContainer);
+            leftIcons.getChildren().add(drawContainer);
         }
+    }
+    
+    /**
+     * Tạo nút suggest move (chỉ hiện khi chơi với AI)
+     */
+    private StackPane createSuggestButton() {
+        StackPane suggestContainer = new StackPane();
+        
+        // Sử dụng icon bóng đèn
+        ImageView suggestIcon = new ImageView(AssetHelper.image("ic_bulb.png"));
+        suggestIcon.setFitWidth(60);
+        suggestIcon.setFitHeight(60);
+        suggestIcon.setPreserveRatio(true);
+        suggestContainer.getChildren().add(suggestIcon);
+        
+        suggestContainer.setCursor(Cursor.HAND);
+        suggestContainer.setMouseTransparent(false);
+        suggestContainer.setPickOnBounds(true);
+        
+        // Hover effects
+        ScaleTransition suggestScaleIn = new ScaleTransition(Duration.millis(200), suggestContainer);
+        suggestScaleIn.setToX(1.1);
+        suggestScaleIn.setToY(1.1);
+        
+        ScaleTransition suggestScaleOut = new ScaleTransition(Duration.millis(200), suggestContainer);
+        suggestScaleOut.setToX(1.0);
+        suggestScaleOut.setToY(1.0);
+        
+        suggestContainer.setOnMouseEntered(e -> {
+            suggestScaleOut.stop();
+            suggestScaleIn.setFromX(suggestContainer.getScaleX());
+            suggestScaleIn.setFromY(suggestContainer.getScaleY());
+            suggestScaleIn.play();
+        });
+        suggestContainer.setOnMouseExited(e -> {
+            suggestScaleIn.stop();
+            suggestScaleOut.setFromX(suggestContainer.getScaleX());
+            suggestScaleOut.setFromY(suggestContainer.getScaleY());
+            suggestScaleOut.play();
+        });
+        
+        // Click handler để gửi SUGGEST_MOVE request
+        suggestContainer.setOnMouseClicked(e -> {
+            try {
+                application.network.NetworkManager.getInstance().game().requestSuggestMove();
+                System.out.println("[GamePanel] Sent SUGGEST_MOVE request");
+            } catch (Exception ex) {
+                System.err.println("[GamePanel] Failed to request suggest move: " + ex.getMessage());
+                ex.printStackTrace();
+            }
+            e.consume();
+        });
+        
+        return suggestContainer;
+    }
+    
+    /**
+     * Parse AI difficulty từ opponent username
+     * Hỗ trợ các format: "AI (Easy)", "AI_easy", "AI_medium", "AI_hard", "AI"
+     * @param opponentUsername Username của opponent
+     * @return Difficulty string: "easy", "medium", "hard" (default: "medium")
+     */
+    private String parseAIDifficulty(String opponentUsername) {
+        if (opponentUsername == null || opponentUsername.isEmpty()) {
+            return "medium";
+        }
+        
+        String lower = opponentUsername.toLowerCase();
+        
+        // Format: "AI (Easy)" hoặc "AI (Medium)" hoặc "AI (Hard)"
+        if (lower.contains("(easy)")) {
+            return "easy";
+        } else if (lower.contains("(medium)")) {
+            return "medium";
+        } else if (lower.contains("(hard)")) {
+            return "hard";
+        }
+        
+        // Format: "AI_easy", "AI_medium", "AI_hard"
+        if (lower.contains("_easy")) {
+            return "easy";
+        } else if (lower.contains("_medium")) {
+            return "medium";
+        } else if (lower.contains("_hard")) {
+            return "hard";
+        }
+        
+        // Format: "AI" hoặc không tìm thấy → default medium
+        return "medium";
+    }
+    
+    /**
+     * Get elo rating cho AI dựa trên difficulty
+     * @param difficulty "easy", "medium", hoặc "hard"
+     * @return Elo rating: easy=800, medium=1800, hard=2500
+     */
+    private int getAIElo(String difficulty) {
+        if (difficulty == null) {
+            return 1800; // Default medium
+        }
+        
+        switch (difficulty.toLowerCase()) {
+            case "easy":
+                return 800;
+            case "hard":
+                return 2500;
+            case "medium":
+            default:
+                return 1800;
+        }
+    }
+    
+    /**
+     * Kiểm tra xem có đang chơi với AI không
+     * @return true nếu là AI game
+     */
+    private boolean isAIGame() {
+        String opponentUsername = state.getOpponentUsername();
+        return opponentUsername != null && 
+               (opponentUsername.startsWith("AI") || 
+                opponentUsername.startsWith("AI_") ||
+                opponentUsername.equals("AI") ||
+                opponentUsername.startsWith("AI ("));
     }
 }

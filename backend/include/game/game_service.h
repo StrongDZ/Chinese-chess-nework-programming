@@ -152,6 +152,10 @@ public:
   // Lấy chi tiết game với đầy đủ moves để replay
   // Dùng cho GET_GAME_DETAILS handler
   GameResult getGameDetails(const std::string &gameId);
+
+  // Xóa game từ active_games (không archive, không tính điểm)
+  // Dùng cho AI_QUIT để quit AI game mà không bị penalty
+  bool deleteGame(const std::string &gameId);
 };
 
 #endif

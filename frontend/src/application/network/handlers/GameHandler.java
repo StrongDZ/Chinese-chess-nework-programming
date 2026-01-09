@@ -93,10 +93,8 @@ public class GameHandler implements MessageHandler {
                     } catch (Exception e) {
                         System.err.println("[GameHandler] Error fetching opponent profile: " + e.getMessage());
                     }
-                } else {
-                    // AI game - no opponent
-                    uiState.setOpponentUsername("AI");
                 }
+                // Nếu opponent rỗng, sẽ xử lý ở phần opponent_data (AI game)
             }
             
             // Extract game mode if available
@@ -119,7 +117,49 @@ public class GameHandler implements MessageHandler {
             uiState.setCurrentGameMode(gameMode);
             uiState.setCurrentTimeLimit(timeLimit);
             
-            // Extract game_id and player_is_red from opponent_data if available
+            // QUAN TRỌNG: Khởi tạo timer values từ time_limit và game_mode
+            // - Classical mode: cả 4 bộ đếm đều là "Unlimited time"
+            // - Blitz mode: remaining timer = time_limit, gray timer = 10 phút (600 giây)
+            // Make variables final for lambda
+            final int finalTimeLimit = timeLimit;
+            final String finalGameMode = gameMode;
+            
+            Platform.runLater(() -> {
+                if ("classical".equals(finalGameMode)) {
+                    // Classical mode: cả 4 bộ đếm đều là "Unlimited time"
+                    uiState.setTimer1Value("Unlimited time");  // Red remaining
+                    uiState.setTimer2Value("Unlimited time");  // Red gray
+                    uiState.setTimer3Value("Unlimited time");  // Black gray
+                    uiState.setTimer4Value("Unlimited time");  // Black remaining
+                    System.out.println("[GameHandler] Classical mode: All 4 timers set to Unlimited time");
+                } else {
+                    // Blitz mode: remaining timer từ time_limit, gray timer = 10 phút
+                    if (finalTimeLimit > 0) {
+                        // Remaining timers từ time_limit
+                        int minutes = finalTimeLimit / 60;
+                        int seconds = finalTimeLimit % 60;
+                        String remainingTimeStr = String.format("%d:%02d", minutes, seconds);
+                        uiState.setTimer1Value(remainingTimeStr);  // Red remaining
+                        uiState.setTimer4Value(remainingTimeStr);  // Black remaining
+                        System.out.println("[GameHandler] Blitz mode: Remaining timers set to " + remainingTimeStr + " (" + finalTimeLimit + "s)");
+                    } else {
+                        // Fallback: unlimited time
+                        uiState.setTimer1Value("Unlimited time");
+                        uiState.setTimer4Value("Unlimited time");
+                    }
+                    
+                    // Gray timers: 10 phút (600 giây) cho blitz mode
+                    int grayTimeSeconds = 600;  // 10 phút = 600 giây
+                    int grayMinutes = grayTimeSeconds / 60;
+                    int graySecs = grayTimeSeconds % 60;
+                    String grayTimeStr = String.format("%d:%02d", grayMinutes, graySecs);
+                    uiState.setTimer2Value(grayTimeStr);  // Red gray
+                    uiState.setTimer3Value(grayTimeStr);  // Black gray
+                    System.out.println("[GameHandler] Blitz mode: Gray timers set to " + grayTimeStr + " (" + grayTimeSeconds + "s)");
+                }
+            });
+            
+            // Extract game_id, player_is_red, và ai_difficulty from opponent_data if available
             if (json.has("opponent_data")) {
                 JsonObject opponentData = json.getAsJsonObject("opponent_data");
                 if (opponentData.has("game_id")) {
@@ -137,10 +177,38 @@ public class GameHandler implements MessageHandler {
                     uiState.setPlayerIsRed(true);
                     System.out.println("[GameHandler] Player side not specified, defaulting to red");
                 }
+                
+                // Extract ai_difficulty nếu là AI game
+                if (opponentData.has("ai_difficulty")) {
+                    String aiDifficulty = opponentData.get("ai_difficulty").getAsString();
+                    // Format: "AI (Easy)", "AI (Medium)", "AI (Hard)"
+                    String capitalized = aiDifficulty.substring(0, 1).toUpperCase() + 
+                                        aiDifficulty.substring(1).toLowerCase();
+                    uiState.setOpponentUsername("AI (" + capitalized + ")");
+                    System.out.println("[GameHandler] AI game detected, set opponentUsername to: AI (" + capitalized + ")");
+                } else if (opponentData.has("is_ai_game") && opponentData.get("is_ai_game").getAsBoolean()) {
+                    // Nếu là AI game nhưng không có ai_difficulty, giữ nguyên giá trị hiện tại hoặc set default
+                    String currentOpponent = uiState.getOpponentUsername();
+                    if (currentOpponent == null || currentOpponent.isEmpty() || "AI".equals(currentOpponent)) {
+                        uiState.setOpponentUsername("AI (Medium)");
+                        System.out.println("[GameHandler] AI game detected but no difficulty, defaulting to: AI (Medium)");
+                    }
+                }
             } else {
                 // Default to red if no opponent_data
                 uiState.setPlayerIsRed(true);
                 System.out.println("[GameHandler] No opponent_data, defaulting to red");
+                
+                // Nếu opponent rỗng và không có opponent_data, có thể là AI game
+                if ((opponent == null || opponent.isEmpty()) && 
+                    (uiState.getOpponentUsername() == null || uiState.getOpponentUsername().isEmpty() || "AI".equals(uiState.getOpponentUsername()))) {
+                    // Giữ nguyên giá trị đã set từ AIDifficultyPanel hoặc set default
+                    String currentOpponent = uiState.getOpponentUsername();
+                    if (currentOpponent == null || currentOpponent.isEmpty() || "AI".equals(currentOpponent)) {
+                        uiState.setOpponentUsername("AI (Medium)");
+                        System.out.println("[GameHandler] No opponent and no opponent_data, defaulting to: AI (Medium)");
+                    }
+                }
             }
             
             // Close waiting panel if open (from quick matching)

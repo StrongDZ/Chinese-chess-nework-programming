@@ -38,6 +38,7 @@ enum class MessageType {
   MESSAGE,
   GAME_END,
   SUGGEST_MOVE,
+  AI_QUIT, // Quit AI game (không tính là resign, không mất điểm)
 
   // === Game Control ===
   RESIGN,
@@ -864,6 +865,7 @@ static const unordered_map<string, MessageType> commandMap = {
     {"MESSAGE", MessageType::MESSAGE},
     {"GAME_END", MessageType::GAME_END},
     {"SUGGEST_MOVE", MessageType::SUGGEST_MOVE},
+    {"AI_QUIT", MessageType::AI_QUIT},
     {"RESIGN", MessageType::RESIGN},
     {"DRAW_REQUEST", MessageType::DRAW_REQUEST},
     {"DRAW_RESPONSE", MessageType::DRAW_RESPONSE},
@@ -923,6 +925,7 @@ static const unordered_map<MessageType, const char *> typeStrings = {
     {MessageType::MESSAGE, "MESSAGE"},
     {MessageType::GAME_END, "GAME_END"},
     {MessageType::SUGGEST_MOVE, "SUGGEST_MOVE"},
+    {MessageType::AI_QUIT, "AI_QUIT"},
     {MessageType::RESIGN, "RESIGN"},
     {MessageType::DRAW_REQUEST, "DRAW_REQUEST"},
     {MessageType::DRAW_RESPONSE, "DRAW_RESPONSE"},

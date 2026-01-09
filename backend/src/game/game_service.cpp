@@ -1279,26 +1279,33 @@ GameService::customBoardSetupToXfen(const nlohmann::json &customBoardSetup,
         string pieceInfo = value.get<string>();
 
         // Parse position: "row_col"
+        // NOTE: Frontend sends coordinates with top=Red, bottom=Black
+        // But XFEN format uses: y=0 is top (black), y=9 is bottom (red)
+        // So we need to flip: row_xfen = 9 - row_frontend
         size_t underscorePos = posKey.find('_');
         if (underscorePos != string::npos) {
           try {
-            int row = stoi(posKey.substr(0, underscorePos));
+            int rowFrontend = stoi(posKey.substr(0, underscorePos));
             int col = stoi(posKey.substr(underscorePos + 1));
 
+            // Convert frontend row to XFEN row (flip vertically)
+            int rowXfen = 9 - rowFrontend;
+
             // Validate coordinates
-            if (row >= 0 && row < 10 && col >= 0 && col < 9) {
+            if (rowFrontend >= 0 && rowFrontend < 10 && col >= 0 && col < 9) {
               // Get piece character
               if (pieceMap.find(pieceInfo) != pieceMap.end()) {
-                board[row][col] = pieceMap[pieceInfo];
+                board[rowXfen][col] = pieceMap[pieceInfo];
                 cout << "[customBoardSetupToXfen] Placed " << pieceInfo
-                     << " at (" << row << "," << col << ")" << endl;
+                     << " at frontend(" << rowFrontend << "," << col
+                     << ") -> XFEN(" << rowXfen << "," << col << ")" << endl;
               } else {
                 cerr << "[customBoardSetupToXfen] WARNING: Unknown piece type: "
                      << pieceInfo << endl;
               }
             } else {
               cerr << "[customBoardSetupToXfen] WARNING: Invalid coordinates: ("
-                   << row << "," << col << ")" << endl;
+                   << rowFrontend << "," << col << ")" << endl;
             }
           } catch (const exception &e) {
             cerr << "[customBoardSetupToXfen] ERROR parsing position " << posKey
@@ -1317,4 +1324,8 @@ GameService::customBoardSetupToXfen(const nlohmann::json &customBoardSetup,
   string xfen = boardToXfen(board, startingColor, 1);
   cout << "[customBoardSetupToXfen] Generated XFEN: " << xfen << endl;
   return xfen;
+}
+
+bool GameService::deleteGame(const string &gameId) {
+  return repository.deleteGame(gameId);
 }
