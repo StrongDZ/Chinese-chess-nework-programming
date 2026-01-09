@@ -30,6 +30,11 @@ public class ProfilePanel extends StackPane {
     
     // Lưu toàn bộ lịch sử (tất cả modes) để filter ở frontend
     private final java.util.List<application.components.HistoryPanel.HistoryEntry> allHistory = new java.util.ArrayList<>();
+    
+    // Lưu callback cũ (HistoryPanel) để có thể gọi khi filter lại
+    private java.util.function.BiConsumer<
+        java.util.List<application.components.HistoryPanel.HistoryEntry>,
+        java.util.List<application.components.HistoryPanel.HistoryEntry>> historyPanelCallback;
 
     public ProfilePanel(UIState state) {
         this.state = state;
@@ -91,6 +96,9 @@ public class ProfilePanel extends StackPane {
         });
         
         // Lắng nghe callback để nhận lịch sử và lưu vào allHistory
+        // Lưu ý: HistoryPanel cũng set callback này, nên cần lưu callback cũ trước
+        this.historyPanelCallback = state.getGameHistoryUpdateCallback();
+        
         state.setGameHistoryUpdateCallback((peopleHistory, aiHistory) -> {
             // Lưu tất cả lịch sử (people + AI) vào allHistory
             allHistory.clear();
@@ -99,8 +107,9 @@ public class ProfilePanel extends StackPane {
             System.out.println("[ProfilePanel] Received game history - total: " + allHistory.size() + 
                 " (people: " + peopleHistory.size() + ", AI: " + aiHistory.size() + ")");
             
-            // Filter và update HistoryPanel theo mode hiện tại
-            filterAndUpdateHistory();
+            // Filter data theo mode hiện tại và update HistoryPanel
+            // Không gọi filterAndUpdateHistory() để tránh vòng lặp, mà filter trực tiếp và gọi callback cũ
+            updateHistoryPanelWithFilteredData(historyPanelCallback);
         });
         
         // Lắng nghe thay đổi selectedTimeControl để filter lại lịch sử
@@ -521,6 +530,27 @@ public class ProfilePanel extends StackPane {
             return;
         }
         
+        // Gọi method để filter và update HistoryPanel (sử dụng callback cũ để tránh vòng lặp)
+        updateHistoryPanelWithFilteredData(historyPanelCallback);
+    }
+    
+    /**
+     * Filter data theo mode hiện tại và update HistoryPanel thông qua callback.
+     * @param callback Callback để update HistoryPanel (có thể null)
+     */
+    private void updateHistoryPanelWithFilteredData(
+            java.util.function.BiConsumer<
+                java.util.List<application.components.HistoryPanel.HistoryEntry>,
+                java.util.List<application.components.HistoryPanel.HistoryEntry>> callback) {
+        
+        if (allHistory.isEmpty()) {
+            System.out.println("[ProfilePanel] No history to filter");
+            if (callback != null) {
+                callback.accept(new java.util.ArrayList<>(), new java.util.ArrayList<>());
+            }
+            return;
+        }
+        
         String mode = selectedTimeControl.get();
         System.out.println("[ProfilePanel] Filtering history by mode: " + mode);
         
@@ -557,9 +587,9 @@ public class ProfilePanel extends StackPane {
         System.out.println("[ProfilePanel] Filtered history - people: " + filteredPeopleHistory.size() + 
             ", AI: " + filteredAiHistory.size());
         
-        // Update HistoryPanel thông qua UIState callback
-        if (state.getGameHistoryUpdateCallback() != null) {
-            state.getGameHistoryUpdateCallback().accept(filteredPeopleHistory, filteredAiHistory);
+        // Update HistoryPanel thông qua callback (nếu có)
+        if (callback != null) {
+            callback.accept(filteredPeopleHistory, filteredAiHistory);
         }
     }
 }
