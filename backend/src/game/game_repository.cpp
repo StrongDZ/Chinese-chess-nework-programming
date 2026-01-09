@@ -696,15 +696,19 @@ vector<Game> GameRepository::findByUser(const string &username,
 
 bool GameRepository::updatePlayerStats(const string &username,
                                        const string &timeControl, int newRating,
+                                       double newRD, double newVolatility,
                                        const string &resultField) {
   try {
     auto db = mongoClient.getDatabase();
     auto stats = db["player_stats"];
 
     // Use upsert to create record if it doesn't exist
+    // Now also update RD and volatility (Glicko-2)
     auto updateDoc = document{}
                      << "$set" << open_document 
                        << "rating" << newRating
+                       << "rd" << newRD
+                       << "volatility" << newVolatility
                        << "username" << username
                        << "time_control" << timeControl
                      << close_document 
@@ -716,8 +720,6 @@ bool GameRepository::updatePlayerStats(const string &username,
                      << "$min" << open_document << "lowest_rating" << newRating
                      << close_document
                      << "$setOnInsert" << open_document
-                       << "rd" << 350.0
-                       << "volatility" << 0.06
                        << "win_streak" << 0
                        << "longest_win_streak" << 0
                      << close_document
@@ -739,25 +741,44 @@ bool GameRepository::updatePlayerStats(const string &username,
   }
 }
 
-int GameRepository::getPlayerRating(const string &username,
-                                    const string &timeControl) {
+GameRepository::PlayerGlickoStats GameRepository::getPlayerGlickoStats(
+    const string &username, const string &timeControl) {
+  PlayerGlickoStats stats;
+  // Default values for new players (Glicko-2 defaults)
+  stats.rating = 1500;
+  stats.rd = 350.0;
+  stats.volatility = 0.06;
+
   try {
     auto db = mongoClient.getDatabase();
-    auto stats = db["player_stats"];
+    auto statsCol = db["player_stats"];
 
     auto result =
-        stats.find_one(document{} << "username" << username << "time_control"
-                                  << timeControl << finalize);
+        statsCol.find_one(document{} << "username" << username << "time_control"
+                                     << timeControl << finalize);
 
-    if (!result) {
-      return 1200; // Default rating
+    if (result) {
+      auto view = result->view();
+      if (view["rating"]) {
+        stats.rating = view["rating"].get_int32().value;
+      }
+      if (view["rd"]) {
+        stats.rd = view["rd"].get_double().value;
+      }
+      if (view["volatility"]) {
+        stats.volatility = view["volatility"].get_double().value;
+      }
     }
-
-    return result->view()["rating"].get_int32().value;
-
-  } catch (const exception &) {
-    return 1200;
+  } catch (const exception &e) {
+    cerr << "[getPlayerGlickoStats] Error: " << e.what() << endl;
   }
+
+  return stats;
+}
+
+int GameRepository::getPlayerRating(const string &username,
+                                    const string &timeControl) {
+  return getPlayerGlickoStats(username, timeControl).rating;
 }
 
 
