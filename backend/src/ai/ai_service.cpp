@@ -1,5 +1,6 @@
 #include "../../include/ai/ai_service.h"
 #include <array>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <errno.h>
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <vector>
 #include <sys/wait.h>
 #include <sys/select.h>
 #include <unistd.h>
@@ -446,10 +448,16 @@ string AIService::executePythonAI(const string &xfen,
   int flags = fcntl(stdoutFd, F_GETFL, 0);
   fcntl(stdoutFd, F_SETFL, flags | O_NONBLOCK);
   
-  // Wait for response with timeout (30s for hard, 20s for medium, 10s for easy)
-  int timeoutSeconds = (difficulty == "hard") ? 30 : (difficulty == "medium") ? 20 : 10;
+  // Wait for response with timeout (tăng timeout để đảm bảo đủ thời gian cho AI tính toán)
+  // Python AI timeout: easy=5s, medium=10s, hard=17s
+  // Backend timeout nên lớn hơn Python timeout + buffer
+  int timeoutSeconds = (difficulty == "hard") ? 25 : (difficulty == "medium") ? 15 : 8;
   int attempts = 0;
   bool gotResponse = false;
+  
+  // Đọc nhiều dòng để tránh đọc nhầm dòng log (nếu có)
+  // Python wrapper chỉ gửi một dòng kết quả, nhưng có thể có dòng trống hoặc log
+  vector<string> responseLines;
   
   while (attempts < timeoutSeconds * 10) {  // Check every 100ms
     fd_set readfds;
@@ -465,17 +473,45 @@ string AIService::executePythonAI(const string &xfen,
     if (selectResult > 0 && FD_ISSET(stdoutFd, &readfds)) {
       // Data available, read it
       if (fgets(buffer, sizeof(buffer), aiProcessStdout) != nullptr) {
-        result = string(buffer);
+        string line(buffer);
         // Trim whitespace
-        while (!result.empty() && (result.back() == '\n' || result.back() == '\r' || 
-                                   result.back() == ' ' || result.back() == '\t')) {
-          result.pop_back();
+        while (!line.empty() && (line.back() == '\n' || line.back() == '\r' || 
+                                 line.back() == ' ' || line.back() == '\t')) {
+          line.pop_back();
         }
-        gotResponse = true;
-        break;
+        
+        if (!line.empty()) {
+          responseLines.push_back(line);
+          cout << "[AIService::executePythonAI] Received line: " << line << endl;
+          
+          // Kiểm tra xem có phải là kết quả hợp lệ không (UCI move hoặc "error")
+          // UCI move: 4 ký tự (a0a1) hoặc "error"
+          if (line.length() == 4 && isalpha(line[0]) && isdigit(line[1]) && 
+              isalpha(line[2]) && isdigit(line[3])) {
+            // Valid UCI move
+            result = line;
+            gotResponse = true;
+            break;
+          } else if (line == "error") {
+            // Error response
+            result = "error";
+            gotResponse = true;
+            break;
+          }
+          // Nếu không phải kết quả hợp lệ, tiếp tục đọc (có thể là log hoặc dòng trống)
+        }
       } else {
-        // EOF or error
-        cerr << "[AIService::executePythonAI] EOF or error reading response" << endl;
+        // EOF or error - nếu đã có response lines, dùng dòng cuối cùng
+        if (!responseLines.empty()) {
+          result = responseLines.back();
+          // Kiểm tra xem có phải kết quả hợp lệ không
+          if (result.length() == 4 && isalpha(result[0]) && isdigit(result[1]) && 
+              isalpha(result[2]) && isdigit(result[3])) {
+            gotResponse = true;
+          } else if (result == "error") {
+            gotResponse = true;
+          }
+        }
         break;
       }
     } else if (selectResult < 0 && errno != EINTR) {
@@ -493,6 +529,18 @@ string AIService::executePythonAI(const string &xfen,
     }
     
     attempts++;
+  }
+  
+  // Nếu chưa có response hợp lệ nhưng có response lines, thử dùng dòng cuối
+  if (!gotResponse && !responseLines.empty()) {
+    result = responseLines.back();
+    if (result.length() == 4 && isalpha(result[0]) && isdigit(result[1]) && 
+        isalpha(result[2]) && isdigit(result[3])) {
+      gotResponse = true;
+      cout << "[AIService::executePythonAI] Using last response line as result: " << result << endl;
+    } else if (result == "error") {
+      gotResponse = true;
+    }
   }
   
   // Restore blocking mode

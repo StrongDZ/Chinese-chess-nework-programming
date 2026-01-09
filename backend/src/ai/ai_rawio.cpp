@@ -425,8 +425,21 @@ void handleAIQuit(const ParsedMessage & /*pm*/, int fd) {
   lock_guard<mutex> lock(g_clients_mutex);
   auto &sender = g_clients[fd];
 
-  if (!sender.in_game) {
+  // Nếu không còn trong game và game_id cũng rỗng, có thể đã xử lý AI_QUIT rồi
+  // Chỉ gửi ERROR nếu thực sự chưa từng là AI game
+  if (!sender.in_game && sender.game_id.empty() && sender.opponent_fd != -1) {
+    // Không phải AI game và không trong game → ERROR
     sendMessage(fd, MessageType::ERROR, ErrorPayload{"You are not in a game"});
+    return;
+  }
+
+  // Nếu đã xử lý AI_QUIT rồi (in_game = false, game_id = "", opponent_fd = -1)
+  // thì chỉ cần gửi lại INFO, không cần xử lý lại
+  if (!sender.in_game && sender.game_id.empty() && sender.opponent_fd == -1) {
+    cout << "[handleAIQuit] AI_QUIT already processed, sending confirmation" << endl;
+    sendMessage(fd, MessageType::INFO,
+                InfoPayload{nlohmann::json{
+                    {"ai_quit", true}, {"message", "Game quit successfully"}}});
     return;
   }
 
