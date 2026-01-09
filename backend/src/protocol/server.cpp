@@ -445,6 +445,12 @@ void processMessage(const ParsedMessage &pm, int fd) {
   case MessageType::CUSTOM_GAME:
     handleCustomGame(pm, fd);
     break;
+  case MessageType::SUGGEST_MOVE:
+    handleSuggestMove(pm, fd);
+    break;
+  case MessageType::AI_QUIT:
+    handleAIQuit(pm, fd);
+    break;
   case MessageType::USER_STATS:
     handleUserStats(pm, fd);
     break;
@@ -645,9 +651,6 @@ void processMessage(const ParsedMessage &pm, int fd) {
                 InfoPayload{nlohmann::json{{"challenge_cancelled", true}}});
     break;
   }
-  case MessageType::SUGGEST_MOVE:
-    handleSuggestMove(pm, fd);
-    break;
   case MessageType::INFO: {
     // Handle INFO messages with special actions (e.g., list_friends)
     if (pm.payload.has_value() && holds_alternative<InfoPayload>(*pm.payload)) {

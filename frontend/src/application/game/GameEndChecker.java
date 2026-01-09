@@ -50,6 +50,31 @@ public class GameEndChecker {
      * @return GameEndResult with status and reason
      */
     public GameEndResult checkGameEnd(char[][] board, boolean isRedTurn) {
+        // 0. Check if King is captured (highest priority)
+        boolean hasRedKing = false;
+        boolean hasBlackKing = false;
+        
+        for (int row = 0; row < BOARD_ROWS; row++) {
+            for (int col = 0; col < BOARD_COLS; col++) {
+                char piece = board[row][col];
+                if (piece == 'K') {
+                    hasRedKing = true;
+                } else if (piece == 'k') {
+                    hasBlackKing = true;
+                }
+            }
+        }
+        
+        // If a King is missing, game ends immediately
+        if (!hasRedKing) {
+            return new GameEndResult(true, "black", "king_captured", 
+                "Red King was captured");
+        }
+        if (!hasBlackKing) {
+            return new GameEndResult(true, "red", "king_captured", 
+                "Black King was captured");
+        }
+        
         // 1. Check for check
         boolean redInCheck = isKingInCheck(board, true);
         boolean blackInCheck = isKingInCheck(board, false);

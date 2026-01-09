@@ -22,6 +22,9 @@ public class ChessBoardManager {
     private final UIState state;
     private final IGamePanel gamePanel;
     
+    // Reference to pieces container để có thể highlight suggest move
+    private Pane piecesContainerRef = null;
+    
     // Callbacks để giao tiếp với các manager khác
     private java.util.function.BiConsumer<String, String> onPieceCaptured = null;  // (color, pieceType)
     private java.util.function.Consumer<String> onMoveAdded = null;  // (moveText)
@@ -131,6 +134,7 @@ public class ChessBoardManager {
         // Pane để chứa các highlight rectangles
         // Đặt ở cuối để nằm trên các quân cờ
         final Pane highlightLayer = new Pane();
+        highlightLayer.setId("highlightLayer"); // Đặt ID để dễ tìm
         highlightLayer.setPrefSize(923, 923);
         highlightLayer.setMouseTransparent(true); // Không chặn mouse events
         
@@ -461,6 +465,9 @@ public class ChessBoardManager {
                         }
                     }
                     
+                    // Xóa suggest highlights khi user thực hiện move
+                    clearSuggestHighlights();
+                    
                     // GỬI MOVE MESSAGE ĐẾN SERVER TRƯỚC KHI CẬP NHẬT LOCAL
                     if (onMoveMade != null) {
                         onMoveMade.onMove(fromRow, fromCol, toRow, toCol, pieceInfo.pieceType, capturedPieceType);
@@ -780,7 +787,190 @@ public class ChessBoardManager {
         container.getChildren().add(0, clickLayer); // Thêm vào đầu để ở dưới cùng
         container.getChildren().add(highlightLayer); // Highlight layer ở trên cùng
         
+        // Lưu reference để có thể highlight suggest move
+        this.piecesContainerRef = container;
+        
         return container;
+    }
+    
+    /**
+     * Highlight suggest move: highlight quân cờ được suggest và chấm vàng ở nước đi
+     * @param fromRow Frontend row (0-9)
+     * @param fromCol Frontend col (0-8)
+     * @param toRow Frontend row (0-9)
+     * @param toCol Frontend col (0-8)
+     */
+    public void highlightSuggestMove(int fromRow, int fromCol, int toRow, int toCol) {
+        // Tìm highlight layer trong piecesContainer
+        if (piecesContainerRef == null) {
+            System.err.println("[ChessBoardManager] piecesContainerRef is null, cannot highlight suggest move");
+            return;
+        }
+        
+        // Tìm highlight layer bằng ID
+        Pane highlightLayer = null;
+        for (javafx.scene.Node node : piecesContainerRef.getChildren()) {
+            if (node instanceof Pane) {
+                Pane pane = (Pane) node;
+                if ("highlightLayer".equals(pane.getId())) {
+                    highlightLayer = pane;
+                    break;
+                }
+            }
+        }
+        
+        if (highlightLayer == null) {
+            System.err.println("[ChessBoardManager] Highlight layer not found");
+            // Debug: in ra tất cả children
+            System.err.println("[ChessBoardManager] Available children in piecesContainer:");
+            for (javafx.scene.Node node : piecesContainerRef.getChildren()) {
+                System.err.println("  - " + node.getClass().getSimpleName() + 
+                    (node instanceof Pane ? " (id=" + ((Pane)node).getId() + ")" : ""));
+            }
+            return;
+        }
+        
+        // Xóa highlights cũ (chỉ xóa suggest highlights, giữ lại valid moves nếu có)
+        java.util.List<javafx.scene.Node> toRemove = new java.util.ArrayList<>();
+        for (javafx.scene.Node node : highlightLayer.getChildren()) {
+            if (node.getUserData() != null && "suggest".equals(node.getUserData())) {
+                toRemove.add(node);
+            }
+        }
+        highlightLayer.getChildren().removeAll(toRemove);
+        
+        // Tìm và highlight quân cờ được suggest
+        ImageView suggestedPiece = null;
+        for (javafx.scene.Node node : piecesContainerRef.getChildren()) {
+            if (node instanceof ImageView) {
+                ImageView imgView = (ImageView) node;
+                if (imgView.getUserData() instanceof PieceInfo) {
+                    PieceInfo info = (PieceInfo) imgView.getUserData();
+                    if (info.row == fromRow && info.col == fromCol) {
+                        suggestedPiece = imgView;
+                        // Highlight quân cờ với màu vàng đậm
+                        DropShadow suggestShadow = new DropShadow();
+                        suggestShadow.setColor(Color.web("#FFD700", 1.0)); // Màu vàng đậm
+                        suggestShadow.setRadius(20);
+                        suggestShadow.setOffsetX(0);
+                        suggestShadow.setOffsetY(0);
+                        imgView.setEffect(suggestShadow);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Tính toán vị trí giao điểm (giống như trong createChessPieces)
+        double boardSize = 923.0;
+        double startX = 45.0;
+        double startY = 45.0;
+        double endX = boardSize - 45.0;
+        double endY = boardSize - 45.0;
+        double intersectionSpacingX = (endX - startX) / 8.0;
+        double intersectionSpacingY = (endY - startY) / 9.0;
+        
+        // Tính vị trí giao điểm cho to
+        double toIntersectionX = startX + toCol * intersectionSpacingX;
+        double toIntersectionY = startY + toRow * intersectionSpacingY;
+        
+        // Tính offset (giống như trong createChessPieces)
+        double offsetX = 0;
+        double offsetY = 0;
+        if (suggestedPiece != null && suggestedPiece.getUserData() instanceof PieceInfo) {
+            PieceInfo pieceInfo = (PieceInfo) suggestedPiece.getUserData();
+            if ("red".equals(pieceInfo.color)) {
+                offsetY = -10;
+                if (toCol >= 5) {
+                    offsetX = 5;
+                } else {
+                    offsetX = -4;
+                }
+            } else if ("black".equals(pieceInfo.color)) {
+                if (toCol < 5) {
+                    offsetX = -5;
+                } else {
+                    offsetX = 9;
+                }
+            }
+        }
+        
+        // Vẽ chấm vàng ở nước đi được suggest
+        Circle suggestDot = new Circle();
+        double dotRadius = Math.min(intersectionSpacingX, intersectionSpacingY) * 0.2; // 20% kích thước intersection spacing
+        suggestDot.setRadius(dotRadius);
+        suggestDot.setFill(Color.web("#FFD700")); // Màu vàng
+        suggestDot.setStroke(Color.web("#FFA500")); // Viền cam đậm
+        suggestDot.setStrokeWidth(3);
+        
+        // Đặt vị trí tại giao điểm với offset
+        double x = toIntersectionX + offsetX;
+        double y = toIntersectionY + offsetY;
+        suggestDot.setLayoutX(x);
+        suggestDot.setLayoutY(y);
+        suggestDot.setUserData("suggest"); // Đánh dấu là suggest highlight
+        
+        highlightLayer.getChildren().add(suggestDot);
+        
+        System.out.println("[ChessBoardManager] Highlighted suggest move: from(" + fromRow + "," + fromCol + 
+            ") to(" + toRow + "," + toCol + ")");
+    }
+    
+    /**
+     * Xóa tất cả suggest highlights (chấm vàng và shadow trên quân cờ)
+     */
+    public void clearSuggestHighlights() {
+        if (piecesContainerRef == null) {
+            return;
+        }
+        
+        // Tìm highlight layer
+        Pane highlightLayer = null;
+        for (javafx.scene.Node node : piecesContainerRef.getChildren()) {
+            if (node instanceof Pane) {
+                Pane pane = (Pane) node;
+                if ("highlightLayer".equals(pane.getId())) {
+                    highlightLayer = pane;
+                    break;
+                }
+            }
+        }
+        
+        if (highlightLayer != null) {
+            // Xóa tất cả suggest highlights (chấm vàng)
+            java.util.List<javafx.scene.Node> toRemove = new java.util.ArrayList<>();
+            for (javafx.scene.Node node : highlightLayer.getChildren()) {
+                if (node.getUserData() != null && "suggest".equals(node.getUserData())) {
+                    toRemove.add(node);
+                }
+            }
+            highlightLayer.getChildren().removeAll(toRemove);
+        }
+        
+        // Xóa shadow effect trên tất cả quân cờ (khôi phục về shadow bình thường)
+        for (javafx.scene.Node node : piecesContainerRef.getChildren()) {
+            if (node instanceof ImageView) {
+                ImageView imgView = (ImageView) node;
+                if (imgView.getEffect() != null && imgView.getEffect() instanceof DropShadow) {
+                    DropShadow shadow = (DropShadow) imgView.getEffect();
+                    // Kiểm tra nếu là suggest shadow (màu vàng #FFD700)
+                    if (shadow.getColor().equals(Color.web("#FFD700", 1.0)) && 
+                        shadow.getRadius() == 20 && 
+                        shadow.getOffsetX() == 0 && 
+                        shadow.getOffsetY() == 0) {
+                        // Khôi phục shadow bình thường
+                        DropShadow normalShadow = new DropShadow();
+                        normalShadow.setColor(Color.color(0, 0, 0, 0.5));
+                        normalShadow.setRadius(8);
+                        normalShadow.setOffsetX(3);
+                        normalShadow.setOffsetY(3);
+                        imgView.setEffect(normalShadow);
+                    }
+                }
+            }
+        }
+        
+        System.out.println("[ChessBoardManager] Cleared suggest highlights");
     }
     
     /**

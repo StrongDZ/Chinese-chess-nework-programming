@@ -201,6 +201,13 @@ public class GameSender {
     }
     
     /**
+     * Quit AI game (không tính là resign, không mất điểm).
+     */
+    public void quitAIGame() throws IOException {
+        socketClient.send(MessageType.AI_QUIT, "{}");
+    }
+    
+    /**
      * Request quick matching to find an opponent.
      * @param mode Game mode: "classical" or "blitz"
      * @param timeLimit Time limit in seconds (0 for unlimited)

@@ -130,6 +130,13 @@ public class InfoHandler implements MessageHandler {
                 return;
             }
             
+            // Check if this is a suggest move response
+            if (response.has("action") && 
+                "suggest_move".equals(response.get("action").getAsString())) {
+                handleSuggestMove(response);
+                return;
+            }
+            
             // Check if this is a replay data response (from REPLAY_REQUEST)
             // Response format: { "status": "success", "game_type": "archived", "game": { ... moves ... } }
             if (response.has("game") && response.has("game_type")) {
@@ -288,56 +295,63 @@ public class InfoHandler implements MessageHandler {
                         totalDraws += stat.get("draws").getAsInt();
                     }
                     
-                    // Update elo for each time_control mode
-                    if (stat.has("rating") && stat.has("time_control")) {
-                        int rating = stat.get("rating").getAsInt();
-                        String timeControl = stat.get("time_control").getAsString();
-                        String currentUsername = uiState.getUsername();
-                        String opponentUsername = uiState.getOpponentUsername();
-                        
-                        // Lấy username từ stat object (có thể khác với username ở đầu loop)
-                        String statUsername = stat.has("username") ? stat.get("username").getAsString() : username;
-                        
-                        boolean isCurrentUser = statUsername != null && statUsername.equals(currentUsername);
-                        boolean isOpponent = statUsername != null && statUsername.equals(opponentUsername);
-                        
-                        System.out.println("[InfoHandler] Processing stat - statUsername=" + statUsername + 
-                            ", currentUsername=" + currentUsername + 
-                            ", timeControl=" + timeControl + 
-                            ", rating=" + rating + 
-                            ", isCurrentUser=" + isCurrentUser);
-                        
-                        if (isCurrentUser) {
-                            System.out.println("[InfoHandler] Setting elo for mode=" + timeControl + ", rating=" + rating);
-                            uiState.setElo(timeControl, rating);
-                            System.out.println("[InfoHandler] Elo set - classical=" + uiState.getClassicalElo() + ", blitz=" + uiState.getBlitzElo());
-                        } else if (isOpponent) {
-                            // Opponent elo is still single value (not mode-specific for now)
-                            uiState.setOpponentElo(rating);
-                        } else {
-                            // Check if this is a friend (not current user, not opponent)
-                            // Update friend elo in PlayWithFriendPanel
-                            if (statUsername != null && uiState.getFriendsList().contains(statUsername)) {
-                                System.out.println("[InfoHandler] Updating elo for friend: " + statUsername + ", mode: " + timeControl + ", elo: " + rating);
-                                uiState.updateFriendElo(statUsername, timeControl, rating);
-                            }
-                        }
+                    // Get time_control from stat (default to "classical" if not present)
+                    String timeControl = "classical";
+                    if (stat.has("time_control") && stat.get("time_control").isJsonPrimitive()) {
+                        timeControl = stat.get("time_control").getAsString();
                     }
-                }
-                
-                // Update UIState with aggregated stats
-                if (username != null) {
+                    
+                    // Lấy username từ stat object (có thể khác với username ở đầu loop)
+                    String statUsername = stat.has("username") ? stat.get("username").getAsString() : username;
                     String currentUsername = uiState.getUsername();
                     String opponentUsername = uiState.getOpponentUsername();
-                    boolean isCurrentUser = username.equals(currentUsername);
-                    boolean isOpponent = username.equals(opponentUsername);
                     
+                    boolean isCurrentUser = statUsername != null && statUsername.equals(currentUsername);
+                    boolean isOpponent = statUsername != null && statUsername.equals(opponentUsername);
+                    
+                    // Update elo for each time_control mode
+                    if (stat.has("rating") && isCurrentUser) {
+                        int rating = stat.get("rating").getAsInt();
+                        System.out.println("[InfoHandler] Setting elo for mode=" + timeControl + ", rating=" + rating);
+                        uiState.setElo(timeControl, rating);
+                        System.out.println("[InfoHandler] Elo set - classical=" + uiState.getClassicalElo() + ", blitz=" + uiState.getBlitzElo());
+                    } else if (stat.has("rating") && isOpponent) {
+                        // Opponent elo is still single value (not mode-specific for now)
+                        int rating = stat.get("rating").getAsInt();
+                        uiState.setOpponentElo(rating);
+                    } else if (stat.has("rating")) {
+                        // Check if this is a friend (not current user, not opponent)
+                        // Update friend elo in PlayWithFriendPanel
+                        int rating = stat.get("rating").getAsInt();
+                        if (statUsername != null && uiState.getFriendsList().contains(statUsername)) {
+                            System.out.println("[InfoHandler] Updating elo for friend: " + statUsername + ", mode: " + timeControl + ", elo: " + rating);
+                            uiState.updateFriendElo(statUsername, timeControl, rating);
+                        }
+                    }
+                    
+                    // Update statistics for each time_control mode (only for current user)
                     if (isCurrentUser) {
-                        uiState.setTotalMatches(totalGames);
-                        uiState.setWinMatches(totalWins);
-                        if (totalGames > 0) {
-                            double winRate = (double) totalWins / totalGames * 100.0;
-                            uiState.setWinRate(winRate);
+                        // Update total matches
+                        if (stat.has("total_games")) {
+                            int totalGamesForMode = stat.get("total_games").getAsInt();
+                            uiState.setTotalMatches(timeControl, totalGamesForMode);
+                            System.out.println("[InfoHandler] Setting totalMatches for mode=" + timeControl + ", totalGames=" + totalGamesForMode);
+                        }
+                        // Update win matches
+                        if (stat.has("wins")) {
+                            int winsForMode = stat.get("wins").getAsInt();
+                            uiState.setWinMatches(timeControl, winsForMode);
+                            System.out.println("[InfoHandler] Setting winMatches for mode=" + timeControl + ", wins=" + winsForMode);
+                        }
+                        // Update winrate
+                        if (stat.has("wins") && stat.has("total_games")) {
+                            int winsForMode = stat.get("wins").getAsInt();
+                            int totalForMode = stat.get("total_games").getAsInt();
+                            if (totalForMode > 0) {
+                                double winRate = (double) winsForMode / totalForMode * 100.0;
+                                uiState.setWinRate(timeControl, winRate);
+                                System.out.println("[InfoHandler] Setting winrate for mode=" + timeControl + ", winRate=" + winRate);
+                            }
                         }
                     }
                 }
@@ -396,17 +410,25 @@ public class InfoHandler implements MessageHandler {
         // Update statistics (only for current user)
         if (isCurrentUser) {
             if (stat.has("total_games")) {
-                uiState.setTotalMatches(stat.get("total_games").getAsInt());
+                int totalGames = stat.get("total_games").getAsInt();
+                // Set total matches theo time control (classical/blitz)
+                uiState.setTotalMatches(timeControl, totalGames);
+                System.out.println("[InfoHandler] processStatObject - Set totalMatches for mode=" + timeControl + ", totalGames=" + totalGames);
             }
             if (stat.has("wins")) {
-                uiState.setWinMatches(stat.get("wins").getAsInt());
+                int wins = stat.get("wins").getAsInt();
+                // Set win matches theo time control (classical/blitz)
+                uiState.setWinMatches(timeControl, wins);
+                System.out.println("[InfoHandler] processStatObject - Set winMatches for mode=" + timeControl + ", wins=" + wins);
             }
             if (stat.has("wins") && stat.has("total_games")) {
                 int wins = stat.get("wins").getAsInt();
                 int total = stat.get("total_games").getAsInt();
                 if (total > 0) {
                     double winRate = (double) wins / total * 100.0;
-                    uiState.setWinRate(winRate);
+                    // Set winrate theo time control (classical/blitz)
+                    uiState.setWinRate(timeControl, winRate);
+                    System.out.println("[InfoHandler] processStatObject - Set winrate for mode=" + timeControl + ", winRate=" + winRate);
                 }
             }
         }
@@ -915,6 +937,63 @@ public class InfoHandler implements MessageHandler {
             
         } catch (Exception e) {
             System.err.println("[InfoHandler] Error parsing replay data: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Handle suggest move response from INFO message
+     * Response format: { "action": "suggest_move", "suggested_move": { "piece": "...", "from": { "row": ..., "col": ... }, "to": { "row": ..., "col": ... } } }
+     */
+    private void handleSuggestMove(JsonObject response) {
+        try {
+            System.out.println("[InfoHandler] Received suggest move response");
+            
+            if (!response.has("suggested_move")) {
+                System.err.println("[InfoHandler] Suggest move response missing 'suggested_move' field");
+                return;
+            }
+            
+            JsonObject suggestedMove = response.getAsJsonObject("suggested_move");
+            
+            // Parse suggested move coordinates from server
+            // Server format: {"piece":"...", "from":{"row":..., "col":...}, "to":{"row":..., "col":...}}
+            JsonObject from = suggestedMove.getAsJsonObject("from");
+            JsonObject to = suggestedMove.getAsJsonObject("to");
+            
+            int backendFromRow = from.get("row").getAsInt();
+            int fromCol = from.get("col").getAsInt();
+            int backendToRow = to.get("row").getAsInt();
+            int toCol = to.get("col").getAsInt();
+            
+            String piece = suggestedMove.has("piece") ? suggestedMove.get("piece").getAsString() : "";
+            
+            System.out.println("[InfoHandler] Received suggest move: " + piece + 
+                " from BE(row=" + backendFromRow + ",col=" + fromCol + 
+                ") to BE(row=" + backendToRow + ",col=" + toCol + ")");
+            
+            // Convert backend coordinates to frontend coordinates
+            // Backend: row 0 = top (đen), row 9 = bottom (đỏ)
+            // Frontend: row 0 = top (đỏ), row 9 = bottom (đen)
+            // Công thức: frontendRow = 9 - backendRow
+            int frontendFromRow = 9 - backendFromRow;
+            int frontendToRow = 9 - backendToRow;
+            
+            // Trigger highlight suggest move thông qua UIState
+            javafx.application.Platform.runLater(() -> {
+                // Store suggest move info in UIState để GamePanel có thể access
+                uiState.setGameActionTrigger("");
+                uiState.setGameActionResult("");
+                javafx.application.Platform.runLater(() -> {
+                    // Format: "fromRow_fromCol_toRow_toCol"
+                    String suggestMoveInfo = String.format("%d_%d_%d_%d", frontendFromRow, fromCol, frontendToRow, toCol);
+                    uiState.setGameActionResult(suggestMoveInfo);
+                    uiState.setGameActionTrigger("suggest_move");
+                    System.out.println("[InfoHandler] Suggest move trigger set: " + suggestMoveInfo);
+                });
+            });
+        } catch (Exception e) {
+            System.err.println("[InfoHandler] Error parsing suggest move: " + e.getMessage());
             e.printStackTrace();
         }
     }

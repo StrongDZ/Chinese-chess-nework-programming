@@ -161,17 +161,83 @@ void handleSuggestMove(const ParsedMessage &pm, int fd) {
   lock_guard<mutex> lock(g_clients_mutex);
   auto &sender = g_clients[fd];
 
+  if (sender.username.empty()) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Please LOGIN before requesting move suggestion"});
+    return;
+  }
+
   if (!sender.in_game) {
     sendMessage(fd, MessageType::ERROR, ErrorPayload{"You are not in a game"});
     return;
   }
 
-  // TODO: Implement via Python API
-  sendMessage(
-      fd, MessageType::ERROR,
-      ErrorPayload{
-          "SUGGEST_MOVE not implemented - will be available via Python API"});
-  return;
+  // Check if it's an AI game
+  if (sender.opponent_fd != -1) {
+    sendMessage(
+        fd, MessageType::ERROR,
+        ErrorPayload{"Move suggestions are only available in AI games"});
+    return;
+  }
+
+  // Get current game state
+  if (sender.game_id.empty()) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"No active game found"});
+    return;
+  }
+
+  if (g_ai_controller == nullptr || g_game_service == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"AI service is not available"});
+    return;
+  }
+
+  // Get current game state
+  auto gameResult = g_game_service->getGame(sender.game_id);
+  if (!gameResult.success || !gameResult.game.has_value()) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Game not found"});
+    return;
+  }
+
+  const auto &game = gameResult.game.value();
+
+  // Check if game is still in progress
+  if (game.status != "in_progress") {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Game is not in progress"});
+    return;
+  }
+
+  // Call AI controller to get move suggestion
+  nlohmann::json request;
+  request["game_id"] = sender.game_id;
+  request["xfen"] = game.xfen;
+
+  nlohmann::json response = g_ai_controller->handleSuggestMove(request);
+
+  if (response["status"] != "success") {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{response.value("message",
+                                            "Failed to get move suggestion")});
+    return;
+  }
+
+  // Extract suggested move from response
+  if (!response.contains("suggested_move")) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"No move suggestion in response"});
+    return;
+  }
+
+  // Send suggestion via INFO message
+  nlohmann::json infoData;
+  infoData["action"] = "suggest_move";
+  infoData["suggested_move"] = response["suggested_move"];
+
+  InfoPayload infoPayload;
+  infoPayload.data = infoData;
+
+  sendMessage(fd, MessageType::INFO, infoPayload);
 
   // TODO: Check AI engine availability via Python API
   // if (!g_ai_engine.isReady()) {
@@ -314,12 +380,12 @@ void handleAIMove(int player_fd, const string &xfen) {
   // NOTE: AIMove uses: fromX=row, fromY=col
   // But makeMove expects: fromX=col, fromY=row
   // So we need to swap: makeMove(..., fromY, fromX, toY, toX, ...)
-  auto moveResult = g_game_service->makeMove(
-      aiPlayer, player.game_id, aiMoveResult.move->fromY,  // col
-      aiMoveResult.move->fromX,                             // row
-      aiMoveResult.move->toY,                               // col
-      aiMoveResult.move->toX,                               // row
-      "", "", "", "", 0);
+  auto moveResult = g_game_service->makeMove(aiPlayer, player.game_id,
+                                             aiMoveResult.move->fromY, // col
+                                             aiMoveResult.move->fromX, // row
+                                             aiMoveResult.move->toY,   // col
+                                             aiMoveResult.move->toX,   // row
+                                             "", "", "", "", 0);
 
   if (!moveResult.success) {
     cerr << "[handleAIMove] Failed to apply AI move: " << moveResult.message
@@ -352,5 +418,67 @@ void handleAIMove(int player_fd, const string &xfen) {
     // TODO: Send GAME_END message if needed
     cout << "[handleAIMove] Game ended: " << moveResult.game->status
          << " result=" << moveResult.game->result << endl;
+  }
+}
+
+void handleAIQuit(const ParsedMessage & /*pm*/, int fd) {
+  lock_guard<mutex> lock(g_clients_mutex);
+  auto &sender = g_clients[fd];
+
+  if (!sender.in_game) {
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"You are not in a game"});
+    return;
+  }
+
+  // Chỉ cho phép quit AI game (opponent_fd == -1)
+  if (sender.opponent_fd != -1) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"AI_QUIT is only available in AI games"});
+    return;
+  }
+
+  if (g_game_service == nullptr) {
+    sendMessage(fd, MessageType::ERROR,
+                ErrorPayload{"Game service not available"});
+    return;
+  }
+
+  string game_id = sender.game_id;
+  string username = sender.username;
+
+  cout << "[handleAIQuit] Player " << username << " (fd=" << fd
+       << ") quits AI game, game_id=" << game_id << endl;
+
+  // Xóa game khỏi active games (không tính là resign, không cập nhật điểm)
+  // Chỉ đơn giản là xóa game và reset player state
+  try {
+    // Reset player state
+    sender.in_game = false;
+    sender.opponent_fd = -1;
+    sender.game_id = "";
+    sender.current_turn = "";
+    sender.is_red = false;
+
+    // Xóa game từ database (không tính điểm, không archive)
+    if (g_game_service != nullptr && !game_id.empty()) {
+      bool deleted = g_game_service->deleteGame(game_id);
+      if (deleted) {
+        cout << "[handleAIQuit] Deleted game " << game_id
+             << " from active_games (not archived, no rating change)" << endl;
+      } else {
+        cout << "[handleAIQuit] Game " << game_id
+             << " not found or already deleted" << endl;
+      }
+    }
+
+    // Gửi thông báo thành công
+    sendMessage(fd, MessageType::INFO,
+                InfoPayload{nlohmann::json{
+                    {"ai_quit", true}, {"message", "Game quit successfully"}}});
+
+    cout << "[handleAIQuit] AI game quit successfully for " << username << endl;
+  } catch (const exception &e) {
+    cerr << "[handleAIQuit] Error quitting AI game: " << e.what() << endl;
+    sendMessage(fd, MessageType::ERROR, ErrorPayload{"Failed to quit game"});
   }
 }
