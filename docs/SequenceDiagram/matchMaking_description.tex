@@ -1,0 +1,15 @@
+\subsection{Quick Matching (Matchmaking)}
+
+This sequence diagram illustrates the quick matching process, where players are automatically paired with opponents based on ELO rating, game mode, and time limit preferences. The matching system uses an in-memory queue and performs immediate matching attempts when players join.
+
+\textbf{Join Queue:} When a player clicks "Play now" or selects a game mode and clicks "Random", the frontend sets the mode and time limit in \texttt{UIState}, opens the waiting panel, and sends a \texttt{QUICK\_MATCHING} request through \texttt{NetworkManager} and \texttt{GameSender}. The server's \texttt{handleQuickMatching()} validates that the player is logged in and not already in a game, then queries the player's ELO rating from the database via \texttt{PlayerStatController} (defaults to 1200 if not found). The server immediately searches the matchmaking queue for a suitable opponent matching three criteria: same game mode, same time limit, and ELO difference within 300 points.
+
+\textbf{Matching Algorithm:} If no match is found, the player is added to the in-memory queue and receives an \texttt{INFO} message with \texttt{quick\_matching: true} and \texttt{status: "waiting"}, which keeps the waiting panel open. The player remains in the queue and will be matched when the next player joins with compatible preferences. If a match is found, the server removes both players from the queue, double-checks that the opponent is still available (not disconnected or in another game), and proceeds to create the game.
+
+\textbf{Game Creation:} Upon successful matching, the server calls \texttt{handleStartGame()}, which creates the game in the database through \texttt{GameController} → \texttt{GameService} → \texttt{GameRepository}. The service randomly assigns red and black sides (red goes first in Xiangqi), creates the game document with initial XFEN, and returns the game ID. The server sets up game state for both players and sends \texttt{GAME\_START} messages to both clients with opponent information, game mode, time limit, color assignment, and game ID. Both clients close their waiting panels and navigate to the game board.
+
+\textbf{Cancel Matchmaking:} Players can cancel their matchmaking request by clicking the cancel button, which sends a \texttt{CANCEL\_QM} message. The server removes the player from the queue and sends an \texttt{INFO} message confirming cancellation, which closes the waiting panel and returns the player to the lobby.
+
+The matchmaking queue is stored entirely in memory (\texttt{g\_quick\_match\_queue}) and is not persisted to the database. Matching occurs immediately when players join the queue, rather than through periodic polling, ensuring low latency and efficient resource usage.
+
+

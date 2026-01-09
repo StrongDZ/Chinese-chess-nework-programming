@@ -5,126 +5,337 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-boundary "UI" as UI
-control "TCP Socket" as Socket
-control "Server" as Server
-database "Database" as DB
-
+boundary "GamePanel" as GP
+participant "NetworkManager" as NM
+participant "GameSender" as GS
+participant "SocketClient" as SC
+participant "GameHandler" as GH
+control "Server (C++)" as Server
+participant "GameController" as GC
+participant "GameService" as GSvc
+participant "GameRepository" as GR
+database "MongoDB" as DB
 
 == Game Play (Common for all types) ==
 
-activate UI
+activate GP
 activate Server
 
 loop Until game ends (Win/Loss/Draw/Resign)
     alt Player's Turn
-        User -> UI: Make move (from→to)
+        User -> GP: Make move (from→to)
         
-        UI -> UI: Validate move locally
+        GP -> GP: Validate move locally\n(GameState.isValidMove)
         
-        alt Invalid move
-            UI -> User: Show "Invalid move"
+        alt Invalid move (local validation)
+            GP -> User: Show "Invalid move"
             
-        else Valid move
-            UI -> Socket: send(MOVE)
-            activate Socket
-            Socket -> Server: Forward move
-            deactivate Socket
+        else Valid move (local)
+            GP -> NM: game().sendMove(fromCol, fromRow, toCol, toRow, piece, captured, notation)
+            activate NM
+            NM -> GS: sendMove(...)
+            activate GS
+            GS -> SC: send(MOVE, {from: {row, col}, to: {row, col}, piece})
+            activate SC
+            SC -> Server: TCP send(MOVE)
+            deactivate SC
+            deactivate GS
+            deactivate NM
             
-            Server -> Server: Validate move on server
-            Server -> Server: Update board state
-            Server -> Server: Check game rules
+            Server -> Server: handleMove(pm, fd)\n[Check: in_game, opponent exists]
             
-            Server -> DB: Save move
-            activate DB
-            DB --> Server: Move saved
-            deactivate DB
+            Server -> Server: Validate turn\n[Check: current_turn == player's side]
             
-            alt Game ended
-                Server -> DB: End game
+            alt Not player's turn
+                Server -> SC: send(INVALID_MOVE, {reason: "Not your turn"})
+                activate SC
+                SC -> GH: handleInvalidMove(payload)
+                activate GH
+                GH -> GP: Show invalid move error
+                deactivate GH
+                deactivate SC
+                
+            else Valid turn
+                Server -> Server: Calculate nextTurn\n[nextTurn = (is_red_turn) ? "black" : "red"]
+                
+                Server -> GC: handleMakeMove({username, game_id, from, to, piece})
+                activate GC
+                GC -> GSvc: makeMove(username, gameId, fromX, fromY, toX, toY, piece, ...)
+                activate GSvc
+                
+                GSvc -> GSvc: Validate game exists\nCheck game status\nCheck it's user's turn
+                
+                GSvc -> GSvc: Calculate new XFEN\nBuild Move object
+                
+                GSvc -> GR: updateAfterMove(gameId, move, nextTurn, redTime, blackTime, xfen)
+                activate GR
+                GR -> DB: Update game document\n[Add move to moves array\nUpdate xfen, current_turn, time_remaining]
                 activate DB
-                DB --> Server: Game ended
+                DB --> GR: Updated
                 deactivate DB
+                GR --> GSvc: Move saved
+                deactivate GR
                 
-                Server -> DB: Update player stats
-                activate DB
-                DB --> Server: Stats updated
-                deactivate DB
+                GSvc --> GC: {status: "success", game: updatedGame}
+                deactivate GSvc
+                GC --> Server: Move saved to database
+                deactivate GC
                 
-                Server -> Socket: send(GAME_END)
-                activate Socket
-                Socket -> UI: Forward result
-                deactivate Socket
+                Server -> Server: Update turn tracking\n[sender.current_turn = nextTurn]
                 
-                UI -> User: Display game result
+                note right of Server
+                  NOTE: Server does NOT echo MOVE
+                  back to sender - they already
+                  moved locally (optimistic update)
+                end note
                 
-            else Game continues
-                Server -> Socket: send(INFO)
-                activate Socket
-                Socket -> UI: Confirmation
-                deactivate Socket
+                alt PvP Game
+                    Server -> Server: Update opponent's turn tracking\n[g_clients[opp].current_turn = nextTurn]
+                    
+                    Server -> SC: send(MOVE, {from, to, piece})\n[To opponent only]
+                    activate SC
+                    SC -> GH: handleMove(payload)
+                    activate GH
+                    GH -> GP: applyOpponentMove(fromCol, fromRow, toCol, toRow)
+                    GP -> GP: Update board display\nShow move animation
+                    deactivate GH
+                    deactivate SC
+                    
+                else AI Game
+                    Server -> Server: handleAIMove(fd)\n[Generate AI move]
+                    note right of Server
+                      AI move generation
+                      and response handled
+                      separately
+                    end note
+                end
                 
-                Server -> Socket: send(MOVE)
-                activate Socket
-                Socket --> UI: Update opponent's board
-                deactivate Socket
-                
-                UI -> UI: Update board display
-                UI -> User: Show move animation\nWait for opponent
+                note right of Server
+                  Server does NOT automatically
+                  check for win/draw after move.
+                  Game end only occurs when:
+                  - Client sends GAME_END (checkmate)
+                  - Client sends RESIGN
+                  - Client sends DRAW_RESPONSE (accept)
+                  - Opponent disconnects (abandonment)
+                end note
             end
         end
         
     else Special Actions
         alt Resign
-            User -> UI: Click "Resign"
-            UI -> Socket: send(RESIGN)
-            activate Socket
-            Socket -> Server: Forward resign
-            deactivate Socket
+            User -> GP: Click "Resign"
+            GP -> GP: Show surrender confirmation dialog
+            User -> GP: Confirm resign
+            GP -> NM: game().resign()
+            activate NM
+            NM -> GS: resign()
+            activate GS
+            GS -> SC: send(RESIGN, {})
+            activate SC
+            SC -> Server: TCP send(RESIGN)
+            deactivate SC
+            deactivate GS
+            deactivate NM
             
-            Server -> DB: End game
+            Server -> Server: handleResign(pm, fd)\n[Check: in_game]
+            
+            Server -> GC: handleResign({username, game_id})
+            activate GC
+            GC -> GSvc: resign(username, gameId)
+            activate GSvc
+            GSvc -> GSvc: Determine result\n[Opponent wins]
+            GSvc -> GR: endGame(gameId, result, "resignation")
+            activate GR
+            GR -> DB: Update game status\n[status: "completed", result: "red_win"/"black_win", termination: "resignation"]
             activate DB
-            DB --> Server: Updated
+            DB --> GR: Updated
             deactivate DB
+            GR -> GR: calculateAndUpdateRatings()\n[If rated game]
+            GR --> GSvc: Game ended
+            deactivate GR
+            GSvc --> GC: {status: "success"}
+            deactivate GSvc
+            GC --> Server: Resignation processed
+            deactivate GC
             
-            Server -> Socket: send(GAME_END)
-            activate Socket
-            Socket -> UI: Forward result
-            deactivate Socket
+            Server -> Server: Create GameEndPayload\n[win_side = opponent.username]
             
-            UI -> User: Show "You resigned"
+            Server -> SC: send(GAME_END, {win_side: opponent})\n[To opponent - they win]
+            activate SC
+            SC -> GH: handleGameEnd(payload)
+            activate GH
+            GH -> GP: setGameActionResult("lose")\nsetGameActionTrigger("game_result")
+            GP -> GP: dialogManager.showGameResult(false)
+            GP -> User: Display "You lost"
+            deactivate GH
+            deactivate SC
+            
+            Server -> SC: send(GAME_END, {win_side: opponent})\n[To sender - they lose]
+            activate SC
+            SC -> GH: handleGameEnd(payload)
+            activate GH
+            GH -> GP: setGameActionResult("lose")\nsetGameActionTrigger("game_result")
+            GP -> GP: dialogManager.showGameResult(false)
+            GP -> User: Display "You resigned"
+            deactivate GH
+            deactivate SC
+            
+            Server -> Server: Clear game state\n[in_game=false, opponent_fd=-1, game_id="", current_turn=""]
             
         else Offer Draw
-            User -> UI: Click "Offer Draw"
-            UI -> Socket: send(DRAW_REQUEST)
-            activate Socket
-            Socket -> Server: Forward offer
-            deactivate Socket
+            User -> GP: Click "Offer Draw"
+            GP -> GP: Show draw request confirmation dialog
+            User -> GP: Confirm draw request
+            GP -> NM: game().requestDraw()
+            activate NM
+            NM -> GS: requestDraw()
+            activate GS
+            GS -> SC: send(DRAW_REQUEST, {})
+            activate SC
+            SC -> Server: TCP send(DRAW_REQUEST)
+            deactivate SC
+            deactivate GS
+            deactivate NM
             
-            Server -> Socket: send(DRAW_REQUEST)
-            activate Socket
-            Socket --> UI: Opponent receives offer
-            deactivate Socket
+            Server -> Server: handleDrawRequest(pm, fd)\n[Check: in_game, opponent exists]
             
-            note right
+            Server -> GC: handleOfferDraw({username, game_id})
+            activate GC
+            GC -> GSvc: offerDraw(username, gameId)
+            activate GSvc
+            GSvc -> GR: Update game document\n[Mark draw offer]
+            activate GR
+            GR -> DB: Update game
+            activate DB
+            DB --> GR: Updated
+            deactivate DB
+            GR --> GSvc: Draw offer saved
+            deactivate GR
+            GSvc --> GC: {status: "success"}
+            deactivate GSvc
+            GC --> Server: Draw offer saved
+            deactivate GC
+            
+            Server -> SC: send(DRAW_REQUEST, {})\n[Forward to opponent]
+            activate SC
+            SC -> GH: handleDrawRequest(payload)
+            activate GH
+            GH -> GP: setGameActionResult("received")\nsetGameActionTrigger("draw_request")
+            GP -> GP: dialogManager.showDrawRequestDialog()
+            GP -> User: Show draw request dialog\n[Accept/Decline buttons]
+            deactivate GH
+            deactivate SC
+            
+            note right of GP
               Wait for opponent response
-              Accept/Decline draw
+              (Accept/Decline draw)
             end note
             
-        else Request Rematch
-            User -> UI: Click "Rematch" (after game ends)
-            
-            note right
-              Similar to Challenge flow
-              Send rematch request
-              Wait for acceptance
-            end note
+            alt Opponent Accepts Draw
+                User -> GP: Click "Accept Draw"
+                GP -> NM: game().respondDraw(true)
+                activate NM
+                NM -> GS: respondDraw(true)
+                activate GS
+                GS -> SC: send(DRAW_RESPONSE, {accept_draw: true})
+                activate SC
+                SC -> Server: TCP send(DRAW_RESPONSE)
+                deactivate SC
+                deactivate GS
+                deactivate NM
+                
+                Server -> Server: handleDrawResponse(pm, fd)\n[Check: accept_draw == true]
+                
+                Server -> GC: handleRespondToDraw({username, game_id, accept: true})
+                activate GC
+                GC -> GSvc: respondToDraw(username, gameId, true)
+                activate GSvc
+                GSvc -> GR: endGame(gameId, "draw", "agreement")
+                activate GR
+                GR -> DB: Update game\n[status: "completed", result: "draw", termination: "agreement"]
+                activate DB
+                DB --> GR: Updated
+                deactivate DB
+                GR -> GR: calculateAndUpdateRatings()\n[If rated game]
+                GR --> GSvc: Game ended (draw)
+                deactivate GR
+                GSvc --> GC: {status: "success"}
+                deactivate GSvc
+                GC --> Server: Draw accepted - game ended
+                deactivate GC
+                
+                Server -> Server: Create GameEndPayload\n[win_side = "draw"]
+                
+                Server -> SC: send(GAME_END, {win_side: "draw"})\n[To both players]
+                activate SC
+                SC -> GH: handleGameEnd(payload)
+                activate GH
+                GH -> GP: setGameActionResult("draw")\nsetGameActionTrigger("game_result")
+                GP -> GP: dialogManager.showGameResultDraw()
+                GP -> User: Display "Draw"
+                deactivate GH
+                deactivate SC
+                
+                Server -> SC: send(GAME_END, {win_side: "draw"})\n[To opponent]
+                activate SC
+                SC -> GH: handleGameEnd(payload)
+                activate GH
+                GH -> GP: setGameActionResult("draw")\nsetGameActionTrigger("game_result")
+                GP -> GP: dialogManager.showGameResultDraw()
+                GP -> User: Display "Draw"
+                deactivate GH
+                deactivate SC
+                
+                Server -> Server: Clear game state\n[For both players]
+                
+            else Opponent Declines Draw
+                User -> GP: Click "Decline Draw"
+                GP -> NM: game().respondDraw(false)
+                activate NM
+                NM -> GS: respondDraw(false)
+                activate GS
+                GS -> SC: send(DRAW_RESPONSE, {accept_draw: false})
+                activate SC
+                SC -> Server: TCP send(DRAW_RESPONSE)
+                deactivate SC
+                deactivate GS
+                deactivate NM
+                
+                Server -> Server: handleDrawResponse(pm, fd)\n[Check: accept_draw == false]
+                
+                Server -> GC: handleRespondToDraw({username, game_id, accept: false})
+                activate GC
+                GC -> GSvc: respondToDraw(username, gameId, false)
+                activate GSvc
+                GSvc -> GR: Clear draw offer
+                activate GR
+                GR -> DB: Update game\n[Clear draw offer flag]
+                activate DB
+                DB --> GR: Updated
+                deactivate DB
+                GR --> GSvc: Draw offer cleared
+                deactivate GR
+                GSvc --> GC: {status: "success"}
+                deactivate GSvc
+                GC --> Server: Draw declined
+                deactivate GC
+                
+                Server -> SC: send(DRAW_RESPONSE, {accept_draw: false})\n[Forward to opponent]
+                activate SC
+                SC -> GH: handleDrawResponse(payload)
+                activate GH
+                GH -> GP: setGameActionResult("hide")\nsetGameActionTrigger("draw_request")
+                GP -> GP: Hide draw request dialog
+                GP -> User: Show "Draw declined"
+                deactivate GH
+                deactivate SC
+            end
         end
     end
 end
 
-deactivate UI
+deactivate GP
 deactivate Server
-
 
 @enduml

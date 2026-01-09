@@ -1,20 +1,33 @@
 #include "../../include/ai/ai_service.h"
 #include <array>
 #include <cstdlib>
+#include <cstring>
+#include <errno.h>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <sys/wait.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 using namespace std;
 
 AIService::AIService()
-    : pythonPath("python3"), aiScriptPath(""), initialized(false) {}
+    : pythonPath("python3"), aiScriptPath(""), initialized(false),
+      aiProcessStdin(nullptr), aiProcessStdout(nullptr), aiProcessStderr(nullptr), aiProcessPid(0) {}
 
-AIService::~AIService() {}
+AIService::~AIService() {
+  cleanupProcess();
+}
 
 bool AIService::initialize(const string &python, const string &aiScriptDir) {
   pythonPath = python.empty() ? "python3" : python;
+  
+  cout << "[AIService] Initializing AI service..." << endl;
+  cout << "[AIService] Python path: " << pythonPath << endl;
+  cout << "[AIService] AI script dir: " << (aiScriptDir.empty() ? "(auto-detect)" : aiScriptDir) << endl;
 
   // Find AI script path
   if (!aiScriptDir.empty()) {
@@ -25,12 +38,16 @@ bool AIService::initialize(const string &python, const string &aiScriptDir) {
                                   "../AI/ai.py", "../../AI/ai.py",
                                   "../../../AI/ai.py", "./AI/ai.py"};
 
+    cout << "[AIService] Searching for ai.py in:" << endl;
     for (const auto &path : searchPaths) {
+      cout << "  - " << path;
       ifstream f(path);
       if (f.good()) {
         aiScriptPath = path;
+        cout << " [FOUND]" << endl;
         break;
       }
+      cout << " [not found]" << endl;
     }
   }
 
@@ -46,7 +63,7 @@ bool AIService::initialize(const string &python, const string &aiScriptDir) {
     return false;
   }
 
-  // Test Python availability
+  // Test Python availability and get absolute path
   string testCmd = pythonPath + " --version 2>&1";
   string result = "";
 
@@ -61,6 +78,47 @@ bool AIService::initialize(const string &python, const string &aiScriptDir) {
   if (result.find("Python") == string::npos) {
     cerr << "[AIService] Python not available at: " << pythonPath << endl;
     return false;
+  }
+
+  // Get absolute path of python3
+  // Try multiple methods to find python3
+  vector<string> pythonPaths = {
+    "/usr/bin/python3",
+    "/usr/local/bin/python3",
+    "/bin/python3",
+    pythonPath  // Keep original as fallback
+  };
+  
+  string pythonAbsPath = "";
+  for (const auto& testPath : pythonPaths) {
+    if (access(testPath.c_str(), X_OK) == 0) {
+      pythonAbsPath = testPath;
+      break;
+    }
+  }
+  
+  // If not found in common paths, try which/command
+  if (pythonAbsPath.empty()) {
+    string whichCmd = "which " + pythonPath + " 2>/dev/null || command -v " + pythonPath + " 2>/dev/null";
+    unique_ptr<FILE, decltype(&pclose)> whichPipe(popen(whichCmd.c_str(), "r"), pclose);
+    if (whichPipe) {
+      while (fgets(buffer.data(), buffer.size(), whichPipe.get()) != nullptr) {
+        pythonAbsPath += buffer.data();
+      }
+    }
+    
+    // Trim whitespace
+    while (!pythonAbsPath.empty() && (pythonAbsPath.back() == '\n' || pythonAbsPath.back() == '\r' || pythonAbsPath.back() == ' ')) {
+      pythonAbsPath.pop_back();
+    }
+  }
+  
+  if (!pythonAbsPath.empty()) {
+    pythonPath = pythonAbsPath;
+    cout << "[AIService] Using Python at: " << pythonPath << endl;
+  } else {
+    cerr << "[AIService] Warning: Could not find absolute path for " << pythonPath << ", trying common paths" << endl;
+    pythonPath = "/usr/bin/python3";  // Default fallback
   }
 
   // Test Pikafish availability by checking if it exists
@@ -80,6 +138,7 @@ bool AIService::initialize(const string &python, const string &aiScriptDir) {
   // Also check common locations
   vector<string> pikafishPaths = {
       "/opt/app/AI/pikafish", // Docker container path
+      "/opt/pikafish/pikafish", // Docker built pikafish
       "/usr/local/bin/pikafish",
       "/usr/bin/pikafish",
       "./pikafish",
@@ -102,16 +161,222 @@ bool AIService::initialize(const string &python, const string &aiScriptDir) {
     cerr << "[AIService] Pikafish engine not found. AI features will be "
             "unavailable."
          << endl;
+    cerr << "[AIService] Searched paths:" << endl;
+    for (const auto& path : pikafishPaths) {
+      cerr << "  - " << path << endl;
+    }
     cerr << "[AIService] Install Pikafish from: "
             "https://github.com/official-pikafish/Pikafish"
          << endl;
     initialized = false;
     return false;
+  } else {
+    cout << "[AIService] Pikafish found" << endl;
   }
 
-  initialized = true;
-  cout << "[AIService] Initialized with AI script: " << aiScriptPath << endl;
-  return true;
+  // Find ai_persistent_wrapper.py
+  string aiWrapperPath = aiScriptPath.substr(0, aiScriptPath.rfind('/')) + "/ai_persistent_wrapper.py";
+  ifstream wrapperFile(aiWrapperPath);
+  if (!wrapperFile.good()) {
+    cerr << "[AIService] ai_persistent_wrapper.py not found at: " << aiWrapperPath << endl;
+    cerr << "[AIService] aiScriptPath: " << aiScriptPath << endl;
+    cerr << "[AIService] Trying alternative paths..." << endl;
+    // Try alternative paths
+    vector<string> altPaths = {
+      "/opt/app/AI/ai_persistent_wrapper.py",
+      "../AI/ai_persistent_wrapper.py",
+      "../../AI/ai_persistent_wrapper.py",
+      "./AI/ai_persistent_wrapper.py"
+    };
+    bool found = false;
+    for (const auto& path : altPaths) {
+      ifstream altFile(path);
+      if (altFile.good()) {
+        aiWrapperPath = path;
+        found = true;
+        cout << "[AIService] Found ai_persistent_wrapper.py at: " << aiWrapperPath << endl;
+        break;
+      }
+    }
+    if (!found) {
+      cerr << "[AIService] ai_persistent_wrapper.py not found in any location" << endl;
+      initialized = false;
+      return false;
+    }
+  } else {
+    cout << "[AIService] Found ai_persistent_wrapper.py at: " << aiWrapperPath << endl;
+  }
+
+  // Spawn persistent Python process
+  int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
+  if (::pipe(stdin_pipe) < 0 || ::pipe(stdout_pipe) < 0 || ::pipe(stderr_pipe) < 0) {
+    cerr << "[AIService] Failed to create pipes" << endl;
+    initialized = false;
+    return false;
+  }
+
+  aiProcessPid = fork();
+  if (aiProcessPid < 0) {
+    cerr << "[AIService] Failed to fork process" << endl;
+    close(stdin_pipe[0]);
+    close(stdin_pipe[1]);
+    close(stdout_pipe[0]);
+    close(stdout_pipe[1]);
+    close(stderr_pipe[0]);
+    close(stderr_pipe[1]);
+    initialized = false;
+    return false;
+  }
+
+  if (aiProcessPid == 0) {
+    // Child process: redirect stdin/stdout/stderr and exec Python script
+    close(stdin_pipe[1]);   // Close write end of stdin pipe
+    close(stdout_pipe[0]);   // Close read end of stdout pipe
+    close(stderr_pipe[0]);   // Close read end of stderr pipe
+
+    dup2(stdin_pipe[0], STDIN_FILENO);
+    dup2(stdout_pipe[1], STDOUT_FILENO);
+    dup2(stderr_pipe[1], STDERR_FILENO);  // Keep stderr separate for debugging
+
+    close(stdin_pipe[0]);
+    close(stdout_pipe[1]);
+    close(stderr_pipe[1]);
+
+    // Verify files exist before exec
+    if (access(pythonPath.c_str(), X_OK) != 0) {
+      cerr << "[AIService] Python not executable: " << pythonPath << " - " << strerror(errno) << endl;
+      _exit(1);
+    }
+    if (access(aiWrapperPath.c_str(), R_OK) != 0) {
+      cerr << "[AIService] Script not readable: " << aiWrapperPath << " - " << strerror(errno) << endl;
+      _exit(1);
+    }
+    
+    // Use execl with absolute paths
+    // execl(path, argv0, arg1, ..., NULL)
+    // argv0 is the program name (can be just "python3" or the path)
+    // Note: Don't use cout here - stdout is already redirected to pipe
+    execl(pythonPath.c_str(), "python3", aiWrapperPath.c_str(), (char*)NULL);
+    cerr << "[AIService] Failed to exec Python script: " << strerror(errno) << endl;
+    cerr << "[AIService] pythonPath: " << pythonPath << endl;
+    cerr << "[AIService] aiWrapperPath: " << aiWrapperPath << endl;
+    _exit(1);
+  } else {
+    // Parent process: keep pipes for communication
+    close(stdin_pipe[0]);   // Close read end of stdin pipe
+    close(stdout_pipe[1]);  // Close write end of stdout pipe
+    close(stderr_pipe[1]);  // Close write end of stderr pipe
+
+    aiProcessStdin = fdopen(stdin_pipe[1], "w");
+    aiProcessStdout = fdopen(stdout_pipe[0], "r");
+    aiProcessStderr = fdopen(stderr_pipe[0], "r");
+
+    if (!aiProcessStdin || !aiProcessStdout) {
+      cerr << "[AIService] Failed to open pipe streams" << endl;
+      if (aiProcessStderr) fclose(aiProcessStderr);
+      cleanupProcess();
+      initialized = false;
+      return false;
+    }
+
+    // Wait for "ready" signal from Python process
+    char buffer[256];
+    char stderrBuffer[256];
+    memset(buffer, 0, sizeof(buffer));
+    cout << "[AIService] Waiting for Python process to be ready..." << endl;
+    
+    // Get file descriptors for select()
+    int stdoutFd = fileno(aiProcessStdout);
+    int stderrFd = aiProcessStderr ? fileno(aiProcessStderr) : -1;
+    
+    // Set non-blocking mode for stdout
+    int flags = fcntl(stdoutFd, F_GETFL, 0);
+    fcntl(stdoutFd, F_SETFL, flags | O_NONBLOCK);
+    if (stderrFd >= 0) {
+      flags = fcntl(stderrFd, F_GETFL, 0);
+      fcntl(stderrFd, F_SETFL, flags | O_NONBLOCK);
+    }
+    
+    // Read with timeout (15 seconds - Python may need time to initialize Pikafish)
+    int attempts = 0;
+    bool foundReady = false;
+    while (attempts < 150) {  // 150 * 100ms = 15 seconds
+      // Check if process is still alive
+      int status;
+      if (waitpid(aiProcessPid, &status, WNOHANG) != 0) {
+        cerr << "[AIService] Python process died before ready (status=" << status << ")" << endl;
+        // Read any remaining stderr
+        if (aiProcessStderr) {
+          while (fgets(stderrBuffer, sizeof(stderrBuffer), aiProcessStderr) != nullptr) {
+            cerr << "[AIService Python stderr]: " << stderrBuffer;
+          }
+        }
+        break;
+      }
+      
+      // Use select() to check if data is available (non-blocking)
+      fd_set readfds;
+      FD_ZERO(&readfds);
+      FD_SET(stdoutFd, &readfds);
+      if (stderrFd >= 0) {
+        FD_SET(stderrFd, &readfds);
+      }
+      
+      struct timeval timeout;
+      timeout.tv_sec = 0;
+      timeout.tv_usec = 100000;  // 100ms
+      
+      int maxFd = (stderrFd >= 0 && stderrFd > stdoutFd) ? stderrFd : stdoutFd;
+      int selectResult = select(maxFd + 1, &readfds, nullptr, nullptr, &timeout);
+      
+      if (selectResult > 0) {
+        // Read from stdout if available
+        if (FD_ISSET(stdoutFd, &readfds)) {
+          if (fgets(buffer, sizeof(buffer), aiProcessStdout) != nullptr) {
+            cout << "[AIService] Received from Python stdout: " << buffer;
+            if (strstr(buffer, "ready") != nullptr) {
+              cout << "[AIService] Persistent AI engine ready" << endl;
+              foundReady = true;
+              break;
+            }
+          }
+        }
+        
+        // Read from stderr if available
+        if (stderrFd >= 0 && FD_ISSET(stderrFd, &readfds)) {
+          if (fgets(stderrBuffer, sizeof(stderrBuffer), aiProcessStderr) != nullptr) {
+            cerr << "[AIService Python stderr]: " << stderrBuffer;
+          }
+        }
+      } else if (selectResult < 0) {
+        // Error in select
+        if (errno != EINTR) {
+          cerr << "[AIService] select() error: " << strerror(errno) << endl;
+        }
+      }
+      
+      attempts++;
+      
+      // Print progress every 2 seconds
+      if (attempts % 20 == 0) {
+        cout << "[AIService] Still waiting... (" << (attempts * 100 / 1000) << "s)" << endl;
+      }
+    }
+    
+    if (foundReady) {
+      initialized = true;
+      return true;
+    }
+    
+    cerr << "[AIService] Timeout waiting for AI engine to be ready" << endl;
+    cerr << "[AIService] Last received: " << (buffer[0] ? buffer : "(empty)") << endl;
+    cerr << "[AIService] Attempts: " << attempts << " (timeout: 15s)" << endl;
+
+    cerr << "[AIService] Timeout waiting for AI engine to be ready" << endl;
+    cleanupProcess();
+    initialized = false;
+    return false;
+  }
 }
 
 bool AIService::isReady() const { return initialized; }
@@ -131,59 +396,116 @@ string AIService::difficultyToString(AIDifficulty difficulty) {
 
 string AIService::executePythonAI(const string &xfen,
                                   const string &difficulty) {
-  if (!initialized) {
-    cerr << "[AIService::executePythonAI] Not initialized" << endl;
-    return "";
-  }
-
-  // Use ai_simple.py for direct subprocess call to Pikafish
-  // This avoids the blocking readline issue in the original ai.py
-  string aiSimplePath =
-      aiScriptPath.substr(0, aiScriptPath.rfind('/')) + "/ai_simple.py";
-
-  stringstream cmd;
-  cmd << pythonPath << " \"" << aiSimplePath << "\" ";
-  cmd << "\"" << xfen << "\" ";
-  cmd << "\"" << difficulty << "\" 2>&1";
-
-  cout << "[AIService::executePythonAI] Executing: " << cmd.str() << endl;
-
-  string result = "";
-  string errorOutput = "";
-  array<char, 256> buffer;
-
-  // Open pipe and capture both stdout and stderr
-  string fullCmd = cmd.str() + " 2>&1";
-  unique_ptr<FILE, decltype(&pclose)> pipe(popen(fullCmd.c_str(), "r"), pclose);
-
-  if (!pipe) {
-    cerr << "[AIService::executePythonAI] Failed to open pipe" << endl;
+  if (!initialized || !aiProcessStdin || !aiProcessStdout) {
+    cerr << "[AIService::executePythonAI] Not initialized or process not ready" << endl;
     return "error";
   }
 
-  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-    string line = buffer.data();
-    result += line;
-    // Check if line contains error info
-    if (line.find("error:") != string::npos ||
-        line.find("stderr:") != string::npos) {
-      errorOutput += line;
+  // Check if process is still alive
+  int status;
+  pid_t waitResult = waitpid(aiProcessPid, &status, WNOHANG);
+  if (waitResult != 0) {
+    cerr << "[AIService::executePythonAI] AI process has died (status=" << status << ")" << endl;
+    // Try to read stderr to see what happened
+    if (aiProcessStderr) {
+      char errBuffer[256];
+      while (fgets(errBuffer, sizeof(errBuffer), aiProcessStderr) != nullptr) {
+        cerr << "[AIService Python stderr]: " << errBuffer;
+      }
     }
+    cleanupProcess();
+    initialized = false;
+    return "error";
   }
 
-  // Log error output if any
-  if (!errorOutput.empty()) {
-    cerr << "[AIService::executePythonAI] Python script errors: " << errorOutput
-         << endl;
+  // Send JSON request to persistent process
+  nlohmann::json request;
+  request["fen"] = xfen;
+  request["difficulty"] = difficulty;
+
+  string requestStr = request.dump() + "\n";
+  
+  cout << "[AIService::executePythonAI] Sending request: " << requestStr << endl;
+  
+  if (fprintf(aiProcessStdin, "%s", requestStr.c_str()) < 0) {
+    cerr << "[AIService::executePythonAI] Failed to send request: " << strerror(errno) << endl;
+    return "error";
+  }
+  if (fflush(aiProcessStdin) != 0) {
+    cerr << "[AIService::executePythonAI] Failed to flush stdin: " << strerror(errno) << endl;
+    return "error";
+  }
+  
+  cout << "[AIService::executePythonAI] Request sent, waiting for response..." << endl;
+
+  // Read response from persistent process with timeout (30 seconds for hard difficulty)
+  char buffer[256];
+  string result = "";
+  
+  int stdoutFd = fileno(aiProcessStdout);
+  int flags = fcntl(stdoutFd, F_GETFL, 0);
+  fcntl(stdoutFd, F_SETFL, flags | O_NONBLOCK);
+  
+  // Wait for response with timeout (30s for hard, 20s for medium, 10s for easy)
+  int timeoutSeconds = (difficulty == "hard") ? 30 : (difficulty == "medium") ? 20 : 10;
+  int attempts = 0;
+  bool gotResponse = false;
+  
+  while (attempts < timeoutSeconds * 10) {  // Check every 100ms
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(stdoutFd, &readfds);
+    
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;  // 100ms
+    
+    int selectResult = select(stdoutFd + 1, &readfds, nullptr, nullptr, &timeout);
+    
+    if (selectResult > 0 && FD_ISSET(stdoutFd, &readfds)) {
+      // Data available, read it
+      if (fgets(buffer, sizeof(buffer), aiProcessStdout) != nullptr) {
+        result = string(buffer);
+        // Trim whitespace
+        while (!result.empty() && (result.back() == '\n' || result.back() == '\r' || 
+                                   result.back() == ' ' || result.back() == '\t')) {
+          result.pop_back();
+        }
+        gotResponse = true;
+        break;
+      } else {
+        // EOF or error
+        cerr << "[AIService::executePythonAI] EOF or error reading response" << endl;
+        break;
+      }
+    } else if (selectResult < 0 && errno != EINTR) {
+      cerr << "[AIService::executePythonAI] select() error: " << strerror(errno) << endl;
+      break;
+    }
+    
+    // Check if process died
+    if (waitpid(aiProcessPid, nullptr, WNOHANG) != 0) {
+      cerr << "[AIService::executePythonAI] AI process died during request" << endl;
+      cleanupProcess();
+      initialized = false;
+      result = "error";
+      break;
+    }
+    
+    attempts++;
+  }
+  
+  // Restore blocking mode
+  fcntl(stdoutFd, F_SETFL, flags);
+  
+  if (!gotResponse) {
+    cerr << "[AIService::executePythonAI] Timeout waiting for response (timeout: " 
+         << timeoutSeconds << "s)" << endl;
+    result = "error";
   }
 
-  // Trim whitespace
-  while (!result.empty() && (result.back() == '\n' || result.back() == '\r' ||
-                             result.back() == ' ')) {
-    result.pop_back();
-  }
-
-  cout << "[AIService::executePythonAI] Result: " << result << endl;
+  cout << "[AIService::executePythonAI] Request: fen=" << xfen.substr(0, 50) 
+       << "..., difficulty=" << difficulty << ", Result: " << result << endl;
 
   return result;
 }
@@ -406,4 +728,32 @@ string AIService::boardToXfen(const string board[10][9], const string &turn) {
 
   fen << " " << turn << " - - 0 1";
   return fen.str();
+}
+
+void AIService::cleanupProcess() {
+  if (aiProcessStdin) {
+    // Send quit command to Python process
+    fprintf(aiProcessStdin, "quit\n");
+    fflush(aiProcessStdin);
+    fclose(aiProcessStdin);
+    aiProcessStdin = nullptr;
+  }
+
+  if (aiProcessStdout) {
+    fclose(aiProcessStdout);
+    aiProcessStdout = nullptr;
+  }
+
+  if (aiProcessPid > 0) {
+    // Wait for process to terminate (with timeout)
+    int status;
+    int waitResult = waitpid(aiProcessPid, &status, WNOHANG);
+    if (waitResult == 0) {
+      // Process still running, kill it
+      kill(aiProcessPid, SIGTERM);
+      sleep(1);
+      waitpid(aiProcessPid, &status, 0);
+    }
+    aiProcessPid = 0;
+  }
 }
