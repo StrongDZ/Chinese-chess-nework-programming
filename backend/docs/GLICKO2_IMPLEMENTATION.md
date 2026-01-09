@@ -532,3 +532,80 @@ void GameService::calculateAndUpdateRatings(
 
 *Document created: January 2026*
 *Author: Group 5 - Network Programming Course*
+
+## GLICKO-2 RATING - BẢN TÓM TẮT (ĐỌC KHI THẦY HỎI)
+
+### 1. Glicko-2 là gì? (Khác ELO thế nào?)
+
+| ELO truyền thống | Glicko-2 |
+|------------------|----------|
+| Chỉ có 1 số: **Rating** | Có 3 số: **Rating + RD + Volatility** |
+| Không biết độ tin cậy | RD cho biết hệ thống "chắc chắn" bao nhiêu |
+| Người mới = người cũ | Người mới thay đổi nhiều hơn |
+
+### 2. Ba thành phần của Glicko-2
+
+| Thành phần | Ý nghĩa | Mặc định |
+|------------|---------|----------|
+| **Rating (r)** | Điểm kỹ năng | 1500 |
+| **RD (φ)** | Độ không chắc chắn (cao = chưa biết rõ skill) | 350 |
+| **Volatility (σ)** | Độ ổn định gần đây (cao = kết quả thất thường) | 0.06 |
+
+**Ví dụ dễ hiểu:**
+- Player mới: Rating 1500, RD **350** → Hệ thống "không chắc" về player này
+- Player 100 trận: Rating 1500, RD **50** → Hệ thống "rất chắc" đây là skill thật
+
+### 3. Thuật toán hoạt động + Công thức
+
+**TRƯỚC TRẬN:** Lấy rating (r), RD, volatility (σ) của 2 người chơi từ Database
+
+**TÍNH TOÁN:**
+
+| Bước | Công thức | Ý nghĩa |
+|------|-----------|---------|
+| 1. Chuyển scale | `μ = (r - 1500) / 173.7178` | Chuyển rating sang thang Glicko-2 |
+| | `φ = RD / 173.7178` | Chuyển RD sang thang Glicko-2 |
+| 2. Tính g(φ) | `g(φ) = 1 / √(1 + 3φ²/π²)` | Giảm ảnh hưởng nếu đối thủ có RD cao |
+| 3. Tính E | `E = 1 / (1 + e^(-g(φ) × (μ - μⱼ)))` | Xác suất thắng (0.5 = ngang tài) |
+| 4. Tính v | `v = 1 / (g(φ)² × E × (1-E))` | Estimated variance |
+| 5. Tính Δ | `Δ = v × g(φ) × (s - E)` | s = kết quả (1/0.5/0), E = kỳ vọng |
+| 6. Cập nhật σ | Illinois algorithm | Volatility mới |
+| 7. Cập nhật φ | `φ* = √(φ² + σ'²)` | Pre-rating period RD |
+| | `φ' = 1 / √(1/φ*² + 1/v)` | RD mới (giảm sau mỗi trận) |
+| 8. Cập nhật μ | `μ' = μ + φ'² × g(φⱼ) × (s - E)` | Rating mới |
+| 9. Chuyển về | `r' = μ' × 173.7178 + 1500` | Rating hiển thị |
+| | `RD' = φ' × 173.7178` | RD hiển thị |
+
+**SAU TRẬN:** Lưu rating, RD, volatility mới vào Database
+
+
+### 4. Tại sao RD quan trọng?
+
+**Ví dụ thực tế:**
+
+| Trường hợp | Kết quả |
+|------------|---------|
+| Player mới (RD=350) thắng Player cũ (RD=50) | Player mới: **+175 điểm** (thay đổi lớn) |
+| | Player cũ: **-5 điểm** (thay đổi nhỏ) |
+
+**Giải thích:** Hệ thống "không chắc" về player mới → điều chỉnh mạnh. Hệ thống "rất chắc" về player cũ → điều chỉnh nhẹ.
+
+### 5. RD giảm theo số trận
+
+| Số trận đã chơi | RD |
+|-----------------|-----|
+| 0 (mới) | 350 |
+| 5 trận | 166 |
+| 10+ trận | ~50-80 |
+
+**Kết luận:** Càng chơi nhiều → RD càng thấp → Rating càng ổn định
+
+### 6. Separate Ratings
+
+Mỗi player có **2 rating riêng biệt**:
+- **Classical Rating** - Cho game không giới hạn thời gian
+- **Blitz Rating** - Cho game có timer
+
+### 7. Một câu tóm tắt
+
+> **"Glicko-2 thông minh hơn ELO vì nó biết KHÔNG CHẮC CHẮN bao nhiêu về rating của mỗi người chơi, từ đó điều chỉnh phù hợp."**

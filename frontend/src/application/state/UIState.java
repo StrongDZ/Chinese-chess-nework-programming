@@ -76,6 +76,9 @@ public class UIState {
     // Game action result - kết quả của action (win, lose, draw, received, hide, message text)
     private final StringProperty gameActionResult = new SimpleStringProperty("");
     
+    // Last rating change from GAME_END (from Glicko-2 calculation)
+    private int lastRatingChange = 0;
+    
     // Player side - true nếu player là red, false nếu là black
     private final BooleanProperty playerIsRed = new SimpleBooleanProperty(true);
 
@@ -1017,10 +1020,19 @@ public class UIState {
         return gameActionResult.get();
     }
     
-    public void setGameActionResult(String value) {
+public void setGameActionResult(String value) {
         gameActionResult.set(value);
     }
-    
+
+    // Last rating change getters/setters (from Glicko-2)
+    public int getLastRatingChange() {
+        return lastRatingChange;
+    }
+
+    public void setLastRatingChange(int change) {
+        this.lastRatingChange = change;
+    }
+
     // Player side getters/setters
     public BooleanProperty playerIsRedProperty() {
         return playerIsRed;

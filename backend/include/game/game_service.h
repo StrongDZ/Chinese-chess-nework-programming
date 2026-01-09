@@ -17,6 +17,16 @@
  * NOTE: Sử dụng username thay vì token (protocol layer mapping fd -> username)
  */
 
+// Result struct for rating changes (Glicko-2)
+struct RatingChangeResult {
+  int red_old_rating{0};
+  int red_new_rating{0};
+  int red_rating_change{0};   // red_new_rating - red_old_rating
+  int black_old_rating{0};
+  int black_new_rating{0};
+  int black_rating_change{0}; // black_new_rating - black_old_rating
+};
+
 // Result struct cho service operations
 struct GameResult {
   bool success;
@@ -25,6 +35,7 @@ struct GameResult {
   std::vector<Game> games;                  // For list active games
   std::optional<ArchivedGame> archivedGame; // For game details (replay)
   std::vector<ArchivedGame> archivedGames;  // For game history
+  std::optional<RatingChangeResult> ratingChange; // Rating changes after game end
 };
 
 class GameService {
@@ -43,11 +54,11 @@ private:
   int getTimeLimitSeconds(const std::string &timeControl);
   int getIncrementSeconds(const std::string &timeControl);
 
-  // Rating calculation (simplified Elo)
-  void calculateAndUpdateRatings(const std::string &redUsername,
-                                 const std::string &blackUsername,
-                                 const std::string &result,
-                                 const std::string &timeControl);
+  // Rating calculation (Glicko-2)
+  RatingChangeResult calculateAndUpdateRatings(const std::string &redUsername,
+                                               const std::string &blackUsername,
+                                               const std::string &result,
+                                               const std::string &timeControl);
 
   // XFEN calculation helper
   // Tính toán XFEN mới sau khi thực hiện nước đi

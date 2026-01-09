@@ -148,6 +148,10 @@ struct GameStartPayload {
 
 struct GameEndPayload {
   string win_side;
+  int red_rating_change{0};    // Rating change for red player
+  int black_rating_change{0};  // Rating change for black player
+  int red_new_rating{0};       // New rating for red player
+  int black_new_rating{0};     // New rating for black player
 };
 
 struct InvalidMovePayload {
@@ -398,7 +402,11 @@ inline void to_json(json &j, const MovePayload &p) {
   j = json{{"piece", p.piece}, {"from", p.from}, {"to", p.to}};
 }
 inline void to_json(json &j, const GameEndPayload &p) {
-  j = json{{"win_side", p.win_side}};
+  j = json{{"win_side", p.win_side},
+           {"red_rating_change", p.red_rating_change},
+           {"black_rating_change", p.black_rating_change},
+           {"red_new_rating", p.red_new_rating},
+           {"black_new_rating", p.black_new_rating}};
 }
 inline void to_json(json &j, const ErrorPayload &p) {
   j = json{{"message", p.message}};

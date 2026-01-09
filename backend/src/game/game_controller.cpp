@@ -252,6 +252,14 @@ nlohmann::json GameController::handleEndGame(const nlohmann::json &request) {
         response["result"] = gameResult.game->result;
         response["winner"] = gameResult.game->winner;
       }
+      
+      // Include rating changes if available
+      if (gameResult.ratingChange) {
+        response["red_rating_change"] = gameResult.ratingChange->red_rating_change;
+        response["black_rating_change"] = gameResult.ratingChange->black_rating_change;
+        response["red_new_rating"] = gameResult.ratingChange->red_new_rating;
+        response["black_new_rating"] = gameResult.ratingChange->black_new_rating;
+      }
     } else {
       response["status"] = "error";
       response["message"] = gameResult.message;

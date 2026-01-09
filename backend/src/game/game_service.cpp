@@ -379,13 +379,19 @@ static double computeNewVolatility(double sigma, double phi, double v, double de
   return exp(A / 2.0);
 }
 
-void GameService::calculateAndUpdateRatings(const string &redUsername,
+RatingChangeResult GameService::calculateAndUpdateRatings(const string &redUsername,
                                             const string &blackUsername,
                                             const string &result,
                                             const string &timeControl) {
+  RatingChangeResult ratingResult;
+  
   // Get current Glicko stats for both players
   auto redStats = repository.getPlayerGlickoStats(redUsername, timeControl);
   auto blackStats = repository.getPlayerGlickoStats(blackUsername, timeControl);
+  
+  // Store old ratings
+  ratingResult.red_old_rating = redStats.rating;
+  ratingResult.black_old_rating = blackStats.rating;
 
   // Calculate actual scores
   double redScore = (result == "red_win") ? 1.0
@@ -463,11 +469,21 @@ void GameService::calculateAndUpdateRatings(const string &redUsername,
   repository.updatePlayerStats(blackUsername, timeControl, blackNewRating,
                                blackNewRD, black_sigma_new, blackField);
   
+  // Store new ratings and calculate changes
+  ratingResult.red_new_rating = redNewRating;
+  ratingResult.black_new_rating = blackNewRating;
+  ratingResult.red_rating_change = redNewRating - ratingResult.red_old_rating;
+  ratingResult.black_rating_change = blackNewRating - ratingResult.black_old_rating;
+  
   // Log the rating changes
-  cout << "[Glicko-2] " << redUsername << ": " << redStats.rating << " -> " << redNewRating
+  cout << "[Glicko-2] " << redUsername << ": " << ratingResult.red_old_rating << " -> " << redNewRating
+       << " (" << (ratingResult.red_rating_change >= 0 ? "+" : "") << ratingResult.red_rating_change << ")"
        << " (RD: " << redStats.rd << " -> " << redNewRD << ")" << endl;
-  cout << "[Glicko-2] " << blackUsername << ": " << blackStats.rating << " -> " << blackNewRating
+  cout << "[Glicko-2] " << blackUsername << ": " << ratingResult.black_old_rating << " -> " << blackNewRating
+       << " (" << (ratingResult.black_rating_change >= 0 ? "+" : "") << ratingResult.black_rating_change << ")"
        << " (RD: " << blackStats.rd << " -> " << blackNewRD << ")" << endl;
+  
+  return ratingResult;
 }
 
 // Private helper: Create game with specific colors (no random assignment)
@@ -852,8 +868,9 @@ GameResult GameService::endGame(const string &gameId, const string &result,
 
   // 5. Update ratings if rated
   if (game.rated) {
-    calculateAndUpdateRatings(game.red_player, game.black_player, result,
-                              game.time_control);
+    RatingChangeResult ratingChanges = calculateAndUpdateRatings(
+        game.red_player, game.black_player, result, game.time_control);
+    gameResult.ratingChange = ratingChanges;
   }
 
   game.status = "completed";
