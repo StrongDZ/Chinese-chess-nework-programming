@@ -5,86 +5,169 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-boundary "UI" as UI
-control "TCP Socket" as Socket
+boundary "LoginPanel" as LoginPanel
+participant "NetworkManager" as NM
+participant "AuthSender" as AuthSnd
+participant "SocketClient" as SC
+participant "AuthHandler" as AuthHdl
 control "Server" as Server
-database "Database" as DB
+participant "AuthController" as AC
+participant "AuthService" as ASvc
+participant "AuthRepository" as AR
+database "MongoDB" as DB
 
 == Signin Authentication ==
-User -> UI: Open application
-activate UI
-UI -> User: Display Signin form
-User -> UI: Enter username & password
-activate UI
+User -> LoginPanel: Enter username & password
+activate LoginPanel
 
-UI -> UI: Validate input format
+LoginPanel -> LoginPanel: Validate input\n(not empty)
 
 alt Invalid format
-    UI -> User: Show "Invalid input format"
+    LoginPanel -> User: Show error
     
 else Valid format
-    UI -> UI: Prepare signin request
+            LoginPanel -> NM: auth().login(username, password)
+            activate NM
+            LoginPanel -> LoginPanel: Save credentials\nSet username in UIState
+            NM -> AuthSnd: login(username, password)
+            activate AuthSnd
+            AuthSnd -> SC: send(LOGIN, {username, password})
+            activate SC
+            SC -> Server: LOGIN message\n[TCP socket]
+            deactivate SC
+            deactivate AuthSnd
     
-    UI -> Socket: send(LOGIN)
-    activate Socket
-    Socket -> Server: Forward packet
-    deactivate Socket
+    Server -> Server: handleLogin()\nParse LOGIN message
+    activate Server
     
-    Server -> Server: Parse signin packet
-    Server -> DB: Get user data
+    Server -> AC: handleLogin(request)
+    activate AC
+    AC -> ASvc: login(username, password)
+    activate ASvc
+    
+    ASvc -> AR: findByUsername(username)
+    activate AR
+    AR -> DB: Find user by username
     activate DB
     
     alt User not found
-        DB --> Server: No record
+        DB --> AR: No record
         deactivate DB
-        Server -> Server: Prepare error response
+        AR --> ASvc: nullopt
+        deactivate AR
+        ASvc -> ASvc: Return error:\n"Invalid username or password"
+        ASvc --> AC: AuthResult{success=false}
+        deactivate ASvc
+        AC --> Server: Response{success=false}
+        deactivate AC
         
-        Server -> Socket: send(ERROR)
-        activate Socket
-        Socket -> UI: Forward error
-        deactivate Socket
-        UI -> User: Display "User not found"
-        
+        Server -> SC: send(ERROR, {message})
+        activate SC
+        SC -> NM: ERROR message
+        deactivate SC
+        NM -> AuthHdl: handle(ERROR, payload)
+        activate AuthHdl
+        AuthHdl -> LoginPanel: Show error toast\n(via UIState.showToast())
+        deactivate AuthHdl
+        deactivate NM
+        LoginPanel -> User: Display error message
+    
     else User exists
-        DB --> Server: Return {id, username, password_hash, elo}
+        DB --> AR: User{username, password_hash,\navatar_id, status, is_online}
         deactivate DB
+        AR --> ASvc: User object
+        deactivate AR
         
-        Server -> Server: Verify password hash
+        ASvc -> ASvc: hashPassword(password)
+        ASvc -> ASvc: Verify password_hash
         
         alt Incorrect password
-            Server -> Server: Prepare error response
+            ASvc -> ASvc: Return error:\n"Invalid username or password"
+            ASvc --> AC: AuthResult{success=false}
+            deactivate ASvc
+            AC --> Server: Response{success=false}
+            deactivate AC
             
-            Server -> Socket: send(ERROR)
-            activate Socket
-            Socket -> UI: Forward error
-            deactivate Socket
-            UI -> User: Display "Incorrect password"
+            Server -> SC: send(ERROR, {message})
+            activate SC
+            SC -> NM: ERROR message
+            deactivate SC
+            NM -> LoginPanel: Error via AuthHandler
+            deactivate NM
+            LoginPanel -> User: Show error toast
             
-        else Correct password
-            Server -> Server: Generate sessionID
+        else Account banned
+            ASvc -> ASvc: Check status == "banned"
+            ASvc --> AC: AuthResult{success=false,\nmessage="Account is banned"}
+            deactivate ASvc
+            AC --> Server: Response{success=false}
+            deactivate AC
             
-            Server -> DB: Update user status
+            Server -> SC: send(ERROR, {message})
+            activate SC
+            SC -> NM: ERROR message
+            deactivate SC
+            NM -> LoginPanel: Error via AuthHandler
+            deactivate NM
+            LoginPanel -> User: Show error toast
+            
+        else Correct password & active
+            ASvc -> AR: updateLastLogin(username)\n[Updates last_login & is_online=true]
+            activate AR
+            AR -> DB: Update user document
             activate DB
-            DB --> Server: Updated
+            DB --> AR: Updated
             deactivate DB
+            AR --> ASvc: Success
+            deactivate AR
             
-            Server -> Server: Store session:\nsessions[sessionID] = {socket, userID}
+            ASvc --> AC: AuthResult{success=true,\nusername, avatar_id}
+            deactivate ASvc
+            AC --> Server: Response{success=true,\ndata={username, avatar_id}}
+            deactivate AC
             
-            Server -> Server: Prepare success response
+            Server -> Server: Check if username\nalready in use\n(g_username_to_fd)
             
-            Server -> Socket: send(AUTHENTICATED)
-            activate Socket
-            Socket -> UI: Forward response
-            deactivate Socket
-            
-            UI -> UI: Save sessionID
-            UI -> User: Show "Signin successful!"
-            UI -> User: Redirect to Main Lobby
+            alt Username already logged in
+                Server -> SC: send(ERROR,\n"Username already in use")
+                activate SC
+                SC -> NM: ERROR message
+                deactivate SC
+                NM -> LoginPanel: Error via AuthHandler
+                deactivate NM
+                LoginPanel -> User: Show error toast
+                
+            else Username available
+                Server -> Server: g_clients[fd].username = username\n g_clients[fd].avatar_id = avatar_id\n g_username_to_fd[username] = fd
+                
+                Server -> SC: send(AUTHENTICATED)
+                activate SC
+                SC -> NM: AUTHENTICATED message
+                deactivate SC
+                deactivate Server
+                
+                NM -> AuthHdl: handle(AUTHENTICATED)
+                activate AuthHdl
+                AuthHdl -> SC: setUsername(username)
+                AuthHdl -> LoginPanel: Navigate to main menu\n(via UIState)
+                AuthHdl -> NM: requestUserStats(username, "all")
+                AuthHdl -> NM: requestFriendsList()
+                AuthHdl -> NM: requestActiveGame(username)
+                AuthHdl --> NM: [Async requests initiated]
+                deactivate AuthHdl
+                LoginPanel -> User: Show main menu
+            end
         end
     end
 end
 
-deactivate UI
-deactivate Server
+deactivate LoginPanel
+
+note right of Server
+  No sessionID used.
+  Server maps: username ↔ socket fd
+  g_clients[fd].username = username
+  g_username_to_fd[username] = fd
+end note
 
 @enduml

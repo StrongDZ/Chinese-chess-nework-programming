@@ -1,0 +1,14 @@
+\subsection{User Authentication (Signin)}
+
+This sequence diagram illustrates the complete user authentication process, from user input to successful login and post-authentication data fetching. The authentication flow follows a layered architecture on both client and server sides.
+
+\textbf{Frontend Flow:} When the user enters credentials, \texttt{LoginPanel} validates the input and calls \texttt{NetworkManager.auth().login()}, which routes through \texttt{AuthSender} to \texttt{SocketClient} for message transmission. The client saves credentials for auto-login and sets the username in \texttt{UIState} before sending the \texttt{LOGIN} message.
+
+\textbf{Backend Flow:} The server's \texttt{handleLogin()} routes the request through \texttt{AuthController} to \texttt{AuthService}, which queries \texttt{AuthRepository} to fetch user data from MongoDB. The service verifies the password hash (SHA-256), checks account status, and updates the last login timestamp and online status. Upon successful authentication, the server maps the username to the socket file descriptor using \texttt{g\_clients[fd].username} and \texttt{g\_username\_to\_fd[username]}, then sends \texttt{AUTHENTICATED} to the client.
+
+\textbf{Error Handling:} The system handles multiple error scenarios: invalid credentials (returns generic "Invalid username or password" for security), banned accounts, and concurrent login attempts (username already in use). All errors are routed through \texttt{AuthHandler} to display toast notifications.
+
+\textbf{Post-Authentication:} Upon receiving \texttt{AUTHENTICATED}, \texttt{AuthHandler} sets the username in \texttt{SocketClient}, navigates to the main menu, and initiates asynchronous requests to fetch user statistics, friends list, and active game state for session restoration.
+
+The authentication system does not use session tokens or session IDs; instead, it maintains a direct mapping between usernames and socket file descriptors for session management.
+

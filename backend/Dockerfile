@@ -4,7 +4,11 @@ FROM ubuntu:22.04
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# --- QUAN TRỌNG: Ngăn Python buffer output (tránh bị treo log/data) ---
+ENV PYTHONUNBUFFERED=1
+
 # Install build dependencies
+# Thay python3-minimal bằng python3 đầy đủ để tránh thiếu thư viện
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -18,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     libsnappy-dev \
     libzstd-dev \
-    python3-minimal \
+    python3 \
     autoconf \
     automake \
     libtool \
@@ -26,7 +30,7 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Build MongoDB C driver from source (required for C++ driver)
+# ... (Giữ nguyên phần Build MongoDB C Driver) ...
 RUN cd /tmp && \
     rm -rf mongo-c-driver && \
     git clone https://github.com/mongodb/mongo-c-driver.git --branch 1.25.0 --depth 1 && \
@@ -42,8 +46,7 @@ RUN cd /tmp && \
     cd / && rm -rf /tmp/mongo-c-driver && \
     ldconfig
 
-# Build MongoDB C++ driver from source (not available in Ubuntu repos)
-# Clone and checkout stable release tag
+# ... (Giữ nguyên phần Build MongoDB C++ Driver) ...
 RUN cd /tmp && \
     rm -rf mongo-cxx-driver && \
     git clone https://github.com/mongodb/mongo-cxx-driver.git && \
@@ -62,24 +65,41 @@ RUN cd /tmp && \
     cd / && rm -rf /tmp/mongo-cxx-driver && \
     ldconfig
 
-# Install nlohmann/json (header-only library)
+# ... (Giữ nguyên phần Install JSON libs) ...
 RUN mkdir -p /usr/include/nlohmann && \
     wget -q https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp -O /usr/include/nlohmann/json.hpp
 
-# Install rapidjson (header-only library)
 RUN mkdir -p /usr/include/rapidjson && \
     cd /tmp && \
     git clone https://github.com/Tencent/rapidjson.git --depth 1 && \
     cp -r rapidjson/include/rapidjson/* /usr/include/rapidjson/ && \
     rm -rf /tmp/rapidjson
 
-# Build Pikafish from source (to match Ubuntu 22.04 GLIBC version)
-# Pikafish uses Makefile-based build system
-# Using 'build' target (faster) instead of 'profile-build' (slower but optimized)
+# ... (Giữ nguyên phần Build Pikafish - Logic này của bạn đã rất tốt) ...
 RUN cd /tmp && \
     git clone https://github.com/official-pikafish/Pikafish.git --depth 1 && \
     cd Pikafish/src && \
-    make -j$(nproc) build ARCH=x86-64-sse41-popcnt COMP=gcc && \
+    ARCH_TYPE=$(uname -m) && \
+    BUILD_SUCCESS=false && \
+    if [ "$ARCH_TYPE" = "x86_64" ] || [ "$ARCH_TYPE" = "amd64" ]; then \
+        echo "Building for x86-64 architecture" && \
+        (make -j$(nproc) build ARCH=x86-64-sse41-popcnt COMP=gcc && BUILD_SUCCESS=true) || \
+        (make clean 2>/dev/null; make -j$(nproc) build ARCH=x86-64-avx2 COMP=gcc && BUILD_SUCCESS=true) || \
+        (make clean 2>/dev/null; make -j$(nproc) build ARCH=x86-64-bmi2 COMP=gcc && BUILD_SUCCESS=true) || \
+        (make clean 2>/dev/null; make -j$(nproc) build ARCH=x86-64 COMP=gcc && BUILD_SUCCESS=true) || \
+        (make clean 2>/dev/null; make -j$(nproc) build COMP=gcc && BUILD_SUCCESS=true); \
+    elif [ "$ARCH_TYPE" = "aarch64" ] || [ "$ARCH_TYPE" = "arm64" ]; then \
+        echo "Building for ARM64 architecture" && \
+        (make -j$(nproc) build ARCH=armv8 COMP=gcc && BUILD_SUCCESS=true) || \
+        (make clean 2>/dev/null; make -j$(nproc) build ARCH=arm64 COMP=gcc && BUILD_SUCCESS=true) || \
+        (make clean 2>/dev/null; make -j$(nproc) build COMP=gcc && BUILD_SUCCESS=true); \
+    else \
+        echo "Unknown architecture $ARCH_TYPE, trying generic build" && \
+        (make -j$(nproc) build COMP=gcc && BUILD_SUCCESS=true); \
+    fi && \
+    if [ "$BUILD_SUCCESS" = "false" ]; then \
+        echo "WARNING: Pikafish build failed. Will use pre-built binary if available."; \
+    fi && \
     ls -la && \
     if [ -f pikafish ]; then \
         mkdir -p /opt/pikafish && \
@@ -87,9 +107,8 @@ RUN cd /tmp && \
         chmod +x /opt/pikafish/pikafish && \
         echo "Pikafish built and copied successfully"; \
     else \
-        echo "ERROR: pikafish binary not found after build" && \
-        find . -name "pikafish" -type f && \
-        exit 1; \
+        echo "WARNING: pikafish binary not found after build, will use pre-built if available" && \
+        find . -name "pikafish" -type f 2>/dev/null || true; \
     fi && \
     cd / && \
     rm -rf /tmp/Pikafish && \
@@ -101,31 +120,33 @@ WORKDIR /app
 # Copy backend source code
 COPY backend .
 
-# Copy AI folder (needed for AI service)
+# Copy AI folder
 COPY AI ./AI
 
-# Build the project to /opt/app (outside volume mount)
+# Build the project to /opt/app
 RUN rm -rf /opt/app && \
     mkdir -p /opt/app/build && \
     cd /opt/app && \
     cp -r /app/* . && \
     rm -rf /opt/app/build && \
     mkdir -p /opt/app/build && \
-    # Copy built pikafish to AI folder (replace incompatible binary)
+    # Logic copy và phân quyền cho AI
     if [ -f /opt/pikafish/pikafish ]; then \
         cp /opt/pikafish/pikafish /opt/app/AI/pikafish && \
-        chmod +x /opt/app/AI/pikafish && \
-        echo "Pikafish copied to AI folder"; \
+        echo "Pikafish copied to AI folder from build"; \
+    elif [ -f /opt/app/AI/pikafish ]; then \
+        echo "Using pre-built pikafish from AI folder"; \
     else \
-        chmod +x /opt/app/AI/pikafish 2>/dev/null || true; \
+        echo "WARNING: No pikafish binary found."; \
     fi && \
+    # --- Cấp quyền thực thi cho CẢ Pikafish và Wrapper Script ---
+    chmod +x /opt/app/AI/pikafish && \
+    chmod +x /opt/app/AI/ai_persistent_wrapper.py && \
+    \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && \
     cmake --build . -j$(nproc)
 
-# Expose port (default 8080)
 EXPOSE 8080
 
-# Run the server from /opt/app/build (not affected by volume mount)
 CMD ["/opt/app/build/bin/ChineseChessNetworkProgramming", "8080"]
-

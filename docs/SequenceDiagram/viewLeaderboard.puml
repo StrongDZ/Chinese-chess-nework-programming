@@ -5,108 +5,159 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-boundary "UI" as UI
-control "TCP Socket" as Socket
+boundary "RankingPanel" as RankingPanel
+participant "NetworkManager" as NM
+participant "InfoSender" as IS
+participant "SocketClient" as SC
+participant "InfoHandler" as IH
 control "Server" as Server
-database "Database" as DB
+participant "PlayerStatController" as PSC
+participant "PlayerStatService" as PSSvc
+participant "PlayerStatRepository" as PSR
+participant "AuthRepository" as AR
+database "MongoDB" as DB
 
-note over UI, Server
+note over RankingPanel, Server
   TCP connection already established
   from login session
 end note
 
 == View Leaderboard ==
-User -> UI: Click "Leaderboard" / "Rankings"
-activate UI
+User -> RankingPanel: Click "Rankings" / "Leaderboard"
+activate RankingPanel
 
-UI -> UI: Request leaderboard
-
-UI -> Socket: send(LEADER_BOARD)
-activate Socket
-Socket -> Server: Forward packet
-deactivate Socket
-activate Server
-
-== Fetch Top Players ==
-Server -> DB: Get leaderboard
-activate DB
-
-alt No players found
-    DB --> Server: Empty result
-    deactivate DB
+RankingPanel -> RankingPanel: Check if data already loaded
+alt Data not loaded
+    RankingPanel -> NM: info().requestLeaderBoard("", 0)
+    activate NM
+    NM -> IS: requestLeaderBoard(timeControl, limit)
+    activate IS
+    IS -> SC: send(LEADER_BOARD, {})
+    activate SC
+    SC -> Server: LEADER_BOARD message\n[TCP socket]
+    deactivate SC
+    deactivate IS
     
-    Server -> Socket: send(INFO)
-    activate Socket
-    Socket -> UI: Forward response
-    deactivate Socket
-    
-    UI -> User: Display "No players yet\nBe the first to play!"
-    deactivate UI
-    
-else Players found
-    DB --> Server: Return top 100 players list:\n[{userID, username, elo,\ntotal_games, wins, losses}...]
-    deactivate DB
-    
-    Server -> Socket: send(INFO)
-    activate Socket
-    Socket -> UI: Forward leaderboard data
-    deactivate Socket
-    
-    UI -> UI: Parse leaderboard data
-    
-    UI -> User: Display leaderboard
-    deactivate UI
-    deactivate Server
-end
-
-== Search Specific Player ==
-User -> UI: Enter username in search box\n(e.g., "Player123")
-activate UI
-
-UI -> UI: Validate input:\nmin 3 characters
-
-alt Input too short
-    UI -> User: Show "Enter at least 3 characters"
-    deactivate UI
-    
-else Valid input
-    UI -> UI: Search player
-    
-    UI -> Socket: send(USER_STATS)
-    activate Socket
-    Socket -> Server: Forward search request
-    deactivate Socket
+    Server -> Server: handleLeaderBoard()\nParse message
     activate Server
     
-    Server -> DB: Search players
-    activate DB
+    Server -> Server: Check PlayerStatController\ninitialized
     
-    alt No matches found
-        DB --> Server: Empty result
-        deactivate DB
-        
-        Server -> Socket: send(INFO)
-        activate Socket
-        Socket -> UI: Forward response
-        deactivate Socket
-        
-        UI -> User: Display "No player found\nmatching 'Player123'"
-        
-    else Players found
-        DB --> Server: Return matching players:\n[{userID, username, elo, rank}...]
-        deactivate DB
-        
-    deactivate UI
+    Server -> PSC: handleGetAllUsersStats(request)
+    activate PSC
+    PSC -> PSSvc: getAllUsersStats()
+    activate PSSvc
+    PSSvc -> PSR: getAllUsersStats()
+    activate PSR
+    PSR -> DB: Query all player_stats\n(time_control: blitz OR classical)
+    activate DB
+    DB --> PSR: All stats documents\n[{username, time_control, rating,\nwins, losses, draws, ...}...]
+    deactivate DB
+    PSR --> PSSvc: vector<PlayerStat>
+    deactivate PSR
+    PSSvc --> PSC: PlayerStatResult{stats}
+    deactivate PSSvc
+    PSC --> Server: Response{status, all_users_stats}
+    deactivate PSC
+    
+    Server -> SC: send(INFO,\n{status: "success",\nall_users_stats: [...]})
+    activate SC
+    SC -> NM: INFO message
+    deactivate SC
+    NM -> IH: handle(INFO)
+    activate IH
+    IH -> IH: Parse response\nCheck for "all_users_stats" field
+    IH -> RankingPanel: Update leaderboard\n(via UIState callback)
+    deactivate IH
+    deactivate NM
     deactivate Server
+    
+    RankingPanel -> RankingPanel: Store all stats\nFilter by current mode\n(Classical/Blitz)
+    RankingPanel -> RankingPanel: Sort by rating\nDisplay leaderboard
+    RankingPanel -> User: Show leaderboard\nwith rankings
+else Data already loaded
+    RankingPanel -> RankingPanel: Filter existing data\nby current mode
+    RankingPanel -> User: Show leaderboard
+end
+deactivate RankingPanel
+
+== Switch Mode (Classical/Blitz) ==
+User -> RankingPanel: Click mode tab\n(Classical or Blitz)
+activate RankingPanel
+
+RankingPanel -> RankingPanel: Filter existing data\nby selected mode
+RankingPanel -> RankingPanel: Re-sort and display
+RankingPanel -> User: Show filtered leaderboard
+deactivate RankingPanel
+
+== Search Specific Player ==
+User -> RankingPanel: Enter username in search box
+activate RankingPanel
+
+RankingPanel -> RankingPanel: Validate input\n(min 3 characters)
+
+alt Input too short
+    RankingPanel -> User: Show validation error
+    deactivate RankingPanel
+    
+else Valid input
+    RankingPanel -> NM: info().searchUsers(query)
+    activate NM
+    NM -> IS: searchUsers(query)
+    activate IS
+    IS -> SC: send(INFO,\n{action: "search_users",\nsearch_query: query})
+    activate SC
+    SC -> Server: INFO message
+    deactivate SC
+    deactivate IS
+    
+    Server -> Server: processMessage()\nParse INFO message
+    activate Server
+    
+    Server -> Server: Check action == "search_users"\nCheck sender logged in
+    
+    Server -> AR: searchUsers(query, limit=50)
+    activate AR
+    AR -> DB: Find users by username prefix\n(case-insensitive regex)
+    activate DB
+    DB --> AR: Matching usernames
+    deactivate DB
+    AR --> Server: vector<string> usernames
+    deactivate AR
+    
+    Server -> Server: Exclude current user\nfrom results
+    
+    Server -> SC: send(INFO,\n[username1, username2, ...])
+    activate SC
+    SC -> NM: INFO message
+    deactivate SC
+    NM -> IH: handle(INFO)
+    activate IH
+    IH -> IH: Detect array format\nParse as search results
+    IH -> RankingPanel: Update search results\n(via UIState callback)
+    deactivate IH
+    deactivate NM
+    deactivate Server
+    
+    RankingPanel -> RankingPanel: Filter leaderboard\nby search results
+    RankingPanel -> User: Show filtered results
+    deactivate RankingPanel
 end
 
 == Leave Leaderboard ==
-User -> UI: Click "Back" button
-activate UI
+User -> RankingPanel: Click "Back" button
+activate RankingPanel
 
-UI -> User: Return to main menu/lobby
-deactivate UI
+RankingPanel -> RankingPanel: Close panel\n(via UIState.closeRanking())
+RankingPanel -> User: Return to main menu
+deactivate RankingPanel
+
+note right of Server
+  Leaderboard returns ALL user stats
+  (both classical and blitz).
+  Frontend filters by mode client-side.
+  No limit applied - returns all players.
+end note
 
 @enduml
 
-∂

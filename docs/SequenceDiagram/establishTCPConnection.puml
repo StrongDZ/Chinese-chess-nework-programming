@@ -5,27 +5,67 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 actor User
-boundary "UI" as UI
-control "TCP Socket" as Socket
-control "Server" as Server
+boundary "UI (JavaFX)" as UI
+participant "NetworkManager" as NM
+participant "SocketClient" as SC
+participant "Java Socket" as JSocket
+control "Server (C++)" as Server
+participant "epoll" as Epoll
 database "Database" as DB
+
+== Server Initialization ==
+Server -> Server: socket(AF_INET, SOCK_STREAM)
+Server -> Server: bind(0.0.0.0, 8080)
+Server -> Server: listen(64)
+Server -> Server: epoll_create1()
+Server -> Epoll: epoll_ctl(ADD, server_fd)
+activate Server
+activate Epoll
 
 == Establish TCP Connection ==
 User -> UI: Open application
 activate UI
 
-UI -> Socket: socket(AF_INET, SOCK_STREAM)
-activate Socket
-UI -> Socket: connect(serverIP, 8080)
+UI -> NM: start()
+activate NM
+NM -> NM: initialize(UIState)
+NM -> SC: connectToServer()
+activate SC
 
-Socket -> Server: TCP 3-way handshake\n(SYN → SYN-ACK → ACK)
-activate Server
+SC -> JSocket: new Socket(host, port)\n[Auto: socket + connect]
+activate JSocket
+JSocket -> Server: TCP 3-way handshake\n(SYN → SYN-ACK → ACK)
 
-Server -> Server: accept() connection\nCreate thread for UI
-Socket --> UI: Connection established
-deactivate Socket
+Server -> Epoll: epoll_wait() detects\nnew connection
+Epoll -> Server: Event: server_fd ready
 
+Server -> Server: accept(server_fd)
+Server -> Server: fcntl(client_fd, O_NONBLOCK)\n[Set non-blocking mode]
+Server -> Server: g_clients[client_fd] = PlayerInfo\n[Register client]
+Server -> Server: initReadBuffer(client_fd)
+Server -> Epoll: epoll_ctl(ADD, client_fd)\n[EPOLLIN | EPOLLET]
+
+JSocket --> SC: Connection established
+deactivate JSocket
+
+SC -> SC: setKeepAlive(true)\nsetTcpNoDelay(true)
+SC -> SC: Create DataInputStream\nCreate DataOutputStream
+SC -> SC: Start receiveThread\n[Background daemon thread]
+activate SC
+
+SC --> NM: Connection successful
+NM --> UI: Connection ready
+deactivate SC
+
+note right of Server
+  Server uses epoll with thread pool
+  (4 worker threads) for message processing.
+  No thread-per-connection model.
+end note
+
+deactivate NM
 deactivate UI
 deactivate Server
+deactivate Epoll
 == ==
 @enduml

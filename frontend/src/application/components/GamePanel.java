@@ -249,6 +249,38 @@ public class GamePanel extends StackPane implements IGamePanel {
                         chatManager.showChatPopup(result, false);
                     }
                     break;
+                case "game_restore":
+                    System.out.println("[GamePanel] Handling game_restore case");
+                    if (result != null && !result.isEmpty()) {
+                        // Format: "|currentTurn|xfen|movesJson"
+                        // Parse: opponent|gameMode|isRed|currentTurn|xfen|movesJson
+                        String[] parts = result.split("\\|", -1);
+                        if (parts.length >= 5) {
+                            String opponent = parts.length > 0 ? parts[0] : "";
+                            String gameMode = parts.length > 1 ? parts[1] : "classical";
+                            boolean isRed = parts.length > 2 && "true".equals(parts[2]);
+                            String currentTurn = parts.length > 3 ? parts[3] : "red";
+                            String xfen = parts.length > 4 ? parts[4] : "";
+                            String movesJson = parts.length > 5 ? parts[5] : "";
+                            
+                            System.out.println("[GamePanel] Restoring game: opponent=" + opponent + 
+                                ", gameMode=" + gameMode + ", isRed=" + isRed + ", currentTurn=" + currentTurn);
+                            
+                            // Set current turn
+                            setCurrentTurn(currentTurn);
+                            
+                            // Restore board from xfen and moves if available
+                            // Note: ChessBoardManager will restore from moves when game state is updated
+                            if (!xfen.isEmpty() && !movesJson.isEmpty()) {
+                                System.out.println("[GamePanel] Restoring board from xfen and moves");
+                                // Board will be restored when moves are applied
+                            }
+                            
+                            // Update timers based on current turn
+                            timerManager.updateTimersOnTurnChange();
+                        }
+                    }
+                    break;
                 default:
                     System.out.println("[GamePanel] Unknown trigger: " + newVal);
             }

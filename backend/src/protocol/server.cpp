@@ -130,16 +130,19 @@ int main(int argc, char **argv) {
   PlayerStatService playerStatService(playerStatRepo);
   AIService aiService;
 
-  // Initialize AI service
+  // Initialize AI service (non-blocking - don't fail server startup if AI fails)
   bool aiInitialized = aiService.initialize();
   if (!aiInitialized) {
     cerr << "[Server] Warning: AI service initialization failed. AI features "
             "will be unavailable."
          << endl;
-    cerr << "[Server] Make sure AI/ai.py and pikafish are available." << endl;
+    cerr << "[Server] Make sure AI/ai.py, ai_persistent_wrapper.py and pikafish are available." << endl;
+    cerr << "[Server] Server will continue without AI features." << endl;
   } else {
     cout << "[Server] AI service initialized successfully." << endl;
   }
+  
+  // Continue server startup even if AI failed
 
   // Initialize Controllers (as global variables)
   AuthController authController(authService);
@@ -846,6 +849,23 @@ void processMessage(const ParsedMessage &pm, int fd) {
 
               sendMessage(fd, MessageType::INFO,
                           InfoPayload{activeGameResponse});
+              
+              // If it's an AI game and it's AI's turn, trigger AI move
+              // Check if opponent is AI (opponent_fd == -1 or opponent starts with "AI_")
+              bool isAIGame = (sender.opponent_fd == -1) || 
+                              (opponentUsername.find("AI_") == 0);
+              
+              if (isAIGame && currentTurn == "black") {
+                cout << "[GET_ACTIVE_GAME] AI game restored, current_turn=black, triggering AI move" << endl;
+                // Get xfen from response for AI move
+                string xfenForAI = "";
+                if (detailsResponse.contains("game")) {
+                  xfenForAI = detailsResponse["game"].value("xfen", "");
+                }
+                // Trigger AI move (will be called after response is sent)
+                // Use a small delay to ensure response is sent first
+                handleAIMove(fd, xfenForAI);
+              }
             } else {
               // No active game
               nlohmann::json noGameResponse;

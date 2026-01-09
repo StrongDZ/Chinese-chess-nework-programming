@@ -1,0 +1,10 @@
+\subsection{TCP Connection Establishment}
+
+This sequence diagram illustrates the TCP connection establishment process between the JavaFX client and C++ backend server, consisting of two phases: \textit{Server Initialization} and \textit{Connection Establishment}.
+
+\textbf{Server Initialization:} The server creates a TCP socket, binds to \texttt{0.0.0.0:8080}, sets it to listen mode (backlog: 64), initializes an \texttt{epoll} instance, and registers the server socket for connection events.
+
+\textbf{Connection Establishment:} When the application starts, \texttt{Main} initializes \texttt{NetworkManager}, which calls \texttt{SocketClient.connect()}. Java's \texttt{Socket} automatically performs socket creation and connection, initiating the TCP three-way handshake. The server's \texttt{epoll\_wait()} detects the connection, triggers \texttt{accept()}, configures the client socket to non-blocking mode (required for edge-triggered epoll), registers the client in the global map, initializes a per-connection read buffer, and adds the client to epoll. The client configures TCP keepalive, disables Nagle's algorithm, creates I/O streams, and starts a background receive thread.
+
+The server uses an \texttt{epoll}-based event-driven architecture with a thread pool (4 workers) for message processing, enabling efficient handling of multiple concurrent clients without the overhead of thread-per-connection.
+

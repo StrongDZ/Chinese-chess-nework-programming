@@ -1,0 +1,13 @@
+\subsection{View Leaderboard}
+
+This sequence diagram illustrates the leaderboard viewing process, including fetching player statistics, client-side filtering by game mode, and searching for specific players. The system retrieves all user statistics (both classical and blitz modes) in a single request and performs filtering on the client side.
+
+\textbf{Fetch Leaderboard:} When the user clicks "Rankings" or "Leaderboard", \texttt{RankingPanel} checks if data is already cached. If not, it sends a \texttt{LEADER\_BOARD} request through \texttt{NetworkManager} and \texttt{InfoSender}. The server's \texttt{handleLeaderBoard()} routes the request through \texttt{PlayerStatController} → \texttt{PlayerStatService} → \texttt{PlayerStatRepository} to query MongoDB for all player statistics matching either "blitz" or "classical" time control. The repository returns all matching documents with fields including username, time control, rating, wins, losses, and draws. The server wraps the response in an \texttt{INFO} message with \texttt{all\_users\_stats} array and sends it to the client. \texttt{InfoHandler} parses the response and updates \texttt{RankingPanel} via a UIState callback. The panel stores all statistics, filters by the current mode (Classical or Blitz), sorts by rating, and displays the leaderboard.
+
+\textbf{Mode Switching:} When the user switches between Classical and Blitz tabs, \texttt{RankingPanel} filters the cached data client-side without making additional server requests. This provides instant mode switching and reduces server load.
+
+\textbf{Search Player:} When the user enters a username in the search box (minimum 3 characters), the frontend sends an \texttt{INFO} message with \texttt{action: "search\_users"} and \texttt{search\_query}. The server validates the request, calls \texttt{AuthRepository.searchUsers()} to perform a case-insensitive prefix search in the users collection, excludes the current user from results, and returns an array of matching usernames. The frontend filters the leaderboard display to show only players matching the search query.
+
+The leaderboard system returns all user statistics without limit, enabling the frontend to cache data and provide instant filtering and mode switching without additional network requests.
+
+

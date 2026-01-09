@@ -1,45 +1,189 @@
 @startuml
+title Challenge Player Sequence Diagram - Chinese Chess (TCP Socket)
 
-title Challenge Player - Sequence Diagram (Simplified)
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
 
-actor P1 as "Player 1"
-boundary C1 as "Client 1"
-control Socket
-control Server
-boundary C2 as "Client 2"
-actor P2 as "Player 2"
-database DB
+actor P1 as "Player 1\n(Challenger)"
+boundary "PlayWithFriendPanel" as P1Panel
+participant "NetworkManager" as NM1
+participant "GameSender" as GS1
+participant "SocketClient" as SC1
+participant "GameHandler" as GH1
+control "Server" as Server
+participant "GameController" as GC
+participant "GameService" as GSvc
+participant "GameRepository" as GR
+boundary "PlayWithFriendPanel" as P2Panel
+participant "NetworkManager" as NM2
+participant "GameSender" as GS2
+participant "SocketClient" as SC2
+participant "GameHandler" as GH2
+actor P2 as "Player 2\n(Target)"
 
-== Send Challenge ==
-P1 -> C1: Click "Challenge"
-C1 -> Socket: send(CHALLENGE_REQUEST)
-Socket -> Server: Forward packet
-Server -> DB: Check target status
+database "MongoDB" as DB
 
-alt Target unavailable
-    Server -> C1: ERROR
-else Target online
-    Server -> DB: Save challenge
-    Server -> C1: INFO
-    Server -> C2: CHALLENGE_REQUEST
+== Send Challenge Request ==
+P1 -> P1Panel: Click "Challenge" button
+activate P1Panel
+P1Panel -> P1Panel: Get mode & time limit\nfrom UIState
+P1Panel -> NM1: game().sendChallenge(target, mode, timeLimit)
+activate NM1
+NM1 -> GS1: sendChallenge(target, mode, timeLimit)
+activate GS1
+GS1 -> SC1: send(CHALLENGE_REQUEST,\n{to_user, mode, time_limit})
+activate SC1
+SC1 -> Server: CHALLENGE_REQUEST message\n[TCP socket]
+deactivate SC1
+deactivate GS1
+
+Server -> Server: handleChallenge()\nParse message
+activate Server
+
+Server -> Server: Check sender logged in\nCheck target in g_username_to_fd
+
+alt Target offline or invalid
+    Server -> SC1: send(ERROR,\n"Target user is offline")
+    activate SC1
+    SC1 -> NM1: ERROR message
+    deactivate SC1
+    NM1 -> P1Panel: Error via GameHandler
+    deactivate NM1
+    P1Panel -> P1: Show error toast
+    deactivate P1Panel
+    deactivate Server
+    
+else Target online & valid
+    Server -> Server: Store pending challenge info\non target PlayerInfo:\n- pending_challenge_mode\n- pending_challenge_time\n- pending_challenger
+    
+    Server -> SC2: send(CHALLENGE_REQUEST,\n{from_user, mode, time_limit})
+    activate SC2
+    SC2 -> NM2: CHALLENGE_REQUEST message
+    deactivate SC2
+    deactivate Server
+    
+    NM2 -> GH2: handle(CHALLENGE_REQUEST)
+    activate GH2
+    GH2 -> P2Panel: showChallengeRequest(from_user, mode, timeLimit)
+    deactivate GH2
+    deactivate NM2
+    P2Panel -> P2: Show challenge dialog\nwith mode & time info
+    activate P2Panel
+    
+    Server -> SC1: send(INFO,\n{challenge_sent: true, target})
+    activate SC1
+    SC1 -> NM1: INFO message
+    deactivate SC1
+    NM1 -> P1Panel: Show waiting panel
+    deactivate NM1
+    deactivate P1Panel
 end
 
 == Opponent Response ==
-alt Timeout
-    Server -> DB: Update challenge status
-    Server -> C1: INFO
-else Decline
-    P2 -> C2: Decline
-    C2 -> Server: send(CHALLENGE_RESPONSE)
-    Server -> DB: Update challenge status
-    Server -> C1: INFO
-else Accept
-    P2 -> C2: Accept
-    C2 -> Server: send(CHALLENGE_RESPONSE)
-    Server -> DB: Update challenge status
-    Server -> DB: Create game
-    Server -> C1: GAME_START
-    Server -> C2: GAME_START
+alt Decline Challenge
+    P2 -> P2Panel: Click "Decline"
+    P2Panel -> NM2: game().respondChallenge(challenger, false)
+    activate NM2
+    NM2 -> GS2: respondChallenge(challenger, false)
+    activate GS2
+    GS2 -> SC2: send(CHALLENGE_RESPONSE,\n{to_user, accept: false})
+    activate SC2
+    SC2 -> Server: CHALLENGE_RESPONSE message
+    deactivate SC2
+    deactivate GS2
+    
+    Server -> Server: handleChallengeResponse()\nGet pending challenge info\nClear pending challenge fields
+    activate Server
+    
+    Server -> SC1: send(CHALLENGE_RESPONSE,\n{from_user, accept: false})
+    activate SC1
+    SC1 -> NM1: CHALLENGE_RESPONSE message
+    deactivate SC1
+    NM1 -> GH1: handle(CHALLENGE_RESPONSE)
+    activate GH1
+    GH1 -> P1Panel: onChallengeRejected(from_user)
+    deactivate GH1
+    deactivate NM1
+    P1Panel -> P1: Hide waiting panel\nShow rejection message
+    
+    Server -> SC2: send(INFO,\n{challenge_declined: true})
+    activate SC2
+    SC2 -> NM2: INFO message
+    deactivate SC2
+    deactivate NM2
+    P2Panel -> P2: Hide challenge dialog
+    deactivate P2Panel
+    deactivate Server
+    
+else Accept Challenge
+    P2 -> P2Panel: Click "Accept"
+    P2Panel -> NM2: game().respondChallenge(challenger, true)
+    activate NM2
+    NM2 -> GS2: respondChallenge(challenger, true)
+    activate GS2
+    GS2 -> SC2: send(CHALLENGE_RESPONSE,\n{to_user, accept: true})
+    activate SC2
+    SC2 -> Server: CHALLENGE_RESPONSE message
+    deactivate SC2
+    deactivate GS2
+    
+    Server -> Server: handleChallengeResponse()\nGet pending challenge info\n(mode, time_limit)\nClear pending challenge fields
+    activate Server
+    
+    Server -> Server: handleStartGame(challenger_fd, target_fd, mode, time_limit)
+    Server -> Server: Check both players available\nCheck not already in game
+    
+    Server -> GC: handleCreateGame(request)
+    activate GC
+    GC -> GSvc: createGame(challenger, target, mode, rated)
+    activate GSvc
+    GSvc -> GSvc: Random assign red/black\n(red goes first)
+    GSvc -> GR: createGame(game)
+    activate GR
+    GR -> DB: Insert game document\nwith initial XFEN
+    activate DB
+    DB --> GR: game_id
+    deactivate DB
+    GR --> GSvc: game_id
+    deactivate GR
+    GSvc --> GC: GameResult{game_id, red_player, black_player}
+    deactivate GSvc
+    GC --> Server: Response{game_id, game}
+    deactivate GC
+    
+    Server -> Server: Set up game state:\n- g_clients[fd1].in_game = true\n- g_clients[fd1].opponent_fd = fd2\n- g_clients[fd1].game_id = game_id\n- g_clients[fd1].is_red = (from game)\n- g_clients[fd1].current_turn = "red"\n- Same for fd2
+    
+    Server -> SC1: send(GAME_START,\n{opponent, game_mode, time_limit,\nplayer_is_red, game_id})
+    activate SC1
+    SC1 -> NM1: GAME_START message
+    deactivate SC1
+    NM1 -> GH1: handle(GAME_START)
+    activate GH1
+    GH1 -> P1Panel: Navigate to game\n(via UIState)
+    deactivate GH1
+    deactivate NM1
+    P1Panel -> P1: Show game board
+    
+    Server -> SC2: send(GAME_START,\n{opponent, game_mode, time_limit,\nplayer_is_red, game_id})
+    activate SC2
+    SC2 -> NM2: GAME_START message
+    deactivate SC2
+    NM2 -> GH2: handle(GAME_START)
+    activate GH2
+    GH2 -> P2Panel: Navigate to game\n(via UIState)
+    deactivate GH2
+    deactivate NM2
+    P2Panel -> P2: Show game board
+    deactivate P2Panel
+    deactivate Server
 end
+
+note right of Server
+  Challenge info stored in memory only:
+  - pending_challenge_mode
+  - pending_challenge_time
+  - pending_challenger
+  No database storage for challenges.
+end note
 
 @enduml

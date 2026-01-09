@@ -3,18 +3,21 @@
 
 #include <string>
 #include <optional>
+#include <cstdio>
+#include <unistd.h>
+#include <sys/types.h>
 #include <nlohmann/json.hpp>
 
 /**
  * AIService - Service layer for AI integration
  * 
- * Communicates with Python AI engine via subprocess/HTTP
+ * Communicates with Python AI engine via persistent subprocess
  * Provides move prediction for AI games
  * 
  * Difficulty levels:
- * - easy: depth 3, quick responses
- * - medium: depth 5, balanced play
- * - hard: depth 8, strongest play
+ * - easy: depth 8, 3 seconds
+ * - medium: depth 12, 8 seconds
+ * - hard: depth 18, 15 seconds
  */
 
 // AI Move result
@@ -45,14 +48,23 @@ private:
     std::string aiScriptPath;
     bool initialized;
     
+    // Persistent engine process
+    FILE* aiProcessStdin;   // stdin pipe to Python process
+    FILE* aiProcessStdout;  // stdout pipe from Python process
+    FILE* aiProcessStderr;  // stderr pipe from Python process (for debugging)
+    pid_t aiProcessPid;     // PID of Python process
+    
     // Convert difficulty enum to string
     std::string difficultyToString(AIDifficulty difficulty);
     
-    // Execute Python AI script and get result
+    // Execute Python AI script and get result (via persistent process)
     std::string executePythonAI(const std::string& xfen, const std::string& difficulty);
     
     // Parse UCI move string to AIMove
     std::optional<AIMove> parseUCIMove(const std::string& uci);
+    
+    // Cleanup persistent process
+    void cleanupProcess();
     
 public:
     AIService();

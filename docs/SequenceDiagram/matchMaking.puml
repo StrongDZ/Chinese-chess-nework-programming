@@ -1,166 +1,217 @@
 @startuml
-title Quick Matching (Random Match) - Sequence Diagram
+title Quick Matching Sequence Diagram - Chinese Chess (TCP Socket)
 
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
-actor "Player 1" as P1
-boundary "UI 1" as C1
-control "TCP Socket" as Socket
+actor P1 as "Player 1"
+boundary "ModePanel/WaitingPanel" as P1Panel
+participant "NetworkManager" as NM1
+participant "GameSender" as GS1
+participant "SocketClient" as SC1
+participant "InfoHandler" as IH1
+participant "GameHandler" as GH1
 control "Server" as Server
-control "Matchmaking Queue" as Queue
-boundary "UI 2" as C2
-actor "Player 2" as P2
-database "Database" as DB
+participant "PlayerStatController" as PSC
+participant "GameController" as GC
+participant "GameService" as GSvc
+participant "GameRepository" as GR
+boundary "ModePanel/WaitingPanel" as P2Panel
+participant "NetworkManager" as NM2
+participant "GameSender" as GS2
+participant "SocketClient" as SC2
+participant "InfoHandler" as IH2
+participant "GameHandler" as GH2
+actor P2 as "Player 2"
+
+database "MongoDB" as DB
+participant "Match Queue\n(in-memory)" as Queue
 
 == Join Matchmaking Queue ==
-P1 -> C1: Click "Find Match" / "Quick Play"
-activate C1
+P1 -> P1Panel: Click "Play now" or\nSelect mode & "Random"
+activate P1Panel
+P1Panel -> P1Panel: Set mode & time limit\nin UIState
+P1Panel -> P1Panel: Open waiting panel
+P1Panel -> NM1: game().requestQuickMatching(mode, timeLimit)
+activate NM1
+NM1 -> GS1: requestQuickMatching(mode, timeLimit)
+activate GS1
+GS1 -> SC1: send(QUICK_MATCHING,\n{mode, time_limit})
+activate SC1
+SC1 -> Server: QUICK_MATCHING message\n[TCP socket]
+deactivate SC1
+deactivate GS1
 
-C1 -> C1: Show game mode selection:\n[Classic] [Rapid] [Blitz]
-
-P1 -> C1: Select mode (e.g., Rapid)
-
-C1 -> C1: Join matchmaking queue
-
-C1 -> Socket: send(QUICK_MATCHING)
-activate Socket
-Socket -> Server: Forward packet
-deactivate Socket
+Server -> Server: handleQuickMatching()\nParse message
 activate Server
 
-Server -> Server: Validate sessionID
+Server -> Server: Check sender logged in\nCheck not already in game
 
-alt Invalid session
-    Server -> Socket: send(ERROR)
-    activate Socket
-    Socket -> C1: Forward error
-    deactivate Socket
-    C1 -> P1: Show "Session expired"
-    deactivate C1
+alt Not logged in or in game
+    Server -> SC1: send(ERROR, message)
+    activate SC1
+    SC1 -> NM1: ERROR message
+    deactivate SC1
+    NM1 -> P1Panel: Error via GameHandler
+    deactivate NM1
+    P1Panel -> P1: Show error toast\nClose waiting panel
+    deactivate P1Panel
+    deactivate Server
     
-else Valid session
-    Server -> DB: Update player status
+else Valid request
+    Server -> PSC: handleGetStats(username, time_control)
+    activate PSC
+    PSC -> DB: Query player rating\nfor time_control mode
     activate DB
-    DB --> Server: Status updated
+    DB --> PSC: Rating (default: 1200)
     deactivate DB
+    PSC --> Server: player_elo
+    deactivate PSC
     
-    Server -> Queue: Add player to queue:\nqueue.add({userID, elo, mode, timestamp})
+    Server -> Queue: Search for match:\n- same mode\n- same time_limit\n- ELO diff <= 300\n- not same player
     activate Queue
-    Queue --> Server: Player queued
     
-    Server -> Socket: send(INFO)
-    activate Socket
-    Socket -> C1: Confirmation
-    deactivate Socket
-    
-    C1 -> C1: Show searching animation
-    C1 -> P1: Display "Searching for opponent...\nEstimated wait: 30s\n[Cancel]"
-    deactivate C1
-    
-    == Matchmaking Algorithm ==
-    loop Every 2 seconds
-        Server -> Queue: Search for match:\nfindMatch(userID, elo±200, mode)
+    alt No match found
+        Queue --> Server: No match
+        deactivate Queue
         
-        alt No suitable opponent found
-            Queue --> Server: No match
-            
-            Server -> Socket: send(INFO)
-            activate Socket
-            Socket -> C1: Update search status
-            deactivate Socket
-            activate C1
-            C1 -> P1: Update wait time
-            deactivate C1
-            
-        else Suitable opponent found
-            Queue --> Server: Match found:\n{player1, player2, elo_diff}
-            deactivate Queue
-            
-            Server -> Server: Validate both players\nstill available
-            
-            Server -> DB: Check player status
-            activate DB
-            DB --> Server: Both IN_QUEUE
-            deactivate DB
-            
-            == Create Matched Game ==
-            Server -> Server: Generate gameID = UUID()
-            Server -> Server: Assign colors randomly:\nplayer1_color = random(RED, BLACK)
-            
-            Server -> DB: Create game
-            activate DB
-            DB --> Server: Game created
-            deactivate DB
-            
-            Server -> DB: Update player status
-            activate DB
-            DB --> Server: Status updated
-            deactivate DB
-            
-            Server -> Queue: Remove both players from queue
+        Server -> Queue: Add player to queue:\n{fd, username, elo, mode, time_limit}
+        activate Queue
+        Queue --> Server: Player queued
+        deactivate Queue
+        
+        Server -> SC1: send(INFO,\n{quick_matching: true,\nstatus: "waiting",\nmode, time_limit})
+        activate SC1
+        SC1 -> NM1: INFO message
+        deactivate SC1
+        NM1 -> IH1: handle(INFO)
+        activate IH1
+        IH1 -> P1Panel: Keep waiting panel open\n(via UIState.openWaiting())
+        deactivate IH1
+        deactivate NM1
+        P1Panel -> P1: Show "Searching for opponent..."
+        deactivate P1Panel
+        deactivate Server
+        
+        note right of Queue
+          Player remains in queue.
+          Next QUICK_MATCHING request
+          will search again.
+        end note
+        
+    else Match found
+        Queue --> Server: Match found:\nmatched_opponent{fd, username, elo}
+        Server -> Queue: Remove both players\nfrom queue
+        Queue --> Server: Players removed
+        deactivate Queue
+        
+        Server -> Server: Double-check opponent\nstill available\n(not disconnected, not in game)
+        
+        alt Opponent unavailable
+            Server -> Queue: Add player back to queue
             activate Queue
-            Queue --> Server: Players removed
+            Queue --> Server: Re-queued
             deactivate Queue
             
-            == Notify Both Players ==
-            Server -> Socket: send(GAME_START)
-            activate Socket
-            Socket -> C1: Forward match info
-            deactivate Socket
-            activate C1
+            Server -> SC1: send(INFO,\n{quick_matching: true,\nstatus: "waiting"})
+            activate SC1
+            SC1 -> NM1: INFO message
+            deactivate SC1
+            NM1 -> IH1: handle(INFO)
+            activate IH1
+            IH1 -> P1Panel: Keep waiting panel
+            deactivate IH1
+            deactivate NM1
+            deactivate Server
             
-            C1 -> C1: Stop searching animation
-            C1 -> P1: Show "Match found!\nOpponent: [username] (ELO: 1420)\nStarting game..."
-            C1 -> C1: Load game board
-            deactivate C1
+        else Both players available
+            Server -> Server: handleStartGame(player1_fd, player2_fd, mode, time_limit)
+            Server -> Server: Check both players\nnot already in game
             
-            Server -> Socket: send(GAME_START)
-            activate Socket
-            Socket -> C2: Forward match info
-            deactivate Socket
-            activate C2
+            Server -> GC: handleCreateGame(request)
+            activate GC
+            GC -> GSvc: createGame(challenger, target, mode, rated)
+            activate GSvc
+            GSvc -> GSvc: Random assign red/black\n(red goes first)
+            GSvc -> GR: createGame(game)
+            activate GR
+            GR -> DB: Insert game document\nwith initial XFEN
+            activate DB
+            DB --> GR: game_id
+            deactivate DB
+            GR --> GSvc: game_id
+            deactivate GR
+            GSvc --> GC: GameResult{game_id, red_player, black_player}
+            deactivate GSvc
+            GC --> Server: Response{game_id, game}
+            deactivate GC
             
-            C2 -> C2: Stop searching animation
-            C2 -> P2: Show "Match found!\nOpponent: [username] (ELO: 1450)\nStarting game..."
-            C2 -> C2: Load game board
-            deactivate C2
+            Server -> Server: Set up game state:\n- g_clients[fd1].in_game = true\n- g_clients[fd1].opponent_fd = fd2\n- g_clients[fd1].game_id = game_id\n- g_clients[fd1].is_red = (from game)\n- g_clients[fd1].current_turn = "red"\n- Same for fd2
             
-            note over C1, C2
-              Both players now enter
-              the game play loop
-              (see Play Game sequence)
-            end note
+            Server -> SC1: send(GAME_START,\n{opponent, game_mode, time_limit,\nplayer_is_red, game_id})
+            activate SC1
+            SC1 -> NM1: GAME_START message
+            deactivate SC1
+            NM1 -> GH1: handle(GAME_START)
+            activate GH1
+            GH1 -> P1Panel: Close waiting panel\nNavigate to game\n(via UIState)
+            deactivate GH1
+            deactivate NM1
+            P1Panel -> P1: Show game board
+            
+            Server -> SC2: send(GAME_START,\n{opponent, game_mode, time_limit,\nplayer_is_red, game_id})
+            activate SC2
+            SC2 -> NM2: GAME_START message
+            deactivate SC2
+            NM2 -> GH2: handle(GAME_START)
+            activate GH2
+            GH2 -> P2Panel: Close waiting panel\nNavigate to game\n(via UIState)
+            deactivate GH2
+            deactivate NM2
+            P2Panel -> P2: Show game board
+            deactivate P2Panel
+            deactivate Server
         end
     end
 end
 
 == Cancel Matchmaking ==
-P1 -> C1: Click "Cancel"
-activate C1
+P1 -> P1Panel: Click "Cancel" button
+activate P1Panel
+P1Panel -> NM1: game().cancelQuickMatching()
+activate NM1
+NM1 -> GS1: cancelQuickMatching()
+activate GS1
+GS1 -> SC1: send(CANCEL_QM, {})
+activate SC1
+SC1 -> Server: CANCEL_QM message
+deactivate SC1
+deactivate GS1
 
-C1 -> Socket: send(QUICK_MATCHING)
-activate Socket
-Socket -> Server: Forward request
-deactivate Socket
+Server -> Server: handleCancelQM()\nCheck sender logged in
+activate Server
 
-Server -> Queue: Remove player from queue:\nqueue.remove(userID)
+Server -> Queue: Remove player from queue\n(queue.remove_if(fd == fd))
 activate Queue
 Queue --> Server: Player removed
 deactivate Queue
 
-Server -> DB: Update player status
-activate DB
-DB --> Server: Status updated
-deactivate DB
-
-Server -> Socket: send(INFO)
-    activate Socket
-    Socket -> C1: Confirmation
-    deactivate Socket
-
-C1 -> P1: Show "Search cancelled"\nReturn to lobby
-deactivate C1
+Server -> SC1: send(INFO,\n{quick_matching_cancelled: true})
+activate SC1
+SC1 -> NM1: INFO message
+deactivate SC1
+NM1 -> P1Panel: Handle cancel response
+deactivate NM1
+P1Panel -> P1Panel: Close waiting panel\n(via UIState.closeWaiting())
+P1Panel -> P1: Return to lobby
+deactivate P1Panel
 deactivate Server
+
+note right of Queue
+  Queue is in-memory only.
+  No database storage.
+  Matching happens immediately
+  when player joins queue.
+end note
 
 @enduml
