@@ -240,30 +240,26 @@ public class GamePanel extends StackPane implements IGamePanel {
                 case "game_result":
                     System.out.println("[GamePanel] Handling game_result case");
                     boolean isAIGame = isAIGame();
-                    // Get rating change from UIState (set by GameHandler from Glicko-2 calculation)
-                    int ratingChange = state.getLastRatingChange();
-                    System.out.println("[GamePanel] Rating change from Glicko-2: " + ratingChange);
-                    
                     if ("win".equals(result)) {
-                        System.out.println("[GamePanel] Calling showGameResult - WIN, ratingChange=" + ratingChange);
+                        System.out.println("[GamePanel] Calling showGameResult - WIN");
                         if (isAIGame) {
                             dialogManager.showGameResultWithCustomText("You win", 0);
                         } else {
-                            dialogManager.showGameResultWithCustomText("You win", ratingChange);
+                            dialogManager.showGameResult(true);
                         }
                     } else if ("lose".equals(result)) {
-                        System.out.println("[GamePanel] Calling showGameResult - LOSE, ratingChange=" + ratingChange);
+                        System.out.println("[GamePanel] Calling showGameResult - LOSE");
                         if (isAIGame) {
                             dialogManager.showGameResultWithCustomText("You lose", 0);
                         } else {
-                            dialogManager.showGameResultWithCustomText("You lose", ratingChange);
+                            dialogManager.showGameResult(false);
                         }
                     } else if ("draw".equals(result)) {
-                        System.out.println("[GamePanel] Calling showGameResult - DRAW, ratingChange=" + ratingChange);
+                        System.out.println("[GamePanel] Calling showGameResult - DRAW");
                         if (isAIGame) {
                             dialogManager.showGameResultWithCustomText("Draw", 0);
                         } else {
-                            dialogManager.showGameResultWithCustomText("Draw", ratingChange);
+                            dialogManager.showGameResultDraw();
                         }
                     } else {
                         System.out.println("[GamePanel] Unknown result: " + result);

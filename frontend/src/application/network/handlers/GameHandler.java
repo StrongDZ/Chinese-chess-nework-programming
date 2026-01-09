@@ -286,14 +286,7 @@ public class GameHandler implements MessageHandler {
             JsonObject json = JsonParser.parseString(payload).getAsJsonObject();
             String winSide = json.has("win_side") ? json.get("win_side").getAsString() : "unknown";
             
-            // Parse rating changes from Glicko-2
-            int redRatingChange = json.has("red_rating_change") ? json.get("red_rating_change").getAsInt() : 0;
-            int blackRatingChange = json.has("black_rating_change") ? json.get("black_rating_change").getAsInt() : 0;
-            int redNewRating = json.has("red_new_rating") ? json.get("red_new_rating").getAsInt() : 0;
-            int blackNewRating = json.has("black_new_rating") ? json.get("black_new_rating").getAsInt() : 0;
-            
             System.out.println("[GameHandler] Parsed winSide: " + winSide);
-            System.out.println("[GameHandler] Rating changes - red: " + redRatingChange + ", black: " + blackRatingChange);
             
             // Xác định kết quả game dựa trên winSide
             String currentUsername = uiState.getUsername();
@@ -301,36 +294,13 @@ public class GameHandler implements MessageHandler {
             final boolean isWinner = !isDraw && currentUsername != null && currentUsername.equals(winSide);
             final String finalWinSide = winSide;
             
-            // Determine rating change for current player based on their color
-            final int playerRatingChange;
-            final int playerNewRating;
-            if (uiState.isPlayerRed()) {
-                playerRatingChange = redRatingChange;
-                playerNewRating = redNewRating;
-            } else {
-                playerRatingChange = blackRatingChange;
-                playerNewRating = blackNewRating;
-            }
-            
-            System.out.println("[GameHandler] Processing GAME_END - isDraw: " + isDraw + ", isWinner: " + isWinner + 
-                             ", currentUsername: " + currentUsername + ", playerRatingChange: " + playerRatingChange);
+            System.out.println("[GameHandler] Processing GAME_END - isDraw: " + isDraw + ", isWinner: " + isWinner + ", currentUsername: " + currentUsername);
             
             // Trigger game result dialog thông qua UIState
             Platform.runLater(() -> {
                 System.out.println("[GameHandler] Platform.runLater - resetting trigger");
                 uiState.setGameActionTrigger("");
                 uiState.setGameActionResult("");
-                
-                // Set rating change BEFORE triggering result
-                uiState.setLastRatingChange(playerRatingChange);
-                
-                // Update player's elo with new rating if available
-                if (playerNewRating > 0) {
-                    String currentMode = uiState.getCurrentGameMode();
-                    uiState.setElo(currentMode, playerNewRating);
-                    System.out.println("[GameHandler] Updated player elo to " + playerNewRating + " for mode " + currentMode);
-                }
-                
                 Platform.runLater(() -> {
                     // QUAN TRỌNG: Set result TRƯỚC trigger vì listener đọc result ngay khi trigger thay đổi
                     if (isDraw) {
@@ -346,8 +316,7 @@ public class GameHandler implements MessageHandler {
                         uiState.setGameActionResult("lose");
                         uiState.setGameActionTrigger("game_result");
                     }
-                    System.out.println("[GameHandler] Game ended - winSide: " + finalWinSide + ", isWinner: " + isWinner + 
-                                     ", isDraw: " + isDraw + ", ratingChange: " + playerRatingChange);
+                    System.out.println("[GameHandler] Game ended - winSide: " + finalWinSide + ", isWinner: " + isWinner + ", isDraw: " + isDraw);
                 });
             });
         } catch (Exception e) {

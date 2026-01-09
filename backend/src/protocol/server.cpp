@@ -497,12 +497,10 @@ void processMessage(const ParsedMessage &pm, int fd) {
       // Regular PvP game
       auto &opponent = g_clients[opp];
 
-      // Update database to end game and calculate Elo FIRST
-      int redRatingChange = 0;
-      int blackRatingChange = 0;
-      int redNewRating = 0;
-      int blackNewRating = 0;
-      
+      // Forward GAME_END to opponent
+      sendMessage(opp, MessageType::GAME_END, gameEndPayload);
+
+      // Update database to end game and calculate Elo
       if (g_game_controller != nullptr && !game_id.empty()) {
         try {
           // Determine result based on win_side
@@ -533,30 +531,10 @@ void processMessage(const ParsedMessage &pm, int fd) {
               g_game_controller->handleEndGame(endRequest);
           cout << "[GAME_END] Database update result: " << endResponse.dump()
                << " (Elo calculated if rated game)" << endl;
-          
-          // Extract rating changes from response
-          if (endResponse.contains("red_rating_change")) {
-            redRatingChange = endResponse["red_rating_change"].get<int>();
-            blackRatingChange = endResponse["black_rating_change"].get<int>();
-            redNewRating = endResponse["red_new_rating"].get<int>();
-            blackNewRating = endResponse["black_new_rating"].get<int>();
-          }
         } catch (const exception &e) {
           cerr << "[GAME_END] Error updating database: " << e.what() << endl;
         }
       }
-
-      // Create GameEndPayload with rating changes
-      GameEndPayload payloadWithRating;
-      payloadWithRating.win_side = gameEndPayload.win_side;
-      payloadWithRating.red_rating_change = redRatingChange;
-      payloadWithRating.black_rating_change = blackRatingChange;
-      payloadWithRating.red_new_rating = redNewRating;
-      payloadWithRating.black_new_rating = blackNewRating;
-
-      // Send GAME_END with rating changes to both players
-      sendMessage(fd, MessageType::GAME_END, payloadWithRating);
-      sendMessage(opp, MessageType::GAME_END, payloadWithRating);
 
       // Clear game state for both players
       opponent.in_game = false;
