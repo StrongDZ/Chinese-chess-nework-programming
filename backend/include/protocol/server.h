@@ -47,6 +47,7 @@ void processAIMatch(const ParsedMessage &pm, int fd);
 void handleAIMatch(const ParsedMessage &pm, int fd);
 void handleCustomGame(const ParsedMessage &pm, int fd);
 void handleSuggestMove(const ParsedMessage &pm, int fd);
+void handleAIQuit(const ParsedMessage &pm, int fd);
 void handleAIMove(int player_fd, const string &xfen = "");
 void handleStartGame(int player1_fd, int player2_fd,
                      const string &mode = "classical", int time_limit = 0);

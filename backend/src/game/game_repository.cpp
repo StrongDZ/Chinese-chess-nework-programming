@@ -22,6 +22,10 @@ GameRepository::GameRepository(MongoDBClient &mongo) : mongoClient(mongo) {}
 
 string GameRepository::createGame(const Game &game) {
   try {
+    cout << "[GameRepository::createGame] Creating game: red="
+         << game.red_player << ", black=" << game.black_player
+         << ", xfen=" << game.xfen << endl;
+
     auto db = mongoClient.getDatabase();
     auto games = db["active_games"];
     auto gameDoc = document{}
@@ -40,15 +44,27 @@ string GameRepository::createGame(const Game &game) {
                    << "increment" << bsoncxx::types::b_int32{game.increment}
                    << "rated" << bsoncxx::types::b_bool{game.rated} << finalize;
 
+    cout << "[GameRepository::createGame] Inserting document into database..."
+         << endl;
     auto result = games.insert_one(gameDoc.view());
 
     if (!result) {
+      cerr << "[GameRepository::createGame] ERROR: insert_one returned null "
+              "result"
+           << endl;
       return "";
     }
 
-    return result->inserted_id().get_oid().value.to_string();
+    string gameId = result->inserted_id().get_oid().value.to_string();
+    cout << "[GameRepository::createGame] Game created successfully, game_id="
+         << gameId << endl;
+    return gameId;
 
   } catch (const exception &e) {
+    cerr << "[GameRepository::createGame] EXCEPTION: " << e.what() << endl;
+    return "";
+  } catch (...) {
+    cerr << "[GameRepository::createGame] UNKNOWN EXCEPTION" << endl;
     return "";
   }
 }
@@ -312,6 +328,30 @@ bool GameRepository::endGame(const string &gameId, const string &status,
   }
 }
 
+bool GameRepository::deleteGame(const string &gameId) {
+  try {
+    auto db = mongoClient.getDatabase();
+    auto games = db["active_games"];
+
+    // Xóa game khỏi active_games (không archive, không tính điểm)
+    auto deleteResult = games.delete_one(
+        document{} << "_id" << bsoncxx::oid(gameId) << finalize);
+
+    if (deleteResult && deleteResult->deleted_count() > 0) {
+      cout << "[GameRepository::deleteGame] Deleted game " << gameId
+           << " from active_games (not archived, no rating change)" << endl;
+      return true;
+    } else {
+      cout << "[GameRepository::deleteGame] Game " << gameId
+           << " not found in active_games" << endl;
+      return false;
+    }
+  } catch (const exception &e) {
+    cerr << "[GameRepository::deleteGame] Error: " << e.what() << endl;
+    return false;
+  }
+}
+
 // ============ Draw Offer Operations ============
 
 bool GameRepository::setDrawOffer(const string &gameId,
@@ -428,7 +468,7 @@ GameRepository::findArchivedGameById(const string &gameId) {
 
         move.move_number = mv["move_number"].get_int32().value;
         move.player = string(mv["player"].get_string().value);
-        
+
         // Parse from/to coordinates - support both formats:
         // Old format: from_x, from_y, to_x, to_y (flat)
         // New format: from: {x, y}, to: {x, y} (nested)
@@ -438,7 +478,8 @@ GameRepository::findArchivedGameById(const string &gameId) {
           move.from_y = mv["from_y"].get_int32().value;
           move.to_x = mv["to_x"].get_int32().value;
           move.to_y = mv["to_y"].get_int32().value;
-        } else if (mv["from"] && mv["from"].type() == bsoncxx::type::k_document) {
+        } else if (mv["from"] &&
+                   mv["from"].type() == bsoncxx::type::k_document) {
           // New format (nested)
           auto fromDoc = mv["from"].get_document().value;
           auto toDoc = mv["to"].get_document().value;
@@ -703,25 +744,16 @@ bool GameRepository::updatePlayerStats(const string &username,
 
     // Use upsert to create record if it doesn't exist
     auto updateDoc = document{}
-                     << "$set" << open_document 
-                       << "rating" << newRating
-                       << "username" << username
-                       << "time_control" << timeControl
-                     << close_document 
-                     << "$inc" << open_document
-                       << "total_games" << 1 << resultField << 1 
-                     << close_document
+                     << "$set" << open_document << "rating" << newRating
+                     << "username" << username << "time_control" << timeControl
+                     << close_document << "$inc" << open_document
+                     << "total_games" << 1 << resultField << 1 << close_document
                      << "$max" << open_document << "highest_rating" << newRating
-                     << close_document 
-                     << "$min" << open_document << "lowest_rating" << newRating
-                     << close_document
-                     << "$setOnInsert" << open_document
-                       << "rd" << 350.0
-                       << "volatility" << 0.06
-                       << "win_streak" << 0
-                       << "longest_win_streak" << 0
-                     << close_document
-                     << finalize;
+                     << close_document << "$min" << open_document
+                     << "lowest_rating" << newRating << close_document
+                     << "$setOnInsert" << open_document << "rd" << 350.0
+                     << "volatility" << 0.06 << "win_streak" << 0
+                     << "longest_win_streak" << 0 << close_document << finalize;
 
     mongocxx::options::update options;
     options.upsert(true); // Create if not exists
@@ -759,7 +791,6 @@ int GameRepository::getPlayerRating(const string &username,
     return 1200;
   }
 }
-
 
 // ============ Helper Operations ============
 

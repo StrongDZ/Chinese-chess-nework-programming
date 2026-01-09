@@ -1121,17 +1121,19 @@ void handleCustomGame(const ParsedMessage &pm, int fd) {
 
   string customXfen =
       g_game_service->customBoardSetupToXfen(customBoardSetup, playerSide);
-  
-  cout << "[handleCustomGame] Converted custom board setup to XFEN: " << customXfen << endl;
+
+  cout << "[handleCustomGame] Converted custom board setup to XFEN: "
+       << customXfen << endl;
 
   // Validate XFEN
   if (!g_game_service->isValidXfen(customXfen)) {
-    cout << "[handleCustomGame] ERROR: Invalid XFEN format: " << customXfen << endl;
+    cout << "[handleCustomGame] ERROR: Invalid XFEN format: " << customXfen
+         << endl;
     sendMessage(fd, MessageType::ERROR,
                 ErrorPayload{"Invalid custom board setup"});
     return;
   }
-  
+
   cout << "[handleCustomGame] XFEN validation passed" << endl;
 
   // Determine if playing with AI or friend
@@ -1167,21 +1169,25 @@ void handleCustomGame(const ParsedMessage &pm, int fd) {
     // board) For now, use game controller to create custom game, then assign AI
     // as opponent
     string aiUsername = "AI_" + ai_mode;
-    
-    cout << "[handleCustomGame] Creating custom game: red=" << sender.username 
-         << ", black=" << aiUsername << ", xfen=" << customXfen 
+
+    cout << "[handleCustomGame] Creating custom game: red=" << sender.username
+         << ", black=" << aiUsername << ", xfen=" << customXfen
          << ", time_limit=" << time_limit << endl;
 
-    auto result = g_game_service->createCustomGame(
-        sender.username, aiUsername, customXfen, playerSide, "custom", time_limit);
+    // Use "blitz" as time_control for custom games (MongoDB schema may not
+    // accept "custom")
+    auto result = g_game_service->createCustomGame(sender.username, aiUsername,
+                                                   customXfen, playerSide,
+                                                   "blitz", time_limit);
 
     if (!result.success) {
-      cout << "[handleCustomGame] ERROR: Failed to create custom game: " << result.message << endl;
+      cout << "[handleCustomGame] ERROR: Failed to create custom game: "
+           << result.message << endl;
       sendMessage(fd, MessageType::ERROR, ErrorPayload{result.message});
       return;
     }
-    
-    cout << "[handleCustomGame] Custom game created successfully, game_id=" 
+
+    cout << "[handleCustomGame] Custom game created successfully, game_id="
          << (result.game.has_value() ? result.game->id : "none") << endl;
 
     // Update sender state
@@ -1237,8 +1243,9 @@ void handleCustomGame(const ParsedMessage &pm, int fd) {
     }
 
     // Create custom game
-    auto result = g_game_service->createCustomGame(
-        sender.username, opponent, customXfen, playerSide, "custom", time_limit);
+    auto result =
+        g_game_service->createCustomGame(sender.username, opponent, customXfen,
+                                         playerSide, "custom", time_limit);
 
     if (!result.success) {
       sendMessage(fd, MessageType::ERROR, ErrorPayload{result.message});

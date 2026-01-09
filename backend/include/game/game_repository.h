@@ -101,6 +101,10 @@ public:
   bool endGame(const std::string &gameId, const std::string &status,
                const std::string &result, const std::string &winner = "");
 
+  // Delete game from active_games (without archiving or rating calculation)
+  // Used for AI_QUIT to quit AI game without penalty
+  bool deleteGame(const std::string &gameId);
+
   // ============ Draw Offer Operations ============
 
   // Set draw offer (username who offered)

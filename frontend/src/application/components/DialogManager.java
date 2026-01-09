@@ -402,8 +402,9 @@ public class DialogManager {
     
     /**
      * Hiển thị dialog xác nhận quit game (cho custom mode)
+     * @param onConfirm Callback được gọi khi user xác nhận quit
      */
-    public void showQuitConfirmation() {
+    public void showQuitConfirmation(Runnable onConfirm) {
         // Nếu đã có dialog, xóa nó trước
         if (quitDialog != null && gamePanel != null && gamePanel.getChildren().contains(quitDialog)) {
             gamePanel.getChildren().remove(quitDialog);
@@ -463,6 +464,11 @@ public class DialogManager {
         yesButton.setOnMouseClicked(e -> {
             // Xử lý khi bấm Yes (quit)
             hideQuitConfirmation();
+            
+            // Gọi callback nếu có
+            if (onConfirm != null) {
+                onConfirm.run();
+            }
             
             // Đóng game và quay về main menu
             state.closeGame();

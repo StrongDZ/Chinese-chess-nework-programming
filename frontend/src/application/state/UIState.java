@@ -84,6 +84,14 @@ public class UIState {
     private final javafx.beans.property.IntegerProperty winMatches = new javafx.beans.property.SimpleIntegerProperty(0);
     private final javafx.beans.property.DoubleProperty winRate = new javafx.beans.property.SimpleDoubleProperty(0.0);
     
+    // Statistics by mode (similar to Elo)
+    private final javafx.beans.property.IntegerProperty classicalTotalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.IntegerProperty blitzTotalMatches = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.IntegerProperty classicalWinMatches = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.IntegerProperty blitzWinMatches = new javafx.beans.property.SimpleIntegerProperty(0);
+    private final javafx.beans.property.DoubleProperty classicalWinRate = new javafx.beans.property.SimpleDoubleProperty(0.0);
+    private final javafx.beans.property.DoubleProperty blitzWinRate = new javafx.beans.property.SimpleDoubleProperty(0.0);
+    
     // Opponent profile (for game panel)
     private final StringProperty opponentUsername = new SimpleStringProperty("");
     private final javafx.beans.property.IntegerProperty opponentElo = new javafx.beans.property.SimpleIntegerProperty(100);
@@ -787,6 +795,136 @@ public class UIState {
         winRate.set(value);
     }
     
+    // Statistics by mode (similar to Elo)
+    // Total matches by mode
+    public javafx.beans.property.IntegerProperty classicalTotalMatchesProperty() {
+        return classicalTotalMatches;
+    }
+    
+    public int getClassicalTotalMatches() {
+        return classicalTotalMatches.get();
+    }
+    
+    public void setClassicalTotalMatches(int value) {
+        classicalTotalMatches.set(value);
+    }
+    
+    public javafx.beans.property.IntegerProperty blitzTotalMatchesProperty() {
+        return blitzTotalMatches;
+    }
+    
+    public int getBlitzTotalMatches() {
+        return blitzTotalMatches.get();
+    }
+    
+    public void setBlitzTotalMatches(int value) {
+        blitzTotalMatches.set(value);
+    }
+    
+    // Win matches by mode
+    public javafx.beans.property.IntegerProperty classicalWinMatchesProperty() {
+        return classicalWinMatches;
+    }
+    
+    public int getClassicalWinMatches() {
+        return classicalWinMatches.get();
+    }
+    
+    public void setClassicalWinMatches(int value) {
+        classicalWinMatches.set(value);
+    }
+    
+    public javafx.beans.property.IntegerProperty blitzWinMatchesProperty() {
+        return blitzWinMatches;
+    }
+    
+    public int getBlitzWinMatches() {
+        return blitzWinMatches.get();
+    }
+    
+    public void setBlitzWinMatches(int value) {
+        blitzWinMatches.set(value);
+    }
+    
+    // Win rate by mode
+    public javafx.beans.property.DoubleProperty classicalWinRateProperty() {
+        return classicalWinRate;
+    }
+    
+    public double getClassicalWinRate() {
+        return classicalWinRate.get();
+    }
+    
+    public void setClassicalWinRate(double value) {
+        classicalWinRate.set(value);
+    }
+    
+    public javafx.beans.property.DoubleProperty blitzWinRateProperty() {
+        return blitzWinRate;
+    }
+    
+    public double getBlitzWinRate() {
+        return blitzWinRate.get();
+    }
+    
+    public void setBlitzWinRate(double value) {
+        blitzWinRate.set(value);
+    }
+    
+    // Get total matches for specific mode
+    public int getTotalMatches(String mode) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            return getBlitzTotalMatches();
+        } else {
+            return getClassicalTotalMatches();  // Default to classical
+        }
+    }
+    
+    // Set total matches for specific mode
+    public void setTotalMatches(String mode, int value) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            setBlitzTotalMatches(value);
+        } else {
+            setClassicalTotalMatches(value);  // Default to classical
+        }
+    }
+    
+    // Get win matches for specific mode
+    public int getWinMatches(String mode) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            return getBlitzWinMatches();
+        } else {
+            return getClassicalWinMatches();  // Default to classical
+        }
+    }
+    
+    // Set win matches for specific mode
+    public void setWinMatches(String mode, int value) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            setBlitzWinMatches(value);
+        } else {
+            setClassicalWinMatches(value);  // Default to classical
+        }
+    }
+    
+    // Get win rate for specific mode
+    public double getWinRate(String mode) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            return getBlitzWinRate();
+        } else {
+            return getClassicalWinRate();  // Default to classical
+        }
+    }
+    
+    // Set win rate for specific mode
+    public void setWinRate(String mode, double value) {
+        if ("blitz".equalsIgnoreCase(mode)) {
+            setBlitzWinRate(value);
+        } else {
+            setClassicalWinRate(value);  // Default to classical
+        }
+    }
+    
     // Opponent profile getters/setters
     public StringProperty opponentUsernameProperty() {
         return opponentUsername;
@@ -974,6 +1112,12 @@ public class UIState {
         java.util.List<application.components.HistoryPanel.HistoryEntry>,
         java.util.List<application.components.HistoryPanel.HistoryEntry>> callback) {
         this.gameHistoryUpdateCallback = callback;
+    }
+    
+    public java.util.function.BiConsumer<
+        java.util.List<application.components.HistoryPanel.HistoryEntry>,
+        java.util.List<application.components.HistoryPanel.HistoryEntry>> getGameHistoryUpdateCallback() {
+        return gameHistoryUpdateCallback;
     }
     
     public void setLeaderboardUpdateCallback(java.util.function.Consumer<com.google.gson.JsonObject> callback) {

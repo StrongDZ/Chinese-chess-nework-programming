@@ -27,6 +27,9 @@ public class ProfilePanel extends StackPane {
     private final UIState state;
     private final NetworkManager networkManager = NetworkManager.getInstance();
     private final javafx.beans.property.SimpleStringProperty selectedTimeControl = new javafx.beans.property.SimpleStringProperty("classical");  // Default to classical
+    
+    // Lưu toàn bộ lịch sử (tất cả modes) để filter ở frontend
+    private final java.util.List<application.components.HistoryPanel.HistoryEntry> allHistory = new java.util.ArrayList<>();
 
     public ProfilePanel(UIState state) {
         this.state = state;
@@ -84,6 +87,27 @@ public class ProfilePanel extends StackPane {
         state.profileVisibleProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal && state.appStateProperty().get() == UIState.AppState.PROFILE) {
                 fetchMatchHistory();
+            }
+        });
+        
+        // Lắng nghe callback để nhận lịch sử và lưu vào allHistory
+        state.setGameHistoryUpdateCallback((peopleHistory, aiHistory) -> {
+            // Lưu tất cả lịch sử (people + AI) vào allHistory
+            allHistory.clear();
+            allHistory.addAll(peopleHistory);
+            allHistory.addAll(aiHistory);
+            System.out.println("[ProfilePanel] Received game history - total: " + allHistory.size() + 
+                " (people: " + peopleHistory.size() + ", AI: " + aiHistory.size() + ")");
+            
+            // Filter và update HistoryPanel theo mode hiện tại
+            filterAndUpdateHistory();
+        });
+        
+        // Lắng nghe thay đổi selectedTimeControl để filter lại lịch sử
+        selectedTimeControl.addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.equals(oldVal)) {
+                System.out.println("[ProfilePanel] Time control changed to: " + newVal);
+                filterAndUpdateHistory();
             }
         });
     }
@@ -248,8 +272,16 @@ public class ProfilePanel extends StackPane {
         Label totalMatchesLabel = new Label();
         totalMatchesLabel.textProperty().bind(
             javafx.beans.binding.Bindings.createStringBinding(
-                () -> "Total match: " + state.getTotalMatches(),
-                state.totalMatchesProperty()
+                () -> {
+                    // Lấy total matches theo selectedTimeControl
+                    String mode = selectedTimeControl.get();
+                    int totalMatches = state.getTotalMatches(mode);
+                    System.out.println("[ProfilePanel] TotalMatches display - mode=" + mode + ", totalMatches=" + totalMatches);
+                    return "Total match: " + totalMatches;
+                },
+                selectedTimeControl,
+                state.classicalTotalMatchesProperty(),
+                state.blitzTotalMatchesProperty()
             )
         );
         totalMatchesLabel.setStyle(
@@ -265,8 +297,16 @@ public class ProfilePanel extends StackPane {
         Label winMatchesLabel = new Label();
         winMatchesLabel.textProperty().bind(
             javafx.beans.binding.Bindings.createStringBinding(
-                () -> "Win matches: " + state.getWinMatches(),
-                state.winMatchesProperty()
+                () -> {
+                    // Lấy win matches theo selectedTimeControl
+                    String mode = selectedTimeControl.get();
+                    int winMatches = state.getWinMatches(mode);
+                    System.out.println("[ProfilePanel] WinMatches display - mode=" + mode + ", winMatches=" + winMatches);
+                    return "Win matches: " + winMatches;
+                },
+                selectedTimeControl,
+                state.classicalWinMatchesProperty(),
+                state.blitzWinMatchesProperty()
             )
         );
         winMatchesLabel.setStyle(
@@ -289,10 +329,15 @@ public class ProfilePanel extends StackPane {
         winRateLabel.textProperty().bind(
             javafx.beans.binding.Bindings.createStringBinding(
                 () -> {
-                    double rate = state.getWinRate();
+                    // Lấy winrate theo selectedTimeControl
+                    String mode = selectedTimeControl.get();
+                    double rate = state.getWinRate(mode);
+                    System.out.println("[ProfilePanel] WinRate display - mode=" + mode + ", winRate=" + rate + ", classical=" + state.getClassicalWinRate() + ", blitz=" + state.getBlitzWinRate());
                     return String.format("Win rates: %.1f%%", rate);
                 },
-                state.winRateProperty()
+                selectedTimeControl,
+                state.classicalWinRateProperty(),
+                state.blitzWinRateProperty()
             )
         );
         winRateLabel.setStyle(
@@ -337,7 +382,8 @@ public class ProfilePanel extends StackPane {
             selectedTimeControl.set("classical");
             updateButtonStyles(this.classicalButton, true);
             updateButtonStyles(this.blitzButton, false);
-            fetchProfile();
+            // Chỉ filter data đã có ở frontend, không request lại từ backend
+            filterAndUpdateHistory();
         });
         
         // Blitz button
@@ -346,7 +392,8 @@ public class ProfilePanel extends StackPane {
             selectedTimeControl.set("blitz");
             updateButtonStyles(this.classicalButton, false);
             updateButtonStyles(this.blitzButton, true);
-            fetchProfile();
+            // Chỉ filter data đã có ở frontend, không request lại từ backend
+            filterAndUpdateHistory();
         });
         
         // Set initial style (classical selected by default)
@@ -430,29 +477,13 @@ public class ProfilePanel extends StackPane {
     
     /**
      * Fetch user profile data from backend.
-     * Called when time control changes.
+     * DEPRECATED: Không còn dùng nữa. Tất cả data được lấy một lần khi mở profile với time_control="all".
+     * Khi chọn mode, chỉ filter data đã có ở frontend.
      */
+    @Deprecated
     private void fetchProfile() {
-        try {
-            if (networkManager.isConnected()) {
-                String username = state.getUsername();
-                String timeControl = selectedTimeControl.get();
-                System.out.println("[ProfilePanel] fetchProfile - username=" + username + ", timeControl=" + timeControl);
-                if (username != null && !username.isEmpty()) {
-                    // Request user stats from backend with selected time control
-                    // InfoHandler will update UIState with the response
-                    networkManager.info().requestUserStats(username, timeControl);
-                    System.out.println("[ProfilePanel] Sent requestUserStats request");
-                } else {
-                    System.err.println("[ProfilePanel] Username is null or empty");
-                }
-            } else {
-                System.err.println("[ProfilePanel] NetworkManager is not connected");
-            }
-        } catch (IOException e) {
-            System.err.println("[ProfilePanel] Failed to fetch profile: " + e.getMessage());
-            e.printStackTrace();
-        }
+        // Method này không còn được dùng nữa
+        // Tất cả data được lấy một lần khi mở profile với fetchAllModes()
     }
     
     /**
@@ -465,10 +496,10 @@ public class ProfilePanel extends StackPane {
                 String username = state.getUsername();
                 System.out.println("[ProfilePanel] fetchMatchHistory - username=" + username);
                 if (username != null && !username.isEmpty()) {
-                    // Request game history from backend (limit 50 games)
-                    // InfoHandler will update HistoryPanel via UIState callback
+                    // Request game history from backend (limit 50 games, tất cả modes)
+                    // InfoHandler will update ProfilePanel via UIState callback
                     networkManager.info().requestGameHistory(50);
-                    System.out.println("[ProfilePanel] Sent requestGameHistory request");
+                    System.out.println("[ProfilePanel] Sent requestGameHistory request (all modes)");
                 } else {
                     System.err.println("[ProfilePanel] Username is null or empty");
                 }
@@ -478,6 +509,57 @@ public class ProfilePanel extends StackPane {
         } catch (IOException e) {
             System.err.println("[ProfilePanel] Failed to fetch match history: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Filter lịch sử theo mode hiện tại và update HistoryPanel.
+     */
+    private void filterAndUpdateHistory() {
+        if (allHistory.isEmpty()) {
+            System.out.println("[ProfilePanel] No history to filter");
+            return;
+        }
+        
+        String mode = selectedTimeControl.get();
+        System.out.println("[ProfilePanel] Filtering history by mode: " + mode);
+        
+        // Filter history theo mode
+        java.util.List<application.components.HistoryPanel.HistoryEntry> filteredPeopleHistory = new java.util.ArrayList<>();
+        java.util.List<application.components.HistoryPanel.HistoryEntry> filteredAiHistory = new java.util.ArrayList<>();
+        
+        for (application.components.HistoryPanel.HistoryEntry entry : allHistory) {
+            String entryMode = entry.getMode();
+            boolean matchesMode = false;
+            
+            // Kiểm tra mode: "Classic Mode" -> "classical", "Blitz Mode" -> "blitz"
+            if ("classical".equalsIgnoreCase(mode)) {
+                matchesMode = entryMode.contains("Classic") || entryMode.contains("Classical");
+            } else if ("blitz".equalsIgnoreCase(mode)) {
+                matchesMode = entryMode.contains("Blitz");
+            }
+            
+            if (matchesMode) {
+                // Phân biệt people vs AI dựa vào opponent
+                String opponent = entry.getOpponent();
+                boolean isAI = opponent == null || opponent.isEmpty() || 
+                              opponent.toLowerCase().contains("ai") ||
+                              opponent.toLowerCase().startsWith("ai");
+                
+                if (isAI) {
+                    filteredAiHistory.add(entry);
+                } else {
+                    filteredPeopleHistory.add(entry);
+                }
+            }
+        }
+        
+        System.out.println("[ProfilePanel] Filtered history - people: " + filteredPeopleHistory.size() + 
+            ", AI: " + filteredAiHistory.size());
+        
+        // Update HistoryPanel thông qua UIState callback
+        if (state.getGameHistoryUpdateCallback() != null) {
+            state.getGameHistoryUpdateCallback().accept(filteredPeopleHistory, filteredAiHistory);
         }
     }
 }
