@@ -1009,6 +1009,11 @@ public class GamePanel extends StackPane implements IGamePanel {
                 }
             }
         }
+        
+        // Xoay các bộ đếm (timers) giống như xoay quân cờ để chữ luôn đúng hướng
+        if (timerManager != null) {
+            timerManager.updateRotation(isPlayerRed);
+        }
     }
     
     /**

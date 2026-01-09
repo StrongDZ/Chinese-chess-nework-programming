@@ -117,6 +117,48 @@ public class GameHandler implements MessageHandler {
             uiState.setCurrentGameMode(gameMode);
             uiState.setCurrentTimeLimit(timeLimit);
             
+            // QUAN TRỌNG: Khởi tạo timer values từ time_limit và game_mode
+            // - Classical mode: cả 4 bộ đếm đều là "Unlimited time"
+            // - Blitz mode: remaining timer = time_limit, gray timer = 10 phút (600 giây)
+            // Make variables final for lambda
+            final int finalTimeLimit = timeLimit;
+            final String finalGameMode = gameMode;
+            
+            Platform.runLater(() -> {
+                if ("classical".equals(finalGameMode)) {
+                    // Classical mode: cả 4 bộ đếm đều là "Unlimited time"
+                    uiState.setTimer1Value("Unlimited time");  // Red remaining
+                    uiState.setTimer2Value("Unlimited time");  // Red gray
+                    uiState.setTimer3Value("Unlimited time");  // Black gray
+                    uiState.setTimer4Value("Unlimited time");  // Black remaining
+                    System.out.println("[GameHandler] Classical mode: All 4 timers set to Unlimited time");
+                } else {
+                    // Blitz mode: remaining timer từ time_limit, gray timer = 10 phút
+                    if (finalTimeLimit > 0) {
+                        // Remaining timers từ time_limit
+                        int minutes = finalTimeLimit / 60;
+                        int seconds = finalTimeLimit % 60;
+                        String remainingTimeStr = String.format("%d:%02d", minutes, seconds);
+                        uiState.setTimer1Value(remainingTimeStr);  // Red remaining
+                        uiState.setTimer4Value(remainingTimeStr);  // Black remaining
+                        System.out.println("[GameHandler] Blitz mode: Remaining timers set to " + remainingTimeStr + " (" + finalTimeLimit + "s)");
+                    } else {
+                        // Fallback: unlimited time
+                        uiState.setTimer1Value("Unlimited time");
+                        uiState.setTimer4Value("Unlimited time");
+                    }
+                    
+                    // Gray timers: 10 phút (600 giây) cho blitz mode
+                    int grayTimeSeconds = 600;  // 10 phút = 600 giây
+                    int grayMinutes = grayTimeSeconds / 60;
+                    int graySecs = grayTimeSeconds % 60;
+                    String grayTimeStr = String.format("%d:%02d", grayMinutes, graySecs);
+                    uiState.setTimer2Value(grayTimeStr);  // Red gray
+                    uiState.setTimer3Value(grayTimeStr);  // Black gray
+                    System.out.println("[GameHandler] Blitz mode: Gray timers set to " + grayTimeStr + " (" + grayTimeSeconds + "s)");
+                }
+            });
+            
             // Extract game_id, player_is_red, và ai_difficulty from opponent_data if available
             if (json.has("opponent_data")) {
                 JsonObject opponentData = json.getAsJsonObject("opponent_data");

@@ -602,6 +602,11 @@ public class UIState {
     }
 
     public void setTimer1Value(String value) {
+        // QUAN TRỌNG: Trong classical mode, luôn giữ "Unlimited time"
+        if ("classical".equals(getCurrentGameMode()) && !"Unlimited time".equals(value)) {
+            System.out.println("[UIState] Classical mode: Preventing timer1 override, keeping 'Unlimited time'");
+            return;
+        }
         timer1Value.set(value);
     }
 
@@ -614,6 +619,11 @@ public class UIState {
     }
 
     public void setTimer2Value(String value) {
+        // QUAN TRỌNG: Trong classical mode, luôn giữ "Unlimited time"
+        if ("classical".equals(getCurrentGameMode()) && !"Unlimited time".equals(value)) {
+            System.out.println("[UIState] Classical mode: Preventing timer2 override, keeping 'Unlimited time'");
+            return;
+        }
         timer2Value.set(value);
     }
 
@@ -626,6 +636,11 @@ public class UIState {
     }
 
     public void setTimer3Value(String value) {
+        // QUAN TRỌNG: Trong classical mode, luôn giữ "Unlimited time"
+        if ("classical".equals(getCurrentGameMode()) && !"Unlimited time".equals(value)) {
+            System.out.println("[UIState] Classical mode: Preventing timer3 override, keeping 'Unlimited time'");
+            return;
+        }
         timer3Value.set(value);
     }
 
@@ -638,6 +653,11 @@ public class UIState {
     }
 
     public void setTimer4Value(String value) {
+        // QUAN TRỌNG: Trong classical mode, luôn giữ "Unlimited time"
+        if ("classical".equals(getCurrentGameMode()) && !"Unlimited time".equals(value)) {
+            System.out.println("[UIState] Classical mode: Preventing timer4 override, keeping 'Unlimited time'");
+            return;
+        }
         timer4Value.set(value);
     }
 
