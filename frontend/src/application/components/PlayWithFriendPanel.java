@@ -1354,6 +1354,7 @@ public class PlayWithFriendPanel extends StackPane {
     /**
      * Update elo for a friend (called from InfoHandler callback).
      * This method will be called by InfoHandler when it receives user stats response.
+     * NOTE: Do NOT call refreshFriendsList() here to avoid infinite loop!
      */
     public void updateFriendElo(String username, String timeControl, int elo) {
         javafx.application.Platform.runLater(() -> {
@@ -1364,14 +1365,69 @@ public class PlayWithFriendPanel extends StackPane {
             }
             friendElos.get(username).put(timeControl, elo);
             
-            // Only refresh if this is for the current mode
+            // Update the UI label directly for this friend (if displayed)
+            // Instead of calling refreshFriendsList() which causes infinite loop
             if (timeControl.equals(currentGameMode)) {
-                System.out.println("[PlayWithFriendPanel] Refreshing display for current mode");
-                refreshFriendsList();
-            } else {
-                System.out.println("[PlayWithFriendPanel] Cached elo for mode " + timeControl + " (current mode: " + currentGameMode + ")");
+                updateFriendEloLabel(username, elo);
             }
         });
+    }
+    
+    /**
+     * Update elo label for a specific friend without refreshing entire list.
+     */
+    private void updateFriendEloLabel(String username, int elo) {
+        // Find and update the label in both columns
+        updateEloInColumn(leftColumn, username, elo);
+        updateEloInColumn(rightColumn, username, elo);
+    }
+    
+    private void updateEloInColumn(VBox column, String username, int elo) {
+        for (javafx.scene.Node node : column.getChildren()) {
+            if (node instanceof HBox) {
+                HBox entry = (HBox) node;
+                // Find the username label and elo label in this entry
+                for (javafx.scene.Node child : entry.getChildren()) {
+                    if (child instanceof VBox) {
+                        VBox textInfo = (VBox) child;
+                        String entryUsername = null;
+                        for (javafx.scene.Node textChild : textInfo.getChildren()) {
+                            if (textChild instanceof Label) {
+                                Label label = (Label) textChild;
+                                String text = label.getText();
+                                // Check if this is the username label
+                                if (text != null && !text.contains("ELO") && !text.contains("Online")) {
+                                    entryUsername = text;
+                                }
+                                // Check if this is the elo label and username matches
+                                if (text != null && text.contains("ELO") && username.equals(entryUsername)) {
+                                    String modeDisplay = "classical".equals(currentGameMode) ? "Classical" : "Blitz";
+                                    label.setText(modeDisplay + " ELO: " + elo);
+                                    System.out.println("[PlayWithFriendPanel] Updated elo label for " + username + " to " + elo);
+                                    return;
+                                }
+                            }
+                            // Also check HBox children (statusEloContainer)
+                            if (textChild instanceof HBox) {
+                                HBox statusEloContainer = (HBox) textChild;
+                                for (javafx.scene.Node statusChild : statusEloContainer.getChildren()) {
+                                    if (statusChild instanceof Label) {
+                                        Label label = (Label) statusChild;
+                                        String text = label.getText();
+                                        if (text != null && text.contains("ELO") && username.equals(entryUsername)) {
+                                            String modeDisplay = "classical".equals(currentGameMode) ? "Classical" : "Blitz";
+                                            label.setText(modeDisplay + " ELO: " + elo);
+                                            System.out.println("[PlayWithFriendPanel] Updated elo label for " + username + " to " + elo);
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
