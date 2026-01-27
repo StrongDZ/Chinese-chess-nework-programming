@@ -552,8 +552,10 @@ public class DialogManager {
             rootPane.getChildren().remove(gameResultOverlay);
         }
         
-        // NOTE: Elo is now updated directly from backend (Glicko-2) in GameHandler
-        // No need to call state.addElo() here anymore
+        // Cập nhật elo nếu có thay đổi (theo currentGameMode)
+        if (eloDelta != 0) {
+            state.addElo(eloDelta);  // addElo tự động dùng currentGameMode
+        }
         
         // Tạo overlay để khóa mọi action
         gameResultOverlay = new StackPane();

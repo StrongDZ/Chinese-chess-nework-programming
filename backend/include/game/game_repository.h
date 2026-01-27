@@ -120,24 +120,12 @@ public:
 
   // ============ Player Stats Operations ============
 
-  // Player stats structure for Glicko-2
-  struct PlayerGlickoStats {
-    int rating;
-    double rd;         // Rating Deviation
-    double volatility; // Rating volatility (sigma)
-  };
-
-  // Update player ratings after game ends (Glicko-2)
+  // Update player ratings after game ends
   bool updatePlayerStats(const std::string &username,
                          const std::string &timeControl, int newRating,
-                         double newRD, double newVolatility,
                          const std::string &resultField); // wins, losses, draws
 
-  // Get player full Glicko stats (rating, RD, volatility)
-  PlayerGlickoStats getPlayerGlickoStats(const std::string &username,
-                                         const std::string &timeControl);
-
-  // Get player rating (backward compatibility)
+  // Get player rating
   int getPlayerRating(const std::string &username,
                       const std::string &timeControl);
   // ============ Rematch Operations ============

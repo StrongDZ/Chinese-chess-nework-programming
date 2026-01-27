@@ -289,171 +289,29 @@ static string charToPieceName(char c) {
   }
 }
 
-// ============ Glicko-2 Constants ============
-static const double GLICKO2_SCALE = 173.7178;  // Convert between Glicko and Glicko-2 scale
-static const double GLICKO2_TAU = 0.5;         // System constant (constrains volatility change)
-static const double GLICKO2_EPSILON = 0.000001; // Convergence tolerance for Illinois algorithm
-static const double PI = 3.14159265358979323846;
-
-// Convert Glicko rating to Glicko-2 scale
-static double toGlicko2Scale(double rating) {
-  return (rating - 1500.0) / GLICKO2_SCALE;
-}
-
-// Convert Glicko RD to Glicko-2 scale
-static double rdToGlicko2Scale(double rd) {
-  return rd / GLICKO2_SCALE;
-}
-
-// Convert Glicko-2 rating back to Glicko scale
-static double fromGlicko2Scale(double mu) {
-  return mu * GLICKO2_SCALE + 1500.0;
-}
-
-// Convert Glicko-2 RD back to Glicko scale
-static double rdFromGlicko2Scale(double phi) {
-  return phi * GLICKO2_SCALE;
-}
-
-// Glicko-2 g(φ) function - reduces impact of opponent's rating based on their RD
-static double g(double phi) {
-  return 1.0 / sqrt(1.0 + 3.0 * phi * phi / (PI * PI));
-}
-
-// Glicko-2 E function - expected score (win probability)
-static double E(double mu, double mu_j, double phi_j) {
-  return 1.0 / (1.0 + exp(-g(phi_j) * (mu - mu_j)));
-}
-
-// Glicko-2 volatility update using Illinois algorithm
-static double computeNewVolatility(double sigma, double phi, double v, double delta) {
-  double a = log(sigma * sigma);
-  double tau2 = GLICKO2_TAU * GLICKO2_TAU;
-  double phi2 = phi * phi;
-  double delta2 = delta * delta;
-  
-  // Function f(x) for finding new volatility
-  auto f = [&](double x) -> double {
-    double ex = exp(x);
-    double num = ex * (delta2 - phi2 - v - ex);
-    double denom = 2.0 * pow(phi2 + v + ex, 2);
-    return num / denom - (x - a) / tau2;
-  };
-  
-  // Initial bounds for Illinois algorithm
-  double A = a;
-  double B;
-  
-  if (delta2 > phi2 + v) {
-    B = log(delta2 - phi2 - v);
-  } else {
-    int k = 1;
-    while (f(a - k * GLICKO2_TAU) < 0) {
-      k++;
-      if (k > 100) break; // Safety limit
-    }
-    B = a - k * GLICKO2_TAU;
-  }
-  
-  double fA = f(A);
-  double fB = f(B);
-  
-  // Illinois algorithm iteration
-  int iter = 0;
-  while (abs(B - A) > GLICKO2_EPSILON && iter < 100) {
-    double C = A + (A - B) * fA / (fB - fA);
-    double fC = f(C);
-    
-    if (fC * fB <= 0) {
-      A = B;
-      fA = fB;
-    } else {
-      fA = fA / 2.0;
-    }
-    
-    B = C;
-    fB = fC;
-    iter++;
-  }
-  
-  return exp(A / 2.0);
-}
-
-RatingChangeResult GameService::calculateAndUpdateRatings(const string &redUsername,
+void GameService::calculateAndUpdateRatings(const string &redUsername,
                                             const string &blackUsername,
                                             const string &result,
                                             const string &timeControl) {
-  RatingChangeResult ratingResult;
-  
-  // Get current Glicko stats for both players
-  auto redStats = repository.getPlayerGlickoStats(redUsername, timeControl);
-  auto blackStats = repository.getPlayerGlickoStats(blackUsername, timeControl);
-  
-  // Store old ratings
-  ratingResult.red_old_rating = redStats.rating;
-  ratingResult.black_old_rating = blackStats.rating;
+  // Get current ratings
+  int redRating = repository.getPlayerRating(redUsername, timeControl);
+  int blackRating = repository.getPlayerRating(blackUsername, timeControl);
 
-  // Calculate actual scores
+  // Calculate scores
   double redScore = (result == "red_win") ? 1.0
                     : (result == "draw")  ? 0.5
                                           : 0.0;
   double blackScore = 1.0 - redScore;
 
-  // ============ Glicko-2 Algorithm ============
-  
-  // Step 1: Convert to Glicko-2 scale
-  double red_mu = toGlicko2Scale(redStats.rating);
-  double red_phi = rdToGlicko2Scale(redStats.rd);
-  double red_sigma = redStats.volatility;
-  
-  double black_mu = toGlicko2Scale(blackStats.rating);
-  double black_phi = rdToGlicko2Scale(blackStats.rd);
-  double black_sigma = blackStats.volatility;
-  
-  // Step 2: Compute g(φ) for opponent
-  double red_g_opponent = g(black_phi);
-  double black_g_opponent = g(red_phi);
-  
-  // Step 3: Compute E (expected score)
-  double red_E = E(red_mu, black_mu, black_phi);
-  double black_E = E(black_mu, red_mu, red_phi);
-  
-  // Step 4: Compute v (estimated variance)
-  double red_v = 1.0 / (red_g_opponent * red_g_opponent * red_E * (1.0 - red_E));
-  double black_v = 1.0 / (black_g_opponent * black_g_opponent * black_E * (1.0 - black_E));
-  
-  // Step 5: Compute delta (improvement)
-  double red_delta = red_v * red_g_opponent * (redScore - red_E);
-  double black_delta = black_v * black_g_opponent * (blackScore - black_E);
-  
-  // Step 6: Update volatility using Illinois algorithm
-  double red_sigma_new = computeNewVolatility(red_sigma, red_phi, red_v, red_delta);
-  double black_sigma_new = computeNewVolatility(black_sigma, black_phi, black_v, black_delta);
-  
-  // Step 7: Update RD (phi)
-  double red_phi_star = sqrt(red_phi * red_phi + red_sigma_new * red_sigma_new);
-  double black_phi_star = sqrt(black_phi * black_phi + black_sigma_new * black_sigma_new);
-  
-  double red_phi_new = 1.0 / sqrt(1.0 / (red_phi_star * red_phi_star) + 1.0 / red_v);
-  double black_phi_new = 1.0 / sqrt(1.0 / (black_phi_star * black_phi_star) + 1.0 / black_v);
-  
-  // Step 8: Update rating (mu)
-  double red_mu_new = red_mu + red_phi_new * red_phi_new * red_g_opponent * (redScore - red_E);
-  double black_mu_new = black_mu + black_phi_new * black_phi_new * black_g_opponent * (blackScore - black_E);
-  
-  // Step 9: Convert back to Glicko scale
-  int redNewRating = static_cast<int>(round(fromGlicko2Scale(red_mu_new)));
-  int blackNewRating = static_cast<int>(round(fromGlicko2Scale(black_mu_new)));
-  double redNewRD = rdFromGlicko2Scale(red_phi_new);
-  double blackNewRD = rdFromGlicko2Scale(black_phi_new);
-  
-  // Clamp RD to reasonable bounds (minimum 30, maximum 350)
-  redNewRD = max(30.0, min(350.0, redNewRD));
-  blackNewRD = max(30.0, min(350.0, blackNewRD));
-  
-  // Clamp volatility to reasonable bounds (0.01 to 0.15)
-  red_sigma_new = max(0.01, min(0.15, red_sigma_new));
-  black_sigma_new = max(0.01, min(0.15, black_sigma_new));
+  // Elo calculation (K-factor = 32)
+  double redExpected =
+      1.0 / (1.0 + pow(10.0, (blackRating - redRating) / 400.0));
+  double blackExpected = 1.0 - redExpected;
+
+  int redNewRating =
+      redRating + static_cast<int>(32 * (redScore - redExpected));
+  int blackNewRating =
+      blackRating + static_cast<int>(32 * (blackScore - blackExpected));
 
   // Determine result fields
   string redField = (result == "red_win") ? "wins"
@@ -463,27 +321,11 @@ RatingChangeResult GameService::calculateAndUpdateRatings(const string &redUsern
                       : (result == "draw")    ? "draws"
                                               : "losses";
 
-  // Update stats with new Glicko-2 values
-  repository.updatePlayerStats(redUsername, timeControl, redNewRating, 
-                               redNewRD, red_sigma_new, redField);
+  // Update stats
+  repository.updatePlayerStats(redUsername, timeControl, redNewRating,
+                               redField);
   repository.updatePlayerStats(blackUsername, timeControl, blackNewRating,
-                               blackNewRD, black_sigma_new, blackField);
-  
-  // Store new ratings and calculate changes
-  ratingResult.red_new_rating = redNewRating;
-  ratingResult.black_new_rating = blackNewRating;
-  ratingResult.red_rating_change = redNewRating - ratingResult.red_old_rating;
-  ratingResult.black_rating_change = blackNewRating - ratingResult.black_old_rating;
-  
-  // Log the rating changes
-  cout << "[Glicko-2] " << redUsername << ": " << ratingResult.red_old_rating << " -> " << redNewRating
-       << " (" << (ratingResult.red_rating_change >= 0 ? "+" : "") << ratingResult.red_rating_change << ")"
-       << " (RD: " << redStats.rd << " -> " << redNewRD << ")" << endl;
-  cout << "[Glicko-2] " << blackUsername << ": " << ratingResult.black_old_rating << " -> " << blackNewRating
-       << " (" << (ratingResult.black_rating_change >= 0 ? "+" : "") << ratingResult.black_rating_change << ")"
-       << " (RD: " << blackStats.rd << " -> " << blackNewRD << ")" << endl;
-  
-  return ratingResult;
+                               blackField);
 }
 
 // Private helper: Create game with specific colors (no random assignment)
@@ -868,9 +710,8 @@ GameResult GameService::endGame(const string &gameId, const string &result,
 
   // 5. Update ratings if rated
   if (game.rated) {
-    RatingChangeResult ratingChanges = calculateAndUpdateRatings(
-        game.red_player, game.black_player, result, game.time_control);
-    gameResult.ratingChange = ratingChanges;
+    calculateAndUpdateRatings(game.red_player, game.black_player, result,
+                              game.time_control);
   }
 
   game.status = "completed";
